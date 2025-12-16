@@ -11,6 +11,7 @@ const StatsScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [todaysSales, setTodaysSales] = useState(0);
     const [activeCarts, setActiveCarts] = useState(0);
+    const [abandonedCarts, setAbandonedCarts] = useState(0);
     const [recentActivity, setRecentActivity] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -20,58 +21,79 @@ const StatsScreen = ({ navigation }) => {
     });
 
     useEffect(() => {
+        // 1. Listen to ORDERS for Revenue & Chart
+        const qOrders = query(
+            collection(db, "orders"),
+            orderBy("createdAt", "desc"),
+            limit(50)
+        );
+
+        const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
+            let total = 0;
+            const hourlyData = new Array(6).fill(0);
+
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                total += parseFloat(data.totalPrice || 0);
+
+                const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+                const hour = date.getHours();
+                const bucketIndex = Math.floor(hour / 4);
+                if (bucketIndex >= 0 && bucketIndex < 6) {
+                    hourlyData[bucketIndex] += parseFloat(data.totalPrice || 0);
+                }
+            });
+
+            setTodaysSales(total);
+            setChartData({
+                labels: ["12am", "4am", "8am", "12pm", "4pm", "8pm"],
+                datasets: [{
+                    data: hourlyData,
+                    color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
+                    strokeWidth: 2
+                }]
+            });
+        });
+
+        // 2. Listen to CHECKOUTS for Active/Abandoned counts & Feed
         const qCheckouts = query(
             collection(db, "checkouts"),
             orderBy("updatedAt", "desc"),
             limit(20)
         );
 
-        const unsubscribe = onSnapshot(qCheckouts, (snapshot) => {
+        const unsubscribeCheckouts = onSnapshot(qCheckouts, (snapshot) => {
             const activities = [];
-            let activeCount = 0;
-            let salesTotal = 0;
-            const hourlyData = new Array(6).fill(0);
+            let active = 0;
+            let abandoned = 0;
 
             snapshot.docs.forEach(doc => {
                 const data = doc.data();
 
-                if (data.eventType !== 'ABANDONED') {
-                    salesTotal += parseFloat(data.amount || 0);
+                // Correct Logic: Active vs Abandoned
+                if (data.eventType === 'ABANDONED') {
+                    abandoned++;
                 } else {
-                    activeCount++;
-                }
-
-                const date = data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date();
-                const hour = date.getHours();
-                const bucketIndex = Math.floor(hour / 4);
-                if (bucketIndex >= 0 && bucketIndex < 6) {
-                    hourlyData[bucketIndex] += parseFloat(data.amount || 0);
+                    active++;
                 }
 
                 activities.push({
                     id: doc.id,
                     ...data,
-                    jsDate: date
+                    jsDate: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date()
                 });
             });
 
-            setActiveCarts(activeCount);
-            setTodaysSales(salesTotal);
+            setActiveCarts(active);
+            setAbandonedCarts(abandoned);
             setRecentActivity(activities);
-
-            setChartData({
-                labels: ["12am", "4am", "8am", "12pm", "4pm", "8pm"],
-                datasets: [{
-                    data: hourlyData,
-                    color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`, // Indigo
-                    strokeWidth: 2
-                }]
-            });
-
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribeOrders();
+            unsubscribeCheckouts();
+        };
     }, []);
 
     const onRefresh = React.useCallback(() => {
@@ -114,8 +136,8 @@ const StatsScreen = ({ navigation }) => {
                         <Text variant="labelMedium" style={{ color: '#666' }}>TOTAL REVENUE</Text>
                         <Text variant="headlineMedium" style={{ fontWeight: 'bold', marginTop: 4 }}>₹{todaysSales.toLocaleString()}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Icon source="arrow-up" size={16} color="green" />
-                            <Text style={{ color: 'green', fontSize: 12, fontWeight: 'bold' }}>12% vs yesterday</Text>
+                            <Icon source="chart-line" size={16} color="#4F46E5" />
+                            <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Sales</Text>
                         </View>
                     </Surface>
 
@@ -123,7 +145,17 @@ const StatsScreen = ({ navigation }) => {
                         <Text variant="labelMedium" style={{ color: '#666' }}>ACTIVE CARTS</Text>
                         <Text variant="headlineMedium" style={{ fontWeight: 'bold', marginTop: 4 }}>{activeCarts}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Text style={{ color: '#666', fontSize: 12 }}>Live now</Text>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e', marginRight: 6 }} />
+                            <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: 'bold' }}>Live Now</Text>
+                        </View>
+                    </Surface>
+
+                    <Surface style={styles.metricCard} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: '#666' }}>ABANDONED</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', marginTop: 4 }}>{abandonedCarts}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                            <Icon source="cart-off" size={16} color="#ef4444" />
+                            <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Lost</Text>
                         </View>
                     </Surface>
                 </View>
