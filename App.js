@@ -7,16 +7,12 @@ import CustomersScreen from './src/screens/CustomersScreen';
 import AddCustomerScreen from './src/screens/AddCustomerScreen';
 import CustomerDetailScreen from './src/screens/CustomerDetailScreen';
 
-const Stack = createNativeStackNavigator();
+import StatsScreen from './src/screens/StatsScreen';
+import DatabaseManagerScreen from './src/screens/DatabaseManagerScreen';
 
-const theme = {
-  ...MD3LightTheme,
-  colors: {
-    ...MD3LightTheme.colors,
-    primary: '#6366f1',
-    secondary: '#8b5cf6',
-  },
-};
+import { theme } from './src/theme/theme';
+
+const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
@@ -26,15 +22,25 @@ export default function App() {
           initialRouteName="Home"
           screenOptions={{
             headerStyle: {
-              backgroundColor: '#6366f1',
+              backgroundColor: theme.colors.primary,
             },
-            headerTintColor: '#fff',
+            headerTintColor: theme.colors.onPrimary,
           }}
         >
           <Stack.Screen
             name="Home"
             component={HomeScreen}
             options={{ title: 'Easey CRM' }}
+          />
+          <Stack.Screen
+            name="Stats"
+            component={StatsScreen}
+            options={{ title: 'Live Dashboard' }}
+          />
+          <Stack.Screen
+            name="DatabaseManager"
+            component={DatabaseManagerScreen}
+            options={{ title: 'Manage Data' }}
           />
           <Stack.Screen
             name="Customers"
