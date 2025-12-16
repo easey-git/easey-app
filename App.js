@@ -9,7 +9,7 @@ import AddCustomerScreen from './src/screens/AddCustomerScreen';
 import CustomerDetailScreen from './src/screens/CustomerDetailScreen';
 
 import StatsScreen from './src/screens/StatsScreen';
-import DatabaseManagerScreen from './src/screens/DatabaseManagerScreen';
+import OrderManagementScreen from './src/screens/DatabaseManagerScreen';
 
 import { theme } from './src/theme/theme';
 
@@ -59,7 +59,7 @@ export default function App() {
           />
           <Stack.Screen
             name="DatabaseManager"
-            component={DatabaseManagerScreen}
+            component={OrderManagementScreen}
             options={{ title: 'Manage Data' }}
           />
           <Stack.Screen

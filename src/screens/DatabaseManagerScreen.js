@@ -1,16 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, DataTable, useTheme, Appbar, Searchbar, IconButton, SegmentedButtons } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Text, DataTable, useTheme, Appbar, SegmentedButtons, IconButton, Portal, Modal, Surface, Button, Divider, Avatar } from 'react-native-paper';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-const DatabaseManagerScreen = ({ navigation }) => {
+const OrderManagementScreen = ({ navigation }) => {
     const [data, setData] = useState([]);
     const [viewType, setViewType] = useState('orders'); // 'orders' or 'checkouts'
     const [page, setPage] = useState(0);
     const [itemsPerPage, setItemsPerPage] = useState(10);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedItem, setSelectedItem] = useState(null);
+    const [visible, setVisible] = useState(false);
     const theme = useTheme();
+
+    const showModal = (item) => {
+        setSelectedItem(item);
+        setVisible(true);
+    };
+    const hideModal = () => setVisible(false);
 
     useEffect(() => {
         const collectionName = viewType === 'orders' ? 'orders' : 'checkouts';
@@ -31,6 +38,7 @@ const DatabaseManagerScreen = ({ navigation }) => {
         try {
             const collectionName = viewType === 'orders' ? 'orders' : 'checkouts';
             await deleteDoc(doc(db, collectionName, id));
+            hideModal();
         } catch (error) {
             console.error("Error deleting document: ", error);
         }
@@ -42,7 +50,7 @@ const DatabaseManagerScreen = ({ navigation }) => {
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
-                <Appbar.Content title="Data Manager" titleStyle={{ fontWeight: 'bold', fontSize: 20, color: theme.colors.onSurface }} />
+                <Appbar.Content title="Order Management" titleStyle={{ fontWeight: 'bold', fontSize: 20, color: theme.colors.onSurface }} />
             </Appbar.Header>
 
             <View style={{ padding: 16 }}>
@@ -64,11 +72,11 @@ const DatabaseManagerScreen = ({ navigation }) => {
                             <DataTable.Title style={{ flex: 2 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>Customer</DataTable.Title>
                             <DataTable.Title numeric textStyle={{ color: theme.colors.onSurfaceVariant }}>Amount</DataTable.Title>
                             <DataTable.Title style={{ flex: 1.5 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>Status</DataTable.Title>
-                            <DataTable.Title style={{ flex: 0.5 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>Actions</DataTable.Title>
+                            <DataTable.Title style={{ flex: 0.5 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>View</DataTable.Title>
                         </DataTable.Header>
 
                         {data.slice(from, to).map((item) => (
-                            <DataTable.Row key={item.id}>
+                            <DataTable.Row key={item.id} onPress={() => showModal(item)}>
                                 <DataTable.Cell style={{ flex: 2 }}>
                                     <View>
                                         <Text variant="bodySmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{item.customerName || 'Guest'}</Text>
@@ -97,7 +105,7 @@ const DatabaseManagerScreen = ({ navigation }) => {
                                     </View>
                                 </DataTable.Cell>
                                 <DataTable.Cell style={{ flex: 0.5 }}>
-                                    <IconButton icon="delete" size={20} iconColor={theme.colors.error} onPress={() => handleDelete(item.id)} />
+                                    <IconButton icon="chevron-right" size={20} iconColor={theme.colors.onSurfaceVariant} onPress={() => showModal(item)} />
                                 </DataTable.Cell>
                             </DataTable.Row>
                         ))}
@@ -116,6 +124,80 @@ const DatabaseManagerScreen = ({ navigation }) => {
                     </DataTable>
                 </View>
             </ScrollView>
+
+            {/* Comprehensive Details Modal */}
+            <Portal>
+                <Modal visible={visible} onDismiss={hideModal} contentContainerStyle={{ padding: 20 }}>
+                    {selectedItem && (
+                        <Surface style={[styles.modalContent, { backgroundColor: theme.colors.surface }]} elevation={4}>
+                            <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        {viewType === 'orders' ? `Order #${selectedItem.orderNumber}` : 'Cart Details'}
+                                    </Text>
+                                    <IconButton icon="close" onPress={hideModal} />
+                                </View>
+
+                                <Divider style={{ marginBottom: 16 }} />
+
+                                {/* Customer Section */}
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary, marginBottom: 8 }}>Customer</Text>
+                                <View style={styles.detailRow}>
+                                    <Avatar.Icon size={40} icon="account" style={{ backgroundColor: theme.colors.surfaceVariant }} />
+                                    <View style={{ marginLeft: 12 }}>
+                                        <Text variant="bodyLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{selectedItem.customerName}</Text>
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{selectedItem.email}</Text>
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{selectedItem.phone}</Text>
+                                    </View>
+                                </View>
+
+                                {/* Address Section */}
+                                {selectedItem.city && (
+                                    <>
+                                        <Divider style={{ marginVertical: 16 }} />
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary, marginBottom: 8 }}>Shipping Address</Text>
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+                                            {selectedItem.address1 ? `${selectedItem.address1}, ` : ''}
+                                            {selectedItem.city}, {selectedItem.province} {selectedItem.zip}
+                                        </Text>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>{selectedItem.country}</Text>
+                                    </>
+                                )}
+
+                                {/* Items Section */}
+                                <Divider style={{ marginVertical: 16 }} />
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary, marginBottom: 8 }}>Items</Text>
+                                {selectedItem.items && selectedItem.items.map((item, index) => (
+                                    <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <Text style={{ flex: 1, color: theme.colors.onSurface }}>{item.quantity}x {item.name}</Text>
+                                        <Text style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.price}</Text>
+                                    </View>
+                                ))}
+
+                                {/* Totals Section */}
+                                <Divider style={{ marginVertical: 16 }} />
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Total</Text>
+                                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                        ₹{viewType === 'orders' ? selectedItem.totalPrice : selectedItem.amount}
+                                    </Text>
+                                </View>
+
+                                {/* Actions */}
+                                <Button
+                                    mode="contained"
+                                    buttonColor={theme.colors.error}
+                                    style={{ marginTop: 24 }}
+                                    icon="delete"
+                                    onPress={() => handleDelete(selectedItem.id)}
+                                >
+                                    Delete Record
+                                </Button>
+                            </ScrollView>
+                        </Surface>
+                    )}
+                </Modal>
+            </Portal>
         </View>
     );
 };
@@ -136,7 +218,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 4,
-    }
+    },
+    modalContent: { borderRadius: 12, padding: 20, maxHeight: '80%' },
+    detailRow: { flexDirection: 'row', alignItems: 'center' }
 });
 
-export default DatabaseManagerScreen;
+export default OrderManagementScreen;

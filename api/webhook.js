@@ -53,6 +53,7 @@ module.exports = async (req, res) => {
                 let customerName = `${firstName} ${lastName}`.trim();
 
                 const phone = data.phone_number || "";
+                const phoneNormalized = phone ? phone.replace(/\D/g, '').slice(-10) : null;
 
                 if (!customerName && phone) {
                     // Mask phone: 7488377378 -> 74883...378
@@ -116,6 +117,7 @@ module.exports = async (req, res) => {
                     customerName,
                     email,
                     phone,
+                    phoneNormalized, // For smart matching
                     items,
                     city,
                     state,
@@ -136,6 +138,8 @@ module.exports = async (req, res) => {
             // B. SHOPIFY ORDER CREATION (Fallback)
             // ---------------------------------------------------------
             if (data.order_number) {
+                const shipping = data.shipping_address || {};
+
                 const orderData = {
                     orderId: data.id,
                     orderNumber: data.order_number,
@@ -145,7 +149,16 @@ module.exports = async (req, res) => {
                     email: data.email,
                     phone: data.phone || (data.customer ? data.customer.phone : null),
                     createdAt: admin.firestore.Timestamp.now(),
-                    status: "Paid", // Assuming order creation means paid/confirmed
+                    status: "Paid",
+                    paymentMethod: data.gateway || "Unknown",
+
+                    // Address Details
+                    address1: shipping.address1 || "",
+                    city: shipping.city || "",
+                    province: shipping.province || "",
+                    zip: shipping.zip || "",
+                    country: shipping.country || "",
+
                     items: data.line_items.map(item => ({
                         name: item.title,
                         quantity: item.quantity,
@@ -156,21 +169,83 @@ module.exports = async (req, res) => {
                 // 1. Save Order
                 await db.collection("orders").doc(String(data.id)).set(orderData);
 
-                // 2. CLEANUP: Find and Delete the Active Cart (converted)
-                // We match Shopify's 'checkout_token' with our saved 'shopifyCartToken'
+                // 2. CLEANUP: Robust "Industry Standard" Cart Removal
+                // We try to find the cart by Token, Email, or Phone and delete it.
+                // This ensures no "stuck" active carts after a purchase.
+
+                const batch = db.batch();
+                let docsToDelete = new Set();
+
+                // A. Match by Token (Most accurate)
                 if (data.checkout_token) {
-                    const cartSnapshot = await db.collection("checkouts")
+                    const tokenQuery = await db.collection("checkouts")
                         .where("shopifyCartToken", "==", data.checkout_token)
                         .get();
+                    tokenQuery.docs.forEach(doc => docsToDelete.add(doc.ref));
+                }
 
-                    if (!cartSnapshot.empty) {
-                        const batch = db.batch();
-                        cartSnapshot.docs.forEach(doc => {
-                            batch.delete(doc.ref);
-                        });
-                        await batch.commit();
-                        console.log(`Converted Cart Deleted: ${data.checkout_token}`);
+                // B. Match by Email (Fallback)
+                if (data.email) {
+                    const emailQuery = await db.collection("checkouts")
+                        .where("email", "==", data.email)
+                        .get();
+                    emailQuery.docs.forEach(doc => docsToDelete.add(doc.ref));
+                }
+
+                // Helper to normalize phone (last 10 digits)
+                const normalizePhone = (p) => {
+                    if (!p) return null;
+                    const digits = p.replace(/\D/g, '');
+                    return digits.slice(-10);
+                };
+
+                // C. Match by Phone (Shotgun Approach)
+                // We search for the phone in multiple formats against the 'phone' field
+                // to catch cases where the data was saved differently.
+                const rawPhone = data.phone || (data.customer ? data.customer.phone : null);
+
+                if (rawPhone) {
+                    const phoneVariations = new Set();
+
+                    // 1. Exact Match
+                    phoneVariations.add(rawPhone);
+
+                    // 2. Without +91 (if present)
+                    if (rawPhone.includes('+91')) {
+                        phoneVariations.add(rawPhone.replace('+91', ''));
                     }
+
+                    // 3. Last 10 Digits (Normalized)
+                    const normalized = normalizePhone(rawPhone);
+                    if (normalized) {
+                        phoneVariations.add(normalized);
+                        // Also try adding +91 to normalized
+                        phoneVariations.add(`+91${normalized}`);
+                    }
+
+                    // Run queries for ALL variations
+                    for (const phoneVar of phoneVariations) {
+                        // Query against the standard 'phone' field
+                        const query1 = await db.collection("checkouts").where("phone", "==", phoneVar).get();
+                        query1.docs.forEach(doc => docsToDelete.add(doc.ref));
+
+                        // Query against the new 'phoneNormalized' field (if it exists)
+                        if (normalized) {
+                            const query2 = await db.collection("checkouts").where("phoneNormalized", "==", normalized).get();
+                            query2.docs.forEach(doc => docsToDelete.add(doc.ref));
+                        }
+                    }
+                }
+
+                // Execute Delete Batch
+                if (docsToDelete.size > 0) {
+                    docsToDelete.forEach(ref => batch.delete(ref));
+                    await batch.commit();
+                    console.log(`Cleaned up ${docsToDelete.size} cart(s) for Order ${data.order_number}`);
+                } else {
+                    console.log(`No matching active carts found for Order ${data.order_number}`);
+                    // Optional: Log what we tried to find for debugging
+                    console.log(`Tried matching: Token=${data.checkout_token}, Email=${data.email}, Phone=${rawPhone}`);
                 }
 
                 console.log(`Shopify Order ${data.order_number} saved.`);
