@@ -22,52 +22,91 @@ module.exports = async (req, res) => {
             // Detect if it's a Shiprocket event (has cart_id or latest_stage)
             if (data.cart_id || data.latest_stage) {
 
-                // 1. Determine Event Type
-                let eventType = data.latest_stage || "UNKNOWN";
+                // 1. Determine Event Type & Stage
+                let eventType = "ACTIVE_CART";
+                let stage = data.latest_stage || "BROWSING";
+
                 if (queryParams.abandoned === "1") {
                     eventType = "ABANDONED";
                 }
 
+                // Map technical stages to human readable text
+                const stageMap = {
+                    "PHONE_RECEIVED": "Entered Phone",
+                    "EMAIL_RECEIVED": "Entered Email",
+                    "ADDRESS_RECEIVED": "Entered Address",
+                    "PAYMENT_INITIATED": "Payment Started"
+                };
+                const readableStage = stageMap[stage] || stage;
+
                 const checkoutId = data.cart_id || "";
                 const orderId = data.order_id || "";
 
-                // 2. Extract Data (Matching your Google Script logic)
+                // 2. Extract Data
                 const amount = data.total_price || 0;
                 const currency = data.currency || "INR";
                 const address = data.shipping_address || data.billing_address || {};
 
-                const firstName = data.first_name || address.first_name || "";
-                const lastName = data.last_name || address.last_name || "";
-                const customerName = `${firstName} ${lastName}`.trim();
+                // Name Logic: Try Name -> Phone -> "Visitor"
+                let firstName = data.first_name || address.first_name || "";
+                let lastName = data.last_name || address.last_name || "";
+                let customerName = `${firstName} ${lastName}`.trim();
 
-                const email = data.email || "";
                 const phone = data.phone_number || "";
 
+                if (!customerName && phone) {
+                    // Mask phone: 7488377378 -> 74883...378
+                    customerName = `Visitor (${phone.slice(0, 5)}...)`;
+                } else if (!customerName) {
+                    customerName = "Visitor";
+                }
+
+                const email = data.email || "";
+
+                // Items Logic
                 let items = [];
-                if (Array.isArray(data.items)) {
+                if (Array.isArray(data.items) && data.items.length > 0) {
                     items = data.items.map(i => ({
-                        name: i.name || i.title || "",
+                        name: i.name || i.title || "Unknown Item",
                         quantity: i.quantity || 1,
-                        price: i.price || 0
+                        price: i.price || 0,
+                        image: i.image || null
                     }));
+                } else if (data.item_count > 0) {
+                    // Placeholder if items details are missing but count exists
+                    items = [{
+                        name: `${data.item_count} Item(s)`,
+                        quantity: data.item_count,
+                        price: amount
+                    }];
                 }
 
                 const city = address.city || "";
                 const state = address.state || "";
                 const pincode = address.zip || "";
 
-                const paymentMethod = data.payment_method || "";
-                const paymentStatus = data.payment_status || "";
-                const recoveryUrl = data.recovery_url || "";
+                // Marketing Data (UTM)
+                const attributes = data.cart_attributes || {};
+                let source = data.source_name || "Direct";
+
+                // Try to extract UTM from landing_page_url if available
+                if (attributes.landing_page_url) {
+                    try {
+                        const url = new URL(attributes.landing_page_url);
+                        const utmSource = url.searchParams.get("utm_source");
+                        const utmMedium = url.searchParams.get("utm_medium");
+                        if (utmSource) source = `${utmSource} / ${utmMedium || ''}`;
+                    } catch (e) {
+                        // Ignore URL parsing errors
+                    }
+                }
 
                 // 3. Duplicate Prevention & Save to Firestore
-                // We use checkoutId as the document ID to prevent duplicates automatically.
-                // If the eventType changes (e.g., from 'shipping' to 'payment'), we update the doc.
-
                 const docId = checkoutId ? `checkout_${checkoutId}` : `unknown_${Date.now()}`;
 
                 const checkoutData = {
                     eventType,
+                    stage: readableStage,
                     checkoutId,
                     orderId,
                     amount,
@@ -79,21 +118,15 @@ module.exports = async (req, res) => {
                     city,
                     state,
                     pincode,
-                    paymentMethod,
-                    paymentStatus,
-                    recoveryUrl,
+                    source, // Marketing Source
+                    ip: attributes.ipv4_address || null,
                     updatedAt: admin.firestore.Timestamp.now(),
-                    rawJson: JSON.stringify(data) // Store raw data just in case
+                    rawJson: JSON.stringify(data)
                 };
-
-                // If it's a new order (completed), we might want to save it to 'orders' too, 
-                // but for now let's keep Shiprocket activity in its own collection 
-                // or merge it if you prefer.
-                // Let's save to a "checkouts" collection for live activity.
 
                 await db.collection("checkouts").doc(docId).set(checkoutData, { merge: true });
 
-                console.log(`Shiprocket Event: ${eventType} for ${customerName}`);
+                console.log(`Shiprocket Event: ${eventType} (${readableStage}) for ${customerName}`);
                 return res.status(200).send("OK");
             }
 

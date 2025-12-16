@@ -152,9 +152,42 @@ const StatsScreen = ({ navigation }) => {
                         <React.Fragment key={item.id}>
                             <List.Item
                                 title={item.customerName || 'Guest User'}
-                                description={`${item.items && item.items.length > 0 ? item.items[0].name : 'Browsing'} • ${item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                                left={props => <Avatar.Icon {...props} icon={item.eventType === 'ABANDONED' ? "cart-off" : "check"} size={40} style={{ backgroundColor: item.eventType === 'ABANDONED' ? '#ffebee' : '#e8f5e9' }} color={item.eventType === 'ABANDONED' ? '#c62828' : '#2e7d32'} />}
-                                right={props => <Text {...props} style={{ alignSelf: 'center', fontWeight: 'bold', marginRight: 16 }}>₹{item.amount}</Text>}
+                                titleStyle={{ fontWeight: 'bold' }}
+                                description={() => (
+                                    <View>
+                                        <Text variant="bodySmall" style={{ color: '#666' }}>
+                                            {item.items && item.items.length > 0 ? item.items[0].name : 'Browsing'}
+                                        </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}>
+                                            {item.stage && (
+                                                <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                    <Text style={{ fontSize: 10, color: '#0284c7', fontWeight: 'bold' }}>{item.stage}</Text>
+                                                </View>
+                                            )}
+                                            {item.source && (
+                                                <Text style={{ fontSize: 10, color: '#9ca3af' }}>via {item.source}</Text>
+                                            )}
+                                            <Text style={{ fontSize: 10, color: '#9ca3af' }}>• {item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                        </View>
+                                    </View>
+                                )}
+                                left={props => (
+                                    <Avatar.Icon
+                                        {...props}
+                                        icon={item.eventType === 'ABANDONED' ? "cart-off" : "cart-outline"}
+                                        size={40}
+                                        style={{ backgroundColor: item.eventType === 'ABANDONED' ? '#ffebee' : '#e0e7ff' }}
+                                        color={item.eventType === 'ABANDONED' ? '#c62828' : '#4338ca'}
+                                    />
+                                )}
+                                right={props => (
+                                    <View style={{ justifyContent: 'center', alignItems: 'flex-end', marginRight: 16 }}>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>₹{item.amount}</Text>
+                                        {item.city && (
+                                            <Text variant="labelSmall" style={{ color: '#6b7280' }}>{item.city}</Text>
+                                        )}
+                                    </View>
+                                )}
                                 style={{ backgroundColor: '#fff' }}
                             />
                             <Divider />
