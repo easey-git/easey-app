@@ -1,59 +1,58 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, DataTable, useTheme, Appbar, Searchbar, IconButton, Menu, Divider, Provider } from 'react-native-paper';
+import { Text, DataTable, useTheme, Appbar, Searchbar, IconButton, SegmentedButtons } from 'react-native-paper';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const DatabaseManagerScreen = ({ navigation }) => {
-    const [orders, setOrders] = useState([]);
+    const [data, setData] = useState([]);
+    const [viewType, setViewType] = useState('orders'); // 'orders' or 'checkouts'
     const [page, setPage] = useState(0);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [searchQuery, setSearchQuery] = useState('');
     const theme = useTheme();
 
     useEffect(() => {
-        // Standard CRM Query: Latest orders first
-        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(50));
+        const collectionName = viewType === 'orders' ? 'orders' : 'checkouts';
+        const q = query(collection(db, collectionName), orderBy("updatedAt", "desc"), limit(50));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const ordersData = snapshot.docs.map(doc => ({
+            const fetchedData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
-            setOrders(ordersData);
+            setData(fetchedData);
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [viewType]);
 
     const handleDelete = async (id) => {
         try {
-            await deleteDoc(doc(db, "orders", id));
+            const collectionName = viewType === 'orders' ? 'orders' : 'checkouts';
+            await deleteDoc(doc(db, collectionName, id));
         } catch (error) {
-            console.error("Error deleting order: ", error);
+            console.error("Error deleting document: ", error);
         }
     };
 
     const from = page * itemsPerPage;
-    const to = Math.min((page + 1) * itemsPerPage, orders.length);
+    const to = Math.min((page + 1) * itemsPerPage, data.length);
 
     return (
-        <View style={styles.container}>
-            {/* Standard CRM Header */}
-            <Appbar.Header style={{ backgroundColor: '#fff', elevation: 0, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
-                <Appbar.Content title="Orders" titleStyle={{ fontWeight: 'bold', fontSize: 20 }} />
-                <Appbar.Action icon="refresh" onPress={() => { }} />
-                <Appbar.Action icon="filter-variant" onPress={() => { }} />
+        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
+                <Appbar.Content title="Data Manager" titleStyle={{ fontWeight: 'bold', fontSize: 20, color: theme.colors.onSurface }} />
             </Appbar.Header>
 
-            {/* Search Toolbar */}
-            <View style={styles.toolbar}>
-                <Searchbar
-                    placeholder="Search orders..."
-                    onChangeText={setSearchQuery}
-                    value={searchQuery}
-                    style={styles.searchbar}
-                    inputStyle={{ fontSize: 14 }}
+            <View style={{ padding: 16 }}>
+                <SegmentedButtons
+                    value={viewType}
+                    onValueChange={setViewType}
+                    buttons={[
+                        { value: 'orders', label: 'Orders', icon: 'package-variant' },
+                        { value: 'checkouts', label: 'Live Carts', icon: 'cart-outline' },
+                    ]}
                 />
             </View>
 
@@ -62,41 +61,52 @@ const DatabaseManagerScreen = ({ navigation }) => {
                 <View style={{ minWidth: '100%' }}>
                     <DataTable>
                         <DataTable.Header>
-                            <DataTable.Title style={{ flex: 2 }}>Customer</DataTable.Title>
-                            <DataTable.Title numeric>Amount</DataTable.Title>
-                            <DataTable.Title style={{ flex: 1.5 }}>Status</DataTable.Title>
-                            <DataTable.Title style={{ flex: 0.5 }}>Actions</DataTable.Title>
+                            <DataTable.Title style={{ flex: 2 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>Customer</DataTable.Title>
+                            <DataTable.Title numeric textStyle={{ color: theme.colors.onSurfaceVariant }}>Amount</DataTable.Title>
+                            <DataTable.Title style={{ flex: 1.5 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>Status</DataTable.Title>
+                            <DataTable.Title style={{ flex: 0.5 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>Actions</DataTable.Title>
                         </DataTable.Header>
 
-                        {orders.slice(from, to).map((item) => (
+                        {data.slice(from, to).map((item) => (
                             <DataTable.Row key={item.id}>
                                 <DataTable.Cell style={{ flex: 2 }}>
                                     <View>
-                                        <Text variant="bodySmall" style={{ fontWeight: 'bold' }}>{item.customerName || 'Guest'}</Text>
-                                        <Text variant="labelSmall" style={{ color: '#666' }}>#{item.orderNumber || item.id.slice(0, 4)}</Text>
+                                        <Text variant="bodySmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{item.customerName || 'Guest'}</Text>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                            {viewType === 'orders' ? `#${item.orderNumber || item.id.slice(0, 4)}` : item.phone || 'No Phone'}
+                                        </Text>
                                     </View>
                                 </DataTable.Cell>
                                 <DataTable.Cell numeric>
-                                    <Text variant="bodySmall">₹{item.totalPrice}</Text>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurface }}>₹{viewType === 'orders' ? item.totalPrice : item.amount}</Text>
                                 </DataTable.Cell>
                                 <DataTable.Cell style={{ flex: 1.5 }}>
-                                    <View style={[styles.badge, { backgroundColor: item.status === 'Paid' ? '#e6fffa' : '#fff5f5' }]}>
-                                        <Text style={{ color: item.status === 'Paid' ? '#2c7a7b' : '#c53030', fontSize: 10, fontWeight: 'bold' }}>
-                                            {item.status || 'PENDING'}
+                                    <View style={[styles.badge, {
+                                        backgroundColor:
+                                            item.status === 'Paid' ? theme.colors.secondaryContainer :
+                                                item.eventType === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer
+                                    }]}>
+                                        <Text style={{
+                                            color:
+                                                item.status === 'Paid' ? theme.colors.onSecondaryContainer :
+                                                    item.eventType === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
+                                            fontSize: 10, fontWeight: 'bold'
+                                        }}>
+                                            {viewType === 'orders' ? (item.status || 'PENDING') : (item.eventType || 'ACTIVE')}
                                         </Text>
                                     </View>
                                 </DataTable.Cell>
                                 <DataTable.Cell style={{ flex: 0.5 }}>
-                                    <IconButton icon="dots-vertical" size={16} onPress={() => handleDelete(item.id)} />
+                                    <IconButton icon="delete" size={20} iconColor={theme.colors.error} onPress={() => handleDelete(item.id)} />
                                 </DataTable.Cell>
                             </DataTable.Row>
                         ))}
 
                         <DataTable.Pagination
                             page={page}
-                            numberOfPages={Math.ceil(orders.length / itemsPerPage)}
+                            numberOfPages={Math.ceil(data.length / itemsPerPage)}
                             onPageChange={(page) => setPage(page)}
-                            label={`${from + 1}-${to} of ${orders.length}`}
+                            label={`${from + 1}-${to} of ${data.length}`}
                             numberOfItemsPerPageList={[10, 20, 50]}
                             numberOfItemsPerPage={itemsPerPage}
                             onItemsPerPageChange={setItemsPerPage}
@@ -113,15 +123,12 @@ const DatabaseManagerScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
     },
     toolbar: {
         padding: 12,
-        backgroundColor: '#fff',
     },
     searchbar: {
         elevation: 0,
-        backgroundColor: '#f5f5f5',
         height: 40,
         borderRadius: 8,
     },

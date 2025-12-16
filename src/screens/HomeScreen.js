@@ -45,30 +45,30 @@ export default function HomeScreen({ navigation }) {
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Header Section */}
-            <Surface style={[styles.header, { backgroundColor: theme.colors.primary }]} elevation={4}>
+            <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]} elevation={0}>
                 <View style={styles.headerContent}>
                     <View>
-                        <Text variant="headlineSmall" style={{ color: theme.colors.onPrimary, fontWeight: 'bold' }}>Easey CRM</Text>
-                        <Text variant="bodyMedium" style={{ color: theme.colors.onPrimary, opacity: 0.8 }}>Welcome back, Mackruize</Text>
+                        <Text variant="headlineSmall" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>Easey CRM</Text>
+                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Welcome back, Mackruize</Text>
                     </View>
                     <Avatar.Text size={48} label="MK" style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />
                 </View>
 
                 {/* Quick Stats Row inside Header */}
-                <View style={styles.statsRow}>
+                <View style={[styles.statsRow, { backgroundColor: theme.colors.surfaceVariant }]}>
                     <View style={styles.statItem}>
-                        <Text variant="titleLarge" style={{ color: theme.colors.onPrimary, fontWeight: 'bold' }}>12</Text>
-                        <Text variant="labelSmall" style={{ color: theme.colors.onPrimary, opacity: 0.8 }}>New Orders</Text>
+                        <Text variant="titleLarge" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>12</Text>
+                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>New Orders</Text>
                     </View>
-                    <View style={[styles.statDivider, { backgroundColor: theme.colors.onPrimary }]} />
+                    <View style={[styles.statDivider, { backgroundColor: theme.colors.outline }]} />
                     <View style={styles.statItem}>
-                        <Text variant="titleLarge" style={{ color: theme.colors.onPrimary, fontWeight: 'bold' }}>₹45k</Text>
-                        <Text variant="labelSmall" style={{ color: theme.colors.onPrimary, opacity: 0.8 }}>Revenue</Text>
+                        <Text variant="titleLarge" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>₹45k</Text>
+                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Revenue</Text>
                     </View>
-                    <View style={[styles.statDivider, { backgroundColor: theme.colors.onPrimary }]} />
+                    <View style={[styles.statDivider, { backgroundColor: theme.colors.outline }]} />
                     <View style={styles.statItem}>
-                        <Text variant="titleLarge" style={{ color: theme.colors.onPrimary, fontWeight: 'bold' }}>5</Text>
-                        <Text variant="labelSmall" style={{ color: theme.colors.onPrimary, opacity: 0.8 }}>Pending</Text>
+                        <Text variant="titleLarge" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>5</Text>
+                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Pending</Text>
                     </View>
                 </View>
             </Surface>

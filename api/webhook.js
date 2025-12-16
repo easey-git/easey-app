@@ -85,8 +85,9 @@ module.exports = async (req, res) => {
                 const state = address.state || "";
                 const pincode = address.zip || "";
 
-                // Marketing Data (UTM)
+                // Marketing Data (UTM) & Cart Token
                 const attributes = data.cart_attributes || {};
+                const shopifyCartToken = attributes.shopifyCartToken || null;
                 let source = data.source_name || "Direct";
 
                 // Try to extract UTM from landing_page_url if available
@@ -108,6 +109,7 @@ module.exports = async (req, res) => {
                     eventType,
                     stage: readableStage,
                     checkoutId,
+                    shopifyCartToken, // Save token to link with Order later
                     orderId,
                     amount,
                     currency,
@@ -143,7 +145,7 @@ module.exports = async (req, res) => {
                     email: data.email,
                     phone: data.phone || (data.customer ? data.customer.phone : null),
                     createdAt: admin.firestore.Timestamp.now(),
-                    status: "New",
+                    status: "Paid", // Assuming order creation means paid/confirmed
                     items: data.line_items.map(item => ({
                         name: item.title,
                         quantity: item.quantity,
@@ -151,7 +153,26 @@ module.exports = async (req, res) => {
                     }))
                 };
 
+                // 1. Save Order
                 await db.collection("orders").doc(String(data.id)).set(orderData);
+
+                // 2. CLEANUP: Find and Delete the Active Cart (converted)
+                // We match Shopify's 'checkout_token' with our saved 'shopifyCartToken'
+                if (data.checkout_token) {
+                    const cartSnapshot = await db.collection("checkouts")
+                        .where("shopifyCartToken", "==", data.checkout_token)
+                        .get();
+
+                    if (!cartSnapshot.empty) {
+                        const batch = db.batch();
+                        cartSnapshot.docs.forEach(doc => {
+                            batch.delete(doc.ref);
+                        });
+                        await batch.commit();
+                        console.log(`Converted Cart Deleted: ${data.checkout_token}`);
+                    }
+                }
+
                 console.log(`Shopify Order ${data.order_number} saved.`);
                 return res.status(200).json({ success: true });
             }

@@ -1,7 +1,8 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme as NavigationDarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Provider as PaperProvider, MD3LightTheme } from 'react-native-paper';
+import { Provider as PaperProvider, adaptNavigationTheme } from 'react-native-paper';
+import { StatusBar } from 'react-native';
 import HomeScreen from './src/screens/HomeScreen';
 import CustomersScreen from './src/screens/CustomersScreen';
 import AddCustomerScreen from './src/screens/AddCustomerScreen';
@@ -12,19 +13,38 @@ import DatabaseManagerScreen from './src/screens/DatabaseManagerScreen';
 
 import { theme } from './src/theme/theme';
 
+const { DarkTheme } = adaptNavigationTheme({
+  reactNavigationLight: NavigationDarkTheme, // We force dark
+  reactNavigationDark: NavigationDarkTheme,
+});
+
+const CombinedTheme = {
+  ...DarkTheme,
+  ...theme,
+  colors: {
+    ...DarkTheme.colors,
+    ...theme.colors,
+  },
+};
+
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
-    <PaperProvider theme={theme}>
-      <NavigationContainer>
+    <PaperProvider theme={CombinedTheme}>
+      <NavigationContainer theme={CombinedTheme}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
         <Stack.Navigator
           initialRouteName="Home"
           screenOptions={{
             headerStyle: {
-              backgroundColor: theme.colors.primary,
+              backgroundColor: '#000000', // Black Header as requested
             },
-            headerTintColor: theme.colors.onPrimary,
+            headerTintColor: '#fff',
+            headerTitleStyle: {
+              fontWeight: 'bold',
+            },
+            headerShadowVisible: false, // Clean look, no shadow line
           }}
         >
           <Stack.Screen

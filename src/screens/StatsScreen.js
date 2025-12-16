@@ -102,67 +102,67 @@ const StatsScreen = ({ navigation }) => {
     }, []);
 
     const chartConfig = {
-        backgroundGradientFrom: "#fff",
-        backgroundGradientTo: "#fff",
+        backgroundGradientFrom: theme.colors.surface,
+        backgroundGradientTo: theme.colors.surface,
         decimalPlaces: 0,
-        color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
-        labelColor: (opacity = 1) => `rgba(0, 0, 0, 0.5)`,
+        color: (opacity = 1) => `rgba(138, 180, 248, ${opacity})`, // Google Blue
+        labelColor: (opacity = 1) => theme.colors.onSurfaceVariant,
         style: { borderRadius: 0 },
-        propsForDots: { r: "4", strokeWidth: "2", stroke: "#4F46E5" }
+        propsForDots: { r: "4", strokeWidth: "2", stroke: theme.colors.primary }
     };
 
     if (loading) {
         return (
-            <View style={[styles.container, styles.center]}>
+            <View style={[styles.container, styles.center, { backgroundColor: theme.colors.background }]}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
         );
     }
 
     return (
-        <View style={styles.container}>
-            <Appbar.Header style={{ backgroundColor: '#fff', elevation: 0, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-                <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold' }} />
-                <Appbar.Action icon="calendar" onPress={() => { }} />
+        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
+                <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }} />
+                <Appbar.Action icon="calendar" color={theme.colors.onSurface} onPress={() => { }} />
             </Appbar.Header>
 
             <ScrollView
                 style={styles.content}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
             >
                 {/* Key Metrics - Simple Cards */}
                 <View style={styles.metricsRow}>
-                    <Surface style={styles.metricCard} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: '#666' }}>TOTAL REVENUE</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', marginTop: 4 }}>₹{todaysSales.toLocaleString()}</Text>
+                    <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>TOTAL REVENUE</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>₹{todaysSales.toLocaleString()}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Icon source="chart-line" size={16} color="#4F46E5" />
-                            <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Sales</Text>
+                            <Icon source="chart-line" size={16} color={theme.colors.primary} />
+                            <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Sales</Text>
                         </View>
                     </Surface>
 
-                    <Surface style={styles.metricCard} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: '#666' }}>ACTIVE CARTS</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', marginTop: 4 }}>{activeCarts}</Text>
+                    <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE CARTS</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeCarts}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e', marginRight: 6 }} />
-                            <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: 'bold' }}>Live Now</Text>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
+                            <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>Live Now</Text>
                         </View>
                     </Surface>
 
-                    <Surface style={styles.metricCard} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: '#666' }}>ABANDONED</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', marginTop: 4 }}>{abandonedCarts}</Text>
+                    <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ABANDONED</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{abandonedCarts}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Icon source="cart-off" size={16} color="#ef4444" />
-                            <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Lost</Text>
+                            <Icon source="cart-off" size={16} color={theme.colors.error} />
+                            <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Lost</Text>
                         </View>
                     </Surface>
                 </View>
 
                 {/* Chart Section */}
-                <Surface style={styles.chartSection} elevation={0}>
-                    <Text variant="titleMedium" style={{ paddingHorizontal: 16, paddingTop: 16, fontWeight: 'bold' }}>Sales Trend</Text>
+                <Surface style={[styles.chartSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                    <Text variant="titleMedium" style={{ paddingHorizontal: 16, paddingTop: 16, fontWeight: 'bold', color: theme.colors.onSurface }}>Sales Trend</Text>
                     <LineChart
                         data={chartData}
                         width={screenWidth}
@@ -177,29 +177,35 @@ const StatsScreen = ({ navigation }) => {
                 </Surface>
 
                 {/* Recent Activity List */}
-                <View style={styles.listSection}>
-                    <Text variant="titleMedium" style={{ padding: 16, fontWeight: 'bold', backgroundColor: '#f9f9f9' }}>Live Feed</Text>
+                <View style={[styles.listSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
+                    <Text variant="titleMedium" style={{ padding: 16, fontWeight: 'bold', backgroundColor: theme.colors.surfaceVariant, color: theme.colors.onSurfaceVariant }}>Live Feed</Text>
                     <Divider />
                     {recentActivity.map((item) => (
                         <React.Fragment key={item.id}>
                             <List.Item
                                 title={item.customerName || 'Guest User'}
-                                titleStyle={{ fontWeight: 'bold' }}
+                                titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }}
                                 description={() => (
                                     <View>
-                                        <Text variant="bodySmall" style={{ color: '#666' }}>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                                             {item.items && item.items.length > 0 ? item.items[0].name : 'Browsing'}
                                         </Text>
+                                        {item.phone && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                                <Icon source="phone" size={12} color={theme.colors.onSurfaceVariant} />
+                                                <Text style={{ fontSize: 11, color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>{item.phone}</Text>
+                                            </View>
+                                        )}
                                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}>
                                             {item.stage && (
-                                                <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                    <Text style={{ fontSize: 10, color: '#0284c7', fontWeight: 'bold' }}>{item.stage}</Text>
+                                                <View style={{ backgroundColor: theme.colors.secondaryContainer, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                    <Text style={{ fontSize: 10, color: theme.colors.onSecondaryContainer, fontWeight: 'bold' }}>{item.stage}</Text>
                                                 </View>
                                             )}
                                             {item.source && (
-                                                <Text style={{ fontSize: 10, color: '#9ca3af' }}>via {item.source}</Text>
+                                                <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant }}>via {item.source}</Text>
                                             )}
-                                            <Text style={{ fontSize: 10, color: '#9ca3af' }}>• {item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                            <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant }}>• {item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                                         </View>
                                     </View>
                                 )}
@@ -208,19 +214,19 @@ const StatsScreen = ({ navigation }) => {
                                         {...props}
                                         icon={item.eventType === 'ABANDONED' ? "cart-off" : "cart-outline"}
                                         size={40}
-                                        style={{ backgroundColor: item.eventType === 'ABANDONED' ? '#ffebee' : '#e0e7ff' }}
-                                        color={item.eventType === 'ABANDONED' ? '#c62828' : '#4338ca'}
+                                        style={{ backgroundColor: item.eventType === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer }}
+                                        color={item.eventType === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer}
                                     />
                                 )}
                                 right={props => (
                                     <View style={{ justifyContent: 'center', alignItems: 'flex-end', marginRight: 16 }}>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>₹{item.amount}</Text>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.amount}</Text>
                                         {item.city && (
-                                            <Text variant="labelSmall" style={{ color: '#6b7280' }}>{item.city}</Text>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.city}</Text>
                                         )}
                                     </View>
                                 )}
-                                style={{ backgroundColor: '#fff' }}
+                                style={{ backgroundColor: theme.colors.surface }}
                             />
                             <Divider />
                         </React.Fragment>
@@ -232,7 +238,7 @@ const StatsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f5f5' },
+    container: { flex: 1 },
     center: { justifyContent: 'center', alignItems: 'center' },
     content: { flex: 1 },
     metricsRow: {
@@ -242,23 +248,17 @@ const styles = StyleSheet.create({
     },
     metricCard: {
         flex: 1,
-        backgroundColor: '#fff',
         padding: 16,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#e0e0e0',
     },
     chartSection: {
-        backgroundColor: '#fff',
         marginBottom: 16,
         borderTopWidth: 1,
         borderBottomWidth: 1,
-        borderColor: '#e0e0e0',
     },
     listSection: {
-        backgroundColor: '#fff',
         borderTopWidth: 1,
-        borderColor: '#e0e0e0',
     },
 });
 
