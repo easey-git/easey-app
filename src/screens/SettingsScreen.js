@@ -17,6 +17,7 @@ const SettingsScreen = ({ navigation }) => {
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0 }}>
+                <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
                 <Appbar.Content title="Settings" titleStyle={{ fontWeight: 'bold' }} />
             </Appbar.Header>
 

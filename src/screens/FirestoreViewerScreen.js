@@ -276,6 +276,7 @@ const FirestoreViewerScreen = ({ navigation }) => {
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
+                <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
                 <Appbar.Content title="Database" titleStyle={{ fontWeight: 'bold', fontSize: 20 }} />
 
                 {/* Select All Checkbox */}

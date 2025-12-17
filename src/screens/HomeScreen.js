@@ -121,20 +121,20 @@ const HomeScreen = ({ navigation }) => {
             title: 'Database',
             subtitle: 'Raw Data',
             icon: 'database',
-            screen: 'FirestoreViewer',
+            screen: 'DatabaseManager',
         },
     ];
 
     return (
-        <View style={[styles.container, { backgroundColor: '#000000' }]}>
-            <Appbar.Header style={{ backgroundColor: '#000000', elevation: 0 }}>
-                <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold', fontSize: 24, color: '#ffffff' }} />
-                <Avatar.Text size={36} label="MK" style={{ backgroundColor: '#333', marginRight: 16 }} color="#fff" />
+        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0 }}>
+                <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold', fontSize: 24, color: theme.colors.onBackground }} />
+                <Avatar.Text size={36} label="MK" style={{ backgroundColor: theme.colors.primaryContainer, marginRight: 16 }} color={theme.colors.onPrimaryContainer} />
             </Appbar.Header>
 
             <ScrollView
                 contentContainerStyle={styles.content}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
             >
                 {/* Date Filter - Minimalist */}
                 <View style={{ marginBottom: 24 }}>
@@ -146,61 +146,65 @@ const HomeScreen = ({ navigation }) => {
                             { value: 'week', label: '7 Days' },
                             { value: 'month', label: '30 Days' },
                         ]}
-                        theme={{ colors: { secondaryContainer: '#333', onSecondaryContainer: '#fff', outline: '#333' } }}
-                        style={{ backgroundColor: '#000' }}
+                        style={{ backgroundColor: theme.colors.elevation.level1 }}
                     />
                 </View>
 
-                {/* Stats Grid - Clean Black/Grey */}
+                {/* Stats Grid - Clean */}
                 <View style={styles.statsGrid}>
-                    <Surface style={styles.statCard} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: '#888' }}>Total Sales</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: '#fff', marginTop: 4 }}>
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Total Sales</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
                             ₹{stats.sales.toLocaleString('en-IN')}
                         </Text>
                     </Surface>
 
-                    <Surface style={styles.statCard} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: '#888' }}>Orders</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: '#fff', marginTop: 4 }}>
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Orders</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
                             {stats.orders}
                         </Text>
                     </Surface>
 
-                    <Surface style={styles.statCard} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: '#888' }}>AOV</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: '#fff', marginTop: 4 }}>
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>AOV</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
                             ₹{stats.aov.toLocaleString('en-IN')}
                         </Text>
                     </Surface>
 
-                    <Surface style={styles.statCard} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: '#888' }}>Active Carts</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: '#fff', marginTop: 4 }}>
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Active Carts</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
                             {stats.activeCarts}
                         </Text>
                     </Surface>
                 </View>
 
-                <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8, color: '#fff' }}>Quick Actions</Text>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8, color: theme.colors.onBackground }}>Quick Actions</Text>
 
                 <View style={styles.menuGrid}>
                     {menuItems.map((item) => (
                         <Surface
                             key={item.id}
-                            style={styles.menuCard}
+                            style={[styles.menuCard, { backgroundColor: theme.colors.secondaryContainer }]}
                             elevation={0}
                         >
                             <Button
                                 mode="text"
                                 contentStyle={{ height: 140, flexDirection: 'column', justifyContent: 'center' }}
                                 onPress={() => navigation.navigate(item.screen)}
-                                textColor="#fff"
+                                textColor={theme.colors.onSecondaryContainer}
                             >
                                 <View style={{ alignItems: 'center' }}>
-                                    <Icon source={item.icon} size={32} color="#fff" />
-                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', marginTop: 12, color: '#fff' }}>{item.title}</Text>
-                                    <Text variant="bodySmall" style={{ color: '#888', marginTop: 4 }}>{item.subtitle}</Text>
+                                    <Avatar.Icon
+                                        size={48}
+                                        icon={item.icon}
+                                        style={{ backgroundColor: 'transparent', marginBottom: 8 }}
+                                        color={theme.colors.onSecondaryContainer}
+                                    />
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer }}>{item.title}</Text>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSecondaryContainer, opacity: 0.7 }}>{item.subtitle}</Text>
                                 </View>
                             </Button>
                         </Surface>
@@ -208,8 +212,8 @@ const HomeScreen = ({ navigation }) => {
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 32, justifyContent: 'center', opacity: 0.5 }}>
-                    <Icon source="database" size={16} color="#666" />
-                    <Text variant="bodySmall" style={{ marginLeft: 8, color: '#666' }}>Firestore Connected</Text>
+                    <Icon source="database" size={16} color={theme.colors.onBackground} />
+                    <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>Firestore Connected</Text>
                 </View>
             </ScrollView>
         </View>
@@ -234,9 +238,6 @@ const styles = StyleSheet.create({
         width: '48%',
         padding: 20,
         borderRadius: 16,
-        backgroundColor: '#1A1A1A', // Dark Grey
-        borderWidth: 1,
-        borderColor: '#333',
     },
     menuGrid: {
         flexDirection: 'row',
@@ -246,9 +247,6 @@ const styles = StyleSheet.create({
     menuCard: {
         width: '48%',
         borderRadius: 16,
-        backgroundColor: '#1A1A1A',
-        borderWidth: 1,
-        borderColor: '#333',
         overflow: 'hidden',
     }
 });

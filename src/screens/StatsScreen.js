@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, RefreshControl } from 'react-native';
-import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divider, Avatar } from 'react-native-paper';
+import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divider, Avatar, useTheme } from 'react-native-paper';
 import { LineChart } from 'react-native-chart-kit';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { theme } from '../theme/theme';
 
 const StatsScreen = ({ navigation }) => {
+    const theme = useTheme();
     const screenWidth = Dimensions.get('window').width;
     const [loading, setLoading] = useState(true);
     const [todaysSales, setTodaysSales] = useState(0);
@@ -122,6 +122,7 @@ const StatsScreen = ({ navigation }) => {
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
+                <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
                 <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }} />
                 <Appbar.Action icon="calendar" color={theme.colors.onSurface} onPress={() => { }} />
             </Appbar.Header>
