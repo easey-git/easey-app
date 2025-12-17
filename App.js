@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Provider as PaperProvider, adaptNavigationTheme, MD3DarkTheme, MD3LightTheme } from 'react-native-paper';
-import { StatusBar, ActivityIndicator, View } from 'react-native';
+import { Provider as PaperProvider, adaptNavigationTheme, MD3DarkTheme, MD3LightTheme, Text, Button, Surface } from 'react-native-paper';
+import { StatusBar, ActivityIndicator, View, AppState } from 'react-native';
 import { useFonts } from 'expo-font';
+import * as LocalAuthentication from 'expo-local-authentication';
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import StatsScreen from './src/screens/StatsScreen';
@@ -43,15 +44,119 @@ const CombinedLightTheme = {
 
 function AppNavigator() {
   const { user, loading } = useAuth();
-  const { isThemeDark } = usePreferences();
+  const { isThemeDark, biometricsEnabled, preferencesLoaded } = usePreferences();
+  const [isLocked, setIsLocked] = useState(true);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const activeTheme = isThemeDark ? CombinedDarkTheme : CombinedLightTheme;
 
-  // Show loading screen while checking auth state
-  if (loading) {
+  // Handle Lock State
+  useEffect(() => {
+    if (preferencesLoaded) {
+      if (!biometricsEnabled) {
+        setIsLocked(false);
+      }
+    }
+  }, [preferencesLoaded, biometricsEnabled]);
+
+  // Trigger Biometrics if Locked
+  const authenticate = async () => {
+    if (isAuthenticating) return;
+
+    setIsAuthenticating(true);
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (!hasHardware || !isEnrolled) {
+        // Fallback or just unlock if hardware became unavailable (edge case)
+        // For security, we might want to force logout, but for now let's just log
+        console.log('Biometrics not available');
+        setIsAuthenticating(false);
+        return;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Unlock Easey CRM',
+        fallbackLabel: 'Use Passcode',
+        cancelLabel: 'Cancel',
+        disableDeviceFallback: false, // Allow PIN/Pattern if biometrics fail
+      });
+
+      if (result.success) {
+        setIsLocked(false);
+      }
+    } catch (e) {
+      console.log('Auth failed', e);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user && biometricsEnabled && isLocked && preferencesLoaded) {
+      // Small delay to ensure UI is ready and avoid race conditions
+      const timer = setTimeout(() => {
+        authenticate();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [user, biometricsEnabled, isLocked, preferencesLoaded]);
+
+  // Re-lock on Background with Grace Period
+  const backgroundTime = React.useRef(0);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'background') {
+        // App went to background, record time
+        backgroundTime.current = Date.now();
+      } else if (nextAppState === 'active') {
+        // App came to foreground
+        if (backgroundTime.current > 0) {
+          const elapsed = Date.now() - backgroundTime.current;
+          // If more than 1 minute (60000ms) has passed, lock the app
+          if (elapsed > 60000 && user && biometricsEnabled) {
+            setIsLocked(true);
+          }
+          // Reset background time
+          backgroundTime.current = 0;
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user, biometricsEnabled]);
+
+  // Show loading screen while checking auth state or preferences
+  if (loading || !preferencesLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: activeTheme.colors.background }}>
         <ActivityIndicator size="large" color={activeTheme.colors.primary} />
+      </View>
+    );
+  }
+
+  // Show Lock Screen
+  if (user && biometricsEnabled && isLocked) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: activeTheme.colors.background }}>
+        <StatusBar barStyle={isThemeDark ? "light-content" : "dark-content"} backgroundColor={activeTheme.colors.background} />
+        <Surface style={{ padding: 32, borderRadius: 16, alignItems: 'center', elevation: 4 }} elevation={4}>
+          <Text variant="headlineMedium" style={{ marginBottom: 16, fontWeight: 'bold' }}>Locked</Text>
+          <Text variant="bodyMedium" style={{ marginBottom: 24, textAlign: 'center' }}>Please authenticate to continue</Text>
+          <Button
+            mode="contained"
+            onPress={authenticate}
+            loading={isAuthenticating}
+            disabled={isAuthenticating}
+            icon="fingerprint"
+          >
+            Unlock
+          </Button>
+        </Surface>
       </View>
     );
   }

@@ -14,6 +14,7 @@ export const PreferencesProvider = ({ children }) => {
     const [isThemeDark, setIsThemeDark] = useState(true);
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+    const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
     useEffect(() => {
         // Load preferences on mount
@@ -28,6 +29,8 @@ export const PreferencesProvider = ({ children }) => {
                 if (bio !== null) setBiometricsEnabled(bio === 'true');
             } catch (e) {
                 console.error("Failed to load preferences", e);
+            } finally {
+                setPreferencesLoaded(true);
             }
         };
         loadPreferences();
@@ -71,6 +74,7 @@ export const PreferencesProvider = ({ children }) => {
             toggleNotifications,
             biometricsEnabled,
             toggleBiometrics,
+            preferencesLoaded,
         }}>
             {children}
         </PreferencesContext.Provider>
