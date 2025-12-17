@@ -20,7 +20,7 @@ const fontConfig = {
 
 export const theme = {
     ...MD3DarkTheme,
-    fonts: configureFonts({ config: fontConfig }),
+    // fonts: configureFonts({ config: fontConfig }), // Using default MD3 fonts to avoid variant errors
     colors: {
         ...MD3DarkTheme.colors,
         // Google Material Dark Palette

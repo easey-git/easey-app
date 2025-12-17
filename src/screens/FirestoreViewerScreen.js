@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
-import { Text, useTheme, Appbar, Surface, IconButton, Portal, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Dialog, Paragraph } from 'react-native-paper';
+import { Text, useTheme, Appbar, Surface, IconButton, Portal, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Dialog, Paragraph, Snackbar } from 'react-native-paper';
 import { collection, getDocs, deleteDoc, updateDoc, doc, limit, query, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -21,7 +21,18 @@ const FirestoreViewerScreen = ({ navigation }) => {
     const [confirmMessage, setConfirmMessage] = useState('');
     const [onConfirm, setOnConfirm] = useState(() => () => { });
 
+    // Snackbar State
+    const [snackbarVisible, setSnackbarVisible] = useState(false);
+    const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [snackbarColor, setSnackbarColor] = useState('#333');
+
     const theme = useTheme();
+
+    const showSnackbar = (message, isError = false) => {
+        setSnackbarMessage(message);
+        setSnackbarColor(isError ? theme.colors.error : theme.colors.inverseSurface);
+        setSnackbarVisible(true);
+    };
 
     useEffect(() => {
         fetchDocuments();
@@ -40,6 +51,7 @@ const FirestoreViewerScreen = ({ navigation }) => {
             setDocuments(docs);
         } catch (error) {
             console.error("Error fetching docs:", error);
+            showSnackbar("Failed to fetch documents", true);
         }
         setLoading(false);
     };
@@ -71,10 +83,10 @@ const FirestoreViewerScreen = ({ navigation }) => {
                 console.log("Batch commit successful");
                 setSelectedItems(new Set());
                 fetchDocuments();
-                alert("Documents deleted");
+                showSnackbar("Documents deleted successfully");
             } catch (error) {
                 console.error("Error bulk deleting:", error);
-                alert(`Failed to delete: ${error.message}`);
+                showSnackbar(`Failed to delete: ${error.message}`, true);
             }
             setLoading(false);
             setConfirmVisible(false);
@@ -93,10 +105,10 @@ const FirestoreViewerScreen = ({ navigation }) => {
                 console.log("Delete successful");
                 setVisible(false);
                 fetchDocuments();
-                alert("Document deleted");
+                showSnackbar("Document deleted successfully");
             } catch (error) {
                 console.error("Error deleting document:", error);
-                alert(`Failed to delete: ${error.message}`);
+                showSnackbar(`Failed to delete: ${error.message}`, true);
             }
             setConfirmVisible(false);
         });
@@ -110,10 +122,10 @@ const FirestoreViewerScreen = ({ navigation }) => {
             await updateDoc(doc(db, selectedCollection, id), dataToUpdate);
             setIsEditing(false);
             fetchDocuments();
-            alert("Document updated successfully");
+            showSnackbar("Document updated successfully");
         } catch (error) {
             console.error("Error updating:", error);
-            alert("Failed to update document");
+            showSnackbar("Failed to update document", true);
         }
     };
 
@@ -386,6 +398,16 @@ const FirestoreViewerScreen = ({ navigation }) => {
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
+
+            {/* Success/Error Snackbar */}
+            <Snackbar
+                visible={snackbarVisible}
+                onDismiss={() => setSnackbarVisible(false)}
+                duration={3000}
+                style={{ backgroundColor: snackbarColor }}
+            >
+                {snackbarMessage}
+            </Snackbar>
         </View>
     );
 };

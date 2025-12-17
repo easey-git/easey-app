@@ -111,10 +111,10 @@ const HomeScreen = ({ navigation }) => {
         },
         {
             id: 3,
-            title: 'Customers',
-            subtitle: 'User Base',
-            icon: 'account-group',
-            screen: 'Customers',
+            title: 'Settings',
+            subtitle: 'App Configuration',
+            icon: 'cog',
+            screen: 'Settings',
         },
         {
             id: 4,
