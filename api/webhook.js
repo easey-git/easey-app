@@ -65,7 +65,7 @@ module.exports = async (req, res) => {
                 const email = data.email || "";
 
                 // Items Logic
-                let items = [];
+                let items = null;
                 if (Array.isArray(data.items) && data.items.length > 0) {
                     items = data.items.map(i => ({
                         name: i.name || i.title || "Unknown Item",
@@ -73,13 +73,6 @@ module.exports = async (req, res) => {
                         price: i.price || 0,
                         image: i.image || null
                     }));
-                } else if (data.item_count > 0) {
-                    // Placeholder if items details are missing but count exists
-                    items = [{
-                        name: `${data.item_count} Item(s)`,
-                        quantity: data.item_count,
-                        price: amount
-                    }];
                 }
 
                 const city = address.city || "";
@@ -105,20 +98,31 @@ module.exports = async (req, res) => {
 
                 // 3. Duplicate Prevention & Save to Firestore
                 const docId = checkoutId ? `checkout_${checkoutId}` : `unknown_${Date.now()}`;
+                const docRef = db.collection("checkouts").doc(docId);
+
+                // Check existing state to prevent regression (e.g. ORDER_PLACED -> PAYMENT_INITIATED)
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
+                    const existingData = docSnap.data();
+                    if (existingData.latest_stage === 'ORDER_PLACED' && stage === 'PAYMENT_INITIATED') {
+                        console.log(`Ignoring PAYMENT_INITIATED for ${docId} as it is already ORDER_PLACED`);
+                        return res.status(200).send("OK");
+                    }
+                }
 
                 const checkoutData = {
                     eventType,
-                    stage: readableStage,
+                    latest_stage: stage, // Save raw stage for logic
+                    stage: readableStage, // Save readable stage for display
                     checkoutId,
                     shopifyCartToken, // Save token to link with Order later
                     orderId,
-                    amount,
+                    totalPrice: amount, // Standardize to totalPrice
                     currency,
                     customerName,
                     email,
                     phone,
                     phoneNormalized, // For smart matching
-                    items,
                     city,
                     state,
                     pincode,
@@ -128,7 +132,12 @@ module.exports = async (req, res) => {
                     rawJson: JSON.stringify(data)
                 };
 
-                await db.collection("checkouts").doc(docId).set(checkoutData, { merge: true });
+                // Only update items if we have valid item data (prevents overwriting with empty/placeholder)
+                if (items) {
+                    checkoutData.items = items;
+                }
+
+                await docRef.set(checkoutData, { merge: true });
 
                 console.log(`Shiprocket Event: ${eventType} (${readableStage}) for ${customerName}`);
                 return res.status(200).send("OK");

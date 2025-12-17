@@ -69,11 +69,25 @@ const HomeScreen = ({ navigation }) => {
         );
 
         const unsubCarts = onSnapshot(cartsQuery, (snapshot) => {
-            // Filter for strictly "active" if needed, but for now count all recent checkouts
-            // You might want to filter out 'converted' ones if you flag them
+            let activeCount = 0;
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const rawStage = data.latest_stage || '';
+                const updatedAt = data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date();
+                const now = new Date();
+                const diffMinutes = Math.abs(now.getTime() - updatedAt.getTime()) / (1000 * 60);
+
+                const isOrdered = rawStage === 'ORDER_PLACED' || rawStage === 'PAYMENT_INITIATED' || rawStage === 'COMPLETED' || !!data.orderId;
+                const isAbandoned = rawStage === 'CHECKOUT_ABANDONED' || diffMinutes > 3;
+
+                if (!isOrdered && !isAbandoned) {
+                    activeCount++;
+                }
+            });
+
             setStats(prev => ({
                 ...prev,
-                activeCarts: snapshot.size
+                activeCarts: activeCount
             }));
         });
 

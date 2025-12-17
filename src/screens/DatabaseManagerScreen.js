@@ -181,7 +181,7 @@ const OrderManagementScreen = ({ navigation }) => {
 
             {/* Comprehensive Details Modal */}
             <Portal>
-                <Modal visible={visible} onDismiss={hideModal} contentContainerStyle={{ padding: 20 }}>
+                <Modal visible={visible} onDismiss={hideModal} contentContainerStyle={{ padding: 16, alignItems: 'center' }}>
                     {selectedItem && (
                         <Surface style={[styles.modalContent, { backgroundColor: theme.colors.surface }]} elevation={4}>
                             <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 12,
     },
-    modalContent: { borderRadius: 12, padding: 20, maxHeight: '80%' },
+    modalContent: { borderRadius: 12, padding: 16, maxHeight: '80%', maxWidth: 500, width: '100%', alignSelf: 'center' },
     detailRow: { flexDirection: 'row', alignItems: 'center' }
 });
 

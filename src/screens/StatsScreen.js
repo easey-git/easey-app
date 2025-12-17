@@ -91,7 +91,8 @@ const StatsScreen = ({ navigation }) => {
 
             snapshot.docs.forEach(doc => {
                 const data = doc.data();
-                const stage = data.latest_stage || data.eventType || '';
+                const rawStage = data.latest_stage || '';
+                const displayStage = data.stage || data.eventType || rawStage;
                 const updatedAt = data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date();
                 const now = new Date();
                 const diffMinutes = Math.abs(now.getTime() - updatedAt.getTime()) / (1000 * 60);
@@ -101,8 +102,8 @@ const StatsScreen = ({ navigation }) => {
                 // Converted/Not Active: ORDER_PLACED, PAYMENT_INITIATED
                 // Abandoned: Explicitly abandoned or old (> 5 mins)
 
-                const isOrdered = stage === 'ORDER_PLACED' || stage === 'PAYMENT_INITIATED' || stage === 'COMPLETED' || !!data.orderId;
-                const isAbandoned = stage === 'CHECKOUT_ABANDONED' || diffMinutes > 5;
+                const isOrdered = rawStage === 'ORDER_PLACED' || rawStage === 'PAYMENT_INITIATED' || rawStage === 'COMPLETED' || !!data.orderId;
+                const isAbandoned = rawStage === 'CHECKOUT_ABANDONED' || diffMinutes > 3;
 
                 if (isAbandoned) {
                     abandoned++;
@@ -110,12 +111,15 @@ const StatsScreen = ({ navigation }) => {
                     active++;
                 }
 
-                activities.push({
-                    id: doc.id,
-                    ...data,
-                    status: stage, // Use stage as status for display
-                    jsDate: updatedAt
-                });
+                // Only show in feed if updated within last 5 minutes (gives 2 mins to see "Abandoned" status)
+                if (diffMinutes <= 5) {
+                    activities.push({
+                        id: doc.id,
+                        ...data,
+                        status: displayStage, // Use readable stage for display
+                        jsDate: updatedAt
+                    });
+                }
             });
 
             setActiveCarts(active);
@@ -287,7 +291,7 @@ const StatsScreen = ({ navigation }) => {
                                         </View>
                                     )}
                                     left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />}
-                                    right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || 0}</Text>}
+                                    right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.amount || 0}</Text>}
                                 />
                                 <Divider />
                             </React.Fragment>

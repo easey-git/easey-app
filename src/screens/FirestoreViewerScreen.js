@@ -391,9 +391,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 onRefresh={fetchDocuments}
             />
 
-            {/* Details Modal */}
             <Portal>
-                <Modal visible={visible} onDismiss={() => setVisible(false)} contentContainerStyle={{ padding: 20 }}>
+                <Modal visible={visible} onDismiss={() => setVisible(false)} contentContainerStyle={{ padding: 16, alignItems: 'center' }}>
                     <Surface style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                             <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>
@@ -408,7 +407,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                             </View>
                         </View>
 
-                        <ScrollView style={{ marginBottom: 16 }}>
+                        <ScrollView style={{ marginBottom: 16, flexShrink: 1 }}>
                             {editedDoc && Object.entries(editedDoc).map(([key, value]) => (
                                 key !== 'id' && (
                                     <RenderField key={key} label={key} value={value} />
@@ -479,14 +478,15 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         borderRadius: 12,
-        padding: 20,
-        height: '90%',
+        padding: 16,
+        maxHeight: '70%',
         width: '100%',
+        maxWidth: 500,
         alignSelf: 'center'
     },
     fieldRow: {
-        marginBottom: 8,
-        paddingVertical: 4
+        marginBottom: 4,
+        paddingVertical: 2
     }
 });
 
