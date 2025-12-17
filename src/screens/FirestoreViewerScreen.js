@@ -5,7 +5,7 @@ import { collection, getDocs, deleteDoc, updateDoc, doc, limit, query, writeBatc
 import { db } from '../config/firebase';
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
-    const [collections, setCollections] = useState(['orders', 'checkouts', 'customers']);
+    const [collections, setCollections] = useState(['orders', 'checkouts', 'push_tokens']);
     const [selectedCollection, setSelectedCollection] = useState(route.params?.collection || 'orders');
     const [documents, setDocuments] = useState([]);
     const [selectedDoc, setSelectedDoc] = useState(null);
@@ -251,6 +251,40 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const renderDocItem = ({ item }) => {
         const isSelected = selectedItems.has(item.id);
         const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
+
+        // Special rendering for Push Tokens
+        if (selectedCollection === 'push_tokens') {
+            return (
+                <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
+                    <TouchableOpacity onPress={() => showDocDetails(item)} onLongPress={() => toggleSelection(item.id)} delayLongPress={200}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+                            <Checkbox
+                                status={isSelected ? 'checked' : 'unchecked'}
+                                onPress={() => toggleSelection(item.id)}
+                            />
+                            <Avatar.Icon
+                                size={40}
+                                icon={item.platform === 'ios' ? 'apple' : 'android'}
+                                style={{ backgroundColor: theme.colors.secondaryContainer, marginLeft: 4 }}
+                                color={theme.colors.onSecondaryContainer}
+                            />
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                    {item.platform ? item.platform.toUpperCase() : 'UNKNOWN'}
+                                </Text>
+                                <Text variant="bodySmall" numberOfLines={1} style={{ color: theme.colors.onSurfaceVariant, fontFamily: 'monospace' }}>
+                                    {item.token}
+                                </Text>
+                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
+                                    User: {item.userId ? item.userId.substring(0, 8) + '...' : 'N/A'}
+                                </Text>
+                            </View>
+                            <IconButton icon="chevron-right" size={20} />
+                        </View>
+                    </TouchableOpacity>
+                </Surface>
+            );
+        }
 
         return (
             <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
