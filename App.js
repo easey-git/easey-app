@@ -10,6 +10,7 @@ import CustomerDetailScreen from './src/screens/CustomerDetailScreen';
 
 import StatsScreen from './src/screens/StatsScreen';
 import OrderManagementScreen from './src/screens/DatabaseManagerScreen';
+import FirestoreViewerScreen from './src/screens/FirestoreViewerScreen';
 
 import { theme } from './src/theme/theme';
 
@@ -61,6 +62,11 @@ export default function App() {
             name="DatabaseManager"
             component={OrderManagementScreen}
             options={{ title: 'Manage Data' }}
+          />
+          <Stack.Screen
+            name="FirestoreViewer"
+            component={FirestoreViewerScreen}
+            options={{ title: 'Database' }}
           />
           <Stack.Screen
             name="Customers"

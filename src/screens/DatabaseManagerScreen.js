@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, DataTable, useTheme, Appbar, SegmentedButtons, IconButton, Portal, Modal, Surface, Button, Divider, Avatar } from 'react-native-paper';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet, FlatList, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { Text, useTheme, Appbar, IconButton, Portal, Modal, Surface, Button, Divider, Avatar, Searchbar } from 'react-native-paper';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const OrderManagementScreen = ({ navigation }) => {
     const [data, setData] = useState([]);
-    const [viewType, setViewType] = useState('orders'); // 'orders' or 'checkouts'
-    const [page, setPage] = useState(0);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [filteredData, setFilteredData] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
     const [selectedItem, setSelectedItem] = useState(null);
     const [visible, setVisible] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const theme = useTheme();
 
     const showModal = (item) => {
@@ -19,111 +19,165 @@ const OrderManagementScreen = ({ navigation }) => {
     };
     const hideModal = () => setVisible(false);
 
-    useEffect(() => {
-        const collectionName = viewType === 'orders' ? 'orders' : 'checkouts';
-        const q = query(collection(db, collectionName), orderBy("updatedAt", "desc"), limit(50));
+    const fetchOrders = () => {
+        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(100));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const fetchedData = snapshot.docs.map(doc => {
+                const d = doc.data();
+                return {
+                    id: doc.id,
+                    ...d,
+                    // Helper for search
+                    searchStr: `${d.orderNumber || ''} ${d.customerName || ''} ${d.phone || ''} ${d.email || ''}`.toLowerCase()
+                };
+            });
             setData(fetchedData);
+            setFilteredData(fetchedData);
+            setRefreshing(false);
         });
 
-        return () => unsubscribe();
-    }, [viewType]);
+        return unsubscribe;
+    };
 
-    const handleDelete = async (id) => {
-        try {
-            const collectionName = viewType === 'orders' ? 'orders' : 'checkouts';
-            await deleteDoc(doc(db, collectionName, id));
-            hideModal();
-        } catch (error) {
-            console.error("Error deleting document: ", error);
+    useEffect(() => {
+        const unsubscribe = fetchOrders();
+        return () => unsubscribe();
+    }, []);
+
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        // The onSnapshot listener will automatically update, this is just for UX
+        // If you want to force a re-fetch, you'd call fetchOrders() again here
+        // but onSnapshot handles real-time updates, so a timeout is sufficient for UX.
+        setTimeout(() => setRefreshing(false), 1000);
+    }, []);
+
+    // Handle Search
+    const onSearch = (query) => {
+        setSearchQuery(query);
+        if (query.trim() === '') {
+            setFilteredData(data);
+        } else {
+            const filtered = data.filter(item =>
+                item.searchStr.includes(query.toLowerCase())
+            );
+            setFilteredData(filtered);
         }
     };
 
-    const from = page * itemsPerPage;
-    const to = Math.min((page + 1) * itemsPerPage, data.length);
+    const handleDelete = async (id) => {
+        try {
+            await deleteDoc(doc(db, "orders", id));
+            hideModal();
+        } catch (error) {
+            console.error("Error deleting order:", error);
+        }
+    };
+
+    const formatDate = (timestamp) => {
+        if (!timestamp) return 'N/A';
+        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
+        return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    const renderOrderCard = ({ item }) => (
+        <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={1}>
+            <TouchableOpacity onPress={() => showModal(item)} activeOpacity={0.8}>
+                <View style={styles.cardHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Avatar.Icon
+                            size={32}
+                            icon="package-variant-closed"
+                            style={{ backgroundColor: theme.colors.secondaryContainer }}
+                            color={theme.colors.onSecondaryContainer}
+                        />
+                        <View style={{ marginLeft: 12 }}>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                Order #{item.orderNumber}
+                            </Text>
+                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                {formatDate(item.createdAt)}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={[styles.statusBadge, {
+                        backgroundColor: item.status === 'Paid' ? '#e6fffa' : '#ebf8ff'
+                    }]}>
+                        <Text style={{
+                            color: item.status === 'Paid' ? '#2c7a7b' : '#2b6cb0',
+                            fontSize: 10, fontWeight: 'bold'
+                        }}>
+                            {item.status || 'PAID'}
+                        </Text>
+                    </View>
+                </View>
+
+                <Divider style={{ marginVertical: 12 }} />
+
+                <View style={styles.cardBody}>
+                    <View style={{ flex: 1 }}>
+                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{item.customerName || 'Guest Customer'}</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                            {item.items ? `${item.items.length} Items` : 'No items'} • {item.city || 'No Location'}
+                        </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                            ₹{item.totalPrice}
+                        </Text>
+                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Total</Text>
+                    </View>
+                </View>
+            </TouchableOpacity>
+        </Surface>
+    );
+
+    const EmptyState = () => (
+        <View style={styles.emptyState}>
+            <Avatar.Icon
+                size={80}
+                icon={searchQuery ? "magnify" : "package-variant"}
+                style={{ backgroundColor: theme.colors.surfaceVariant }}
+                color={theme.colors.onSurfaceVariant}
+            />
+            <Text variant="titleMedium" style={{ marginTop: 16, fontWeight: 'bold', color: theme.colors.onSurface }}>
+                {searchQuery ? 'No Orders Found' : 'No Orders Yet'}
+            </Text>
+            <Text variant="bodyMedium" style={{ marginTop: 8, color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
+                {searchQuery
+                    ? `No orders match "${searchQuery}"`
+                    : 'Orders will appear here once customers complete their purchase'}
+            </Text>
+        </View>
+    );
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
-                <Appbar.Content title="Order Management" titleStyle={{ fontWeight: 'bold', fontSize: 20, color: theme.colors.onSurface }} />
+                <Appbar.BackAction onPress={() => navigation.goBack()} />
+                <Appbar.Content title="Orders" titleStyle={{ fontWeight: 'bold', fontSize: 20, color: theme.colors.onSurface }} />
+                <Appbar.Action icon="filter-variant" onPress={() => { }} />
             </Appbar.Header>
 
-            <View style={{ padding: 16 }}>
-                <SegmentedButtons
-                    value={viewType}
-                    onValueChange={setViewType}
-                    buttons={[
-                        { value: 'orders', label: 'Orders', icon: 'package-variant' },
-                        { value: 'checkouts', label: 'Live Carts', icon: 'cart-outline' },
-                    ]}
+            <View style={{ padding: 16, paddingBottom: 8 }}>
+                <Searchbar
+                    placeholder="Search orders, customers..."
+                    onChangeText={setSearchQuery}
+                    value={searchQuery}
+                    style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderColor: theme.colors.outlineVariant }}
+                    inputStyle={{ minHeight: 0 }}
                 />
             </View>
 
-            {/* Standard Data Table */}
-            <ScrollView horizontal contentContainerStyle={{ flexGrow: 1 }}>
-                <View style={{ minWidth: '100%' }}>
-                    <DataTable>
-                        <DataTable.Header>
-                            <DataTable.Title style={{ flex: 2 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>Customer</DataTable.Title>
-                            <DataTable.Title numeric textStyle={{ color: theme.colors.onSurfaceVariant }}>Amount</DataTable.Title>
-                            <DataTable.Title style={{ flex: 1.5 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>Status</DataTable.Title>
-                            <DataTable.Title style={{ flex: 0.5 }} textStyle={{ color: theme.colors.onSurfaceVariant }}>View</DataTable.Title>
-                        </DataTable.Header>
-
-                        {data.slice(from, to).map((item) => (
-                            <DataTable.Row key={item.id} onPress={() => showModal(item)}>
-                                <DataTable.Cell style={{ flex: 2 }}>
-                                    <View>
-                                        <Text variant="bodySmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{item.customerName || 'Guest'}</Text>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                            {viewType === 'orders' ? `#${item.orderNumber || item.id.slice(0, 4)}` : item.phone || 'No Phone'}
-                                        </Text>
-                                    </View>
-                                </DataTable.Cell>
-                                <DataTable.Cell numeric>
-                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurface }}>₹{viewType === 'orders' ? item.totalPrice : item.amount}</Text>
-                                </DataTable.Cell>
-                                <DataTable.Cell style={{ flex: 1.5 }}>
-                                    <View style={[styles.badge, {
-                                        backgroundColor:
-                                            item.status === 'Paid' ? theme.colors.secondaryContainer :
-                                                item.eventType === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer
-                                    }]}>
-                                        <Text style={{
-                                            color:
-                                                item.status === 'Paid' ? theme.colors.onSecondaryContainer :
-                                                    item.eventType === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
-                                            fontSize: 10, fontWeight: 'bold'
-                                        }}>
-                                            {viewType === 'orders' ? (item.status || 'PENDING') : (item.eventType || 'ACTIVE')}
-                                        </Text>
-                                    </View>
-                                </DataTable.Cell>
-                                <DataTable.Cell style={{ flex: 0.5 }}>
-                                    <IconButton icon="chevron-right" size={20} iconColor={theme.colors.onSurfaceVariant} onPress={() => showModal(item)} />
-                                </DataTable.Cell>
-                            </DataTable.Row>
-                        ))}
-
-                        <DataTable.Pagination
-                            page={page}
-                            numberOfPages={Math.ceil(data.length / itemsPerPage)}
-                            onPageChange={(page) => setPage(page)}
-                            label={`${from + 1}-${to} of ${data.length}`}
-                            numberOfItemsPerPageList={[10, 20, 50]}
-                            numberOfItemsPerPage={itemsPerPage}
-                            onItemsPerPageChange={setItemsPerPage}
-                            showFastPaginationControls
-                            selectPageDropdownLabel={'Rows per page'}
-                        />
-                    </DataTable>
-                </View>
-            </ScrollView>
+            <FlatList
+                data={filteredData}
+                renderItem={renderOrderCard}
+                keyExtractor={item => item.id}
+                contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+                ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+                showsVerticalScrollIndicator={false}
+            />
 
             {/* Comprehensive Details Modal */}
             <Portal>
@@ -133,7 +187,7 @@ const OrderManagementScreen = ({ navigation }) => {
                             <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                                     <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                        {viewType === 'orders' ? `Order #${selectedItem.orderNumber}` : 'Cart Details'}
+                                        Order #{selectedItem.orderNumber}
                                     </Text>
                                     <IconButton icon="close" onPress={hideModal} />
                                 </View>
@@ -179,7 +233,7 @@ const OrderManagementScreen = ({ navigation }) => {
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Total</Text>
                                     <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-                                        ₹{viewType === 'orders' ? selectedItem.totalPrice : selectedItem.amount}
+                                        ₹{selectedItem.totalPrice}
                                     </Text>
                                 </View>
 
@@ -203,21 +257,27 @@ const OrderManagementScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
+    container: { flex: 1 },
+    card: {
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
     },
-    toolbar: {
-        padding: 12,
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
-    searchbar: {
-        elevation: 0,
-        height: 40,
-        borderRadius: 8,
+    cardBody: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
-    badge: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 4,
+    statusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
     },
     modalContent: { borderRadius: 12, padding: 20, maxHeight: '80%' },
     detailRow: { flexDirection: 'row', alignItems: 'center' }

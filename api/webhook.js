@@ -140,6 +140,8 @@ module.exports = async (req, res) => {
             if (data.order_number) {
                 const shipping = data.shipping_address || {};
 
+                console.log(`Order ${data.order_number} Gateway: ${data.gateway}, Payment Names: ${JSON.stringify(data.payment_gateway_names)}`);
+
                 const orderData = {
                     orderId: data.id,
                     orderNumber: data.order_number,
@@ -149,7 +151,11 @@ module.exports = async (req, res) => {
                     email: data.email,
                     phone: data.phone || (data.customer ? data.customer.phone : null),
                     createdAt: admin.firestore.Timestamp.now(),
-                    status: "Paid",
+                    updatedAt: admin.firestore.Timestamp.now(),
+                    status: (
+                        (data.gateway && (data.gateway.toLowerCase().includes('cash') || data.gateway.toLowerCase().includes('cod') || data.gateway.toLowerCase().includes('manual'))) ||
+                        (data.payment_gateway_names && data.payment_gateway_names.some(name => name.toLowerCase().includes('cash') || name.toLowerCase().includes('cod') || name.toLowerCase().includes('manual')))
+                    ) ? "COD" : "Paid",
                     paymentMethod: data.gateway || "Unknown",
 
                     // Address Details

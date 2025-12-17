@@ -220,10 +220,14 @@ const StatsScreen = ({ navigation }) => {
                                 )}
                                 right={props => (
                                     <View style={{ justifyContent: 'center', alignItems: 'flex-end', marginRight: 16 }}>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.amount}</Text>
-                                        {item.city && (
-                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.city}</Text>
-                                        )}
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                            {`₹${item.amount}`}
+                                        </Text>
+                                        {item.city ? (
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                                {item.city}
+                                            </Text>
+                                        ) : null}
                                     </View>
                                 )}
                                 style={{ backgroundColor: theme.colors.surface }}

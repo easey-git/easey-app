@@ -1,196 +1,256 @@
-import React from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
-import { Text, Surface, useTheme, Icon, Avatar } from 'react-native-paper';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon } from 'react-native-paper';
+import { collection, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
-export default function HomeScreen({ navigation }) {
+const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
-    const screenWidth = Dimensions.get('window').width;
+    const [timeRange, setTimeRange] = useState('today');
+    const [stats, setStats] = useState({
+        sales: 0,
+        orders: 0,
+        aov: 0,
+        activeCarts: 0
+    });
+    const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const getStartDate = (range) => {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0); // Start of today
+
+        if (range === 'today') return now;
+
+        const date = new Date(now);
+        if (range === 'week') {
+            date.setDate(date.getDate() - 7);
+        } else if (range === 'month') {
+            date.setMonth(date.getMonth() - 1);
+        }
+        return date;
+    };
+
+    const fetchStats = useCallback(() => {
+        setLoading(true);
+        const startDate = getStartDate(timeRange);
+        const startTimestamp = Timestamp.fromDate(startDate);
+
+        // 1. Orders Query
+        const ordersQuery = query(
+            collection(db, "orders"),
+            where("createdAt", ">=", startTimestamp),
+            orderBy("createdAt", "desc")
+        );
+
+        const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
+            let totalSales = 0;
+            let totalOrders = snapshot.size;
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                totalSales += parseFloat(data.totalPrice || 0);
+            });
+
+            setStats(prev => ({
+                ...prev,
+                sales: totalSales,
+                orders: totalOrders,
+                aov: totalOrders > 0 ? Math.round(totalSales / totalOrders) : 0
+            }));
+            setLoading(false);
+        });
+
+        // 2. Active Carts Query (Last 24h)
+        const cartsQuery = query(
+            collection(db, "checkouts"),
+            where("updatedAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))),
+            orderBy("updatedAt", "desc")
+        );
+
+        const unsubCarts = onSnapshot(cartsQuery, (snapshot) => {
+            // Filter for strictly "active" if needed, but for now count all recent checkouts
+            // You might want to filter out 'converted' ones if you flag them
+            setStats(prev => ({
+                ...prev,
+                activeCarts: snapshot.size
+            }));
+        });
+
+        return () => {
+            unsubOrders();
+            unsubCarts();
+        };
+    }, [timeRange]);
+
+    useEffect(() => {
+        const unsubscribe = fetchStats();
+        return () => unsubscribe && unsubscribe();
+    }, [fetchStats]);
+
+    const onRefresh = React.useCallback(() => {
+        setRefreshing(true);
+        fetchStats();
+        setTimeout(() => setRefreshing(false), 1000);
+    }, [fetchStats]);
 
     const menuItems = [
         {
             id: 1,
-            title: 'Live Dashboard',
-            subtitle: 'Real-time analytics',
-            icon: 'chart-timeline-variant',
-            screen: 'Stats',
-            color: theme.colors.primary,
+            title: 'Orders',
+            subtitle: 'Manage Orders',
+            icon: 'package-variant',
+            screen: 'DatabaseManager', // Fixed Name
         },
         {
             id: 2,
-            title: 'Orders',
-            subtitle: 'Manage & Track',
-            icon: 'package-variant-closed',
-            screen: 'DatabaseManager',
-            color: theme.colors.secondary,
+            title: 'Analytics',
+            subtitle: 'Sales Trends',
+            icon: 'chart-bar',
+            screen: 'Stats',
         },
         {
             id: 3,
             title: 'Customers',
-            subtitle: 'CRM Database',
+            subtitle: 'User Base',
             icon: 'account-group',
             screen: 'Customers',
-            color: theme.colors.tertiary,
         },
         {
             id: 4,
-            title: 'Settings',
-            subtitle: 'App Config',
-            icon: 'cog',
-            screen: 'Home', // Placeholder
-            color: theme.colors.error,
+            title: 'Database',
+            subtitle: 'Raw Data',
+            icon: 'database',
+            screen: 'FirestoreViewer',
         },
     ];
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            {/* Header Section */}
-            <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]} elevation={0}>
-                <View style={styles.headerContent}>
-                    <View>
-                        <Text variant="headlineSmall" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>Easey CRM</Text>
-                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Welcome back, Mackruize</Text>
-                    </View>
-                    <Avatar.Text size={48} label="MK" style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />
+        <View style={[styles.container, { backgroundColor: '#000000' }]}>
+            <Appbar.Header style={{ backgroundColor: '#000000', elevation: 0 }}>
+                <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold', fontSize: 24, color: '#ffffff' }} />
+                <Avatar.Text size={36} label="MK" style={{ backgroundColor: '#333', marginRight: 16 }} color="#fff" />
+            </Appbar.Header>
+
+            <ScrollView
+                contentContainerStyle={styles.content}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
+            >
+                {/* Date Filter - Minimalist */}
+                <View style={{ marginBottom: 24 }}>
+                    <SegmentedButtons
+                        value={timeRange}
+                        onValueChange={setTimeRange}
+                        buttons={[
+                            { value: 'today', label: 'Today' },
+                            { value: 'week', label: '7 Days' },
+                            { value: 'month', label: '30 Days' },
+                        ]}
+                        theme={{ colors: { secondaryContainer: '#333', onSecondaryContainer: '#fff', outline: '#333' } }}
+                        style={{ backgroundColor: '#000' }}
+                    />
                 </View>
 
-                {/* Quick Stats Row inside Header */}
-                <View style={[styles.statsRow, { backgroundColor: theme.colors.surfaceVariant }]}>
-                    <View style={styles.statItem}>
-                        <Text variant="titleLarge" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>12</Text>
-                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>New Orders</Text>
-                    </View>
-                    <View style={[styles.statDivider, { backgroundColor: theme.colors.outline }]} />
-                    <View style={styles.statItem}>
-                        <Text variant="titleLarge" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>₹45k</Text>
-                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Revenue</Text>
-                    </View>
-                    <View style={[styles.statDivider, { backgroundColor: theme.colors.outline }]} />
-                    <View style={styles.statItem}>
-                        <Text variant="titleLarge" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>5</Text>
-                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Pending</Text>
-                    </View>
+                {/* Stats Grid - Clean Black/Grey */}
+                <View style={styles.statsGrid}>
+                    <Surface style={styles.statCard} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: '#888' }}>Total Sales</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: '#fff', marginTop: 4 }}>
+                            ₹{stats.sales.toLocaleString('en-IN')}
+                        </Text>
+                    </Surface>
+
+                    <Surface style={styles.statCard} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: '#888' }}>Orders</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: '#fff', marginTop: 4 }}>
+                            {stats.orders}
+                        </Text>
+                    </Surface>
+
+                    <Surface style={styles.statCard} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: '#888' }}>AOV</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: '#fff', marginTop: 4 }}>
+                            ₹{stats.aov.toLocaleString('en-IN')}
+                        </Text>
+                    </Surface>
+
+                    <Surface style={styles.statCard} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: '#888' }}>Active Carts</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: '#fff', marginTop: 4 }}>
+                            {stats.activeCarts}
+                        </Text>
+                    </Surface>
                 </View>
-            </Surface>
 
-            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
-                <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>Quick Actions</Text>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8, color: '#fff' }}>Quick Actions</Text>
 
-                <View style={styles.grid}>
+                <View style={styles.menuGrid}>
                     {menuItems.map((item) => (
-                        <TouchableOpacity
+                        <Surface
                             key={item.id}
-                            onPress={() => navigation.navigate(item.screen)}
-                            activeOpacity={0.9}
-                            style={{ width: '48%', marginBottom: 16 }}
+                            style={styles.menuCard}
+                            elevation={0}
                         >
-                            <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={2}>
-                                <View style={[styles.iconContainer, { backgroundColor: item.color + '20' }]}>
-                                    <Icon source={item.icon} size={28} color={item.color} />
+                            <Button
+                                mode="text"
+                                contentStyle={{ height: 140, flexDirection: 'column', justifyContent: 'center' }}
+                                onPress={() => navigation.navigate(item.screen)}
+                                textColor="#fff"
+                            >
+                                <View style={{ alignItems: 'center' }}>
+                                    <Icon source={item.icon} size={32} color="#fff" />
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', marginTop: 12, color: '#fff' }}>{item.title}</Text>
+                                    <Text variant="bodySmall" style={{ color: '#888', marginTop: 4 }}>{item.subtitle}</Text>
                                 </View>
-                                <Text variant="titleMedium" style={{ marginTop: 12, fontWeight: '600' }}>{item.title}</Text>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.subtitle}</Text>
-                            </Surface>
-                        </TouchableOpacity>
+                            </Button>
+                        </Surface>
                     ))}
                 </View>
 
-                {/* Recent Activity Widget */}
-                <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onBackground, marginTop: 8 }]}>System Status</Text>
-                <Surface style={[styles.statusCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
-                    <View style={styles.statusRow}>
-                        <Icon source="check-circle" size={20} color={theme.colors.secondary} />
-                        <Text variant="bodyMedium" style={{ marginLeft: 8, flex: 1 }}>Shopify Webhooks Active</Text>
-                    </View>
-                    <View style={[styles.divider, { backgroundColor: theme.colors.surfaceVariant }]} />
-                    <View style={styles.statusRow}>
-                        <Icon source="check-circle" size={20} color={theme.colors.secondary} />
-                        <Text variant="bodyMedium" style={{ marginLeft: 8, flex: 1 }}>Shiprocket Sync Active</Text>
-                    </View>
-                    <View style={[styles.divider, { backgroundColor: theme.colors.surfaceVariant }]} />
-                    <View style={styles.statusRow}>
-                        <Icon source="database" size={20} color={theme.colors.primary} />
-                        <Text variant="bodyMedium" style={{ marginLeft: 8, flex: 1 }}>Firestore Connected</Text>
-                    </View>
-                </Surface>
-
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 32, justifyContent: 'center', opacity: 0.5 }}>
+                    <Icon source="database" size={16} color="#666" />
+                    <Text variant="bodySmall" style={{ marginLeft: 8, color: '#666' }}>Firestore Connected</Text>
+                </View>
             </ScrollView>
         </View>
     );
-}
+};
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        paddingTop: 20, // Safe area padding
-        paddingHorizontal: 20,
-        paddingBottom: 30,
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-    },
-    headerContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        borderRadius: 16,
-        padding: 16,
-    },
-    statItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    statDivider: {
-        width: 1,
-        height: 24,
-        opacity: 0.3,
-    },
     content: {
-        flex: 1,
-        padding: 20,
+        padding: 16,
+        paddingBottom: 32,
     },
-    sectionTitle: {
-        marginBottom: 16,
-        fontWeight: 'bold',
-    },
-    grid: {
+    statsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 32,
     },
-    card: {
-        padding: 16,
+    statCard: {
+        width: '48%',
+        padding: 20,
         borderRadius: 16,
-        height: 140,
-        justifyContent: 'center',
+        backgroundColor: '#1A1A1A', // Dark Grey
+        borderWidth: 1,
+        borderColor: '#333',
     },
-    iconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    statusCard: {
-        borderRadius: 16,
-        padding: 16,
-    },
-    statusRow: {
+    menuGrid: {
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
+        flexWrap: 'wrap',
+        gap: 12,
     },
-    divider: {
-        height: 1,
-        width: '100%',
-    },
+    menuCard: {
+        width: '48%',
+        borderRadius: 16,
+        backgroundColor: '#1A1A1A',
+        borderWidth: 1,
+        borderColor: '#333',
+        overflow: 'hidden',
+    }
 });
+
+export default HomeScreen;
