@@ -20,43 +20,79 @@ const StatsScreen = ({ navigation }) => {
     const [modalVisible, setModalVisible] = useState(false);
 
     const [chartData, setChartData] = useState({
-        labels: ["00", "04", "08", "12", "16", "20"],
-        datasets: [{ data: [0, 0, 0, 0, 0, 0] }]
+        labels: ["12am", "2am", "4am", "6am", "8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm", "10pm"],
+        datasets: [{ data: new Array(12).fill(0) }]
     });
 
     useEffect(() => {
-        // 1. Listen to ORDERS for Revenue & Chart
+        // Get today's date at midnight (start of day)
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        // 1. Listen to ORDERS for Revenue & Chart (Continuous Timeline)
         const qOrders = query(
             collection(db, "orders"),
             orderBy("createdAt", "desc"),
-            limit(50)
+            limit(100) // Fetch last 100 orders for history
         );
 
         const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
-            let total = 0;
-            // 12 buckets for 2-hour intervals (0-1, 2-3, 4-5, ... 22-23)
-            const hourlyData = new Array(12).fill(0);
+            let todayTotal = 0;
+            const buckets = {}; // Map to group orders by 2-hour blocks
 
             snapshot.docs.forEach(doc => {
                 const data = doc.data();
-                total += parseFloat(data.totalPrice || 0);
+                const orderDate = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+                const price = parseFloat(data.totalPrice || 0);
 
-                const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-                const hour = date.getHours();
-                // 2-hour buckets: 0-1, 2-3, 4-5, etc.
-                const bucketIndex = Math.floor(hour / 2);
-                if (bucketIndex >= 0 && bucketIndex < 12) {
-                    hourlyData[bucketIndex] += parseFloat(data.totalPrice || 0);
+                // Calculate today's total revenue (keep this metric for the card)
+                if (orderDate >= todayStart) {
+                    todayTotal += price;
                 }
+
+                // Create a unique key for this 2-hour block (e.g., "Dec 18 2pm")
+                const hour = orderDate.getHours();
+                const bucketHour = Math.floor(hour / 2) * 2; // 0, 2, 4, ... 22
+
+                // Format: "18 Dec 2pm"
+                const dateStr = orderDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+                const timeStr = new Date(orderDate.setHours(bucketHour, 0, 0, 0)).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).toLowerCase();
+                const key = `${dateStr} ${timeStr}`; // Unique key combining date and bucket time
+
+                if (!buckets[key]) {
+                    buckets[key] = {
+                        total: 0,
+                        count: 0,
+                        timestamp: orderDate.setHours(bucketHour, 0, 0, 0), // For sorting
+                        label: timeStr,
+                        fullLabel: key // "18 Dec 2pm"
+                    };
+                }
+
+                buckets[key].total += price;
+                buckets[key].count += 1;
             });
 
-            setTodaysSales(total);
+            // Convert buckets to array and sort chronologically (oldest to newest)
+            const sortedBuckets = Object.values(buckets).sort((a, b) => a.timestamp - b.timestamp);
+
+            // Safety check: If no data, show empty placeholder for today
+            if (sortedBuckets.length === 0) {
+                sortedBuckets.push({
+                    total: 0,
+                    count: 0,
+                    label: 'Now',
+                    fullLabel: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+                });
+            }
+
+            setTodaysSales(todayTotal);
             setChartData({
-                labels: ["12am", "2am", "4am", "6am", "8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm", "10pm"],
+                labels: sortedBuckets.map(b => b.label), // Use short label "2pm" for axis
+                fullLabels: sortedBuckets.map(b => b.fullLabel), // Keep full label "18 Dec 2pm" for tooltip
                 datasets: [{
-                    data: hourlyData,
-                    color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
-                    strokeWidth: 2
+                    data: sortedBuckets.map(b => b.total),
+                    orderCounts: sortedBuckets.map(b => b.count),
                 }]
             });
         });
@@ -203,11 +239,11 @@ const StatsScreen = ({ navigation }) => {
                 >
                     {/* Total Revenue Card */}
                     <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>TOTAL REVENUE</Text>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>TODAY'S REVENUE</Text>
                         <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>₹{todaysSales.toLocaleString()}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                             <Icon source="chart-line" size={16} color={theme.colors.primary} />
-                            <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Sales</Text>
+                            <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Since Midnight</Text>
                         </View>
                     </Surface>
 
@@ -246,29 +282,33 @@ const StatsScreen = ({ navigation }) => {
                 <Surface style={[styles.chartSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16 }}>
                         <View>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Sales Trend</Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>Tap on points to see values</Text>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Sales History</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                <Icon source="timeline-text" size={14} color={theme.colors.onSurfaceVariant} />
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>
+                                    Last 100 orders
+                                </Text>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
+                                    • 2-hour intervals
+                                </Text>
+                            </View>
                         </View>
-                        <Chip mode="flat" compact style={{ backgroundColor: theme.colors.primaryContainer }}>
-                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 12, fontWeight: 'bold' }}>₹{todaysSales.toLocaleString()}</Text>
-                        </Chip>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
                         <LineChart
-                            data={chartData.datasets[0].data.map((value, index) => ({
+                            data={(chartData.datasets[0]?.data || [0]).map((value, index) => ({
                                 value: value,
-                                label: chartData.labels[index],
+                                label: chartData.labels?.[index] || '',
+                                fullLabel: chartData.fullLabels?.[index] || '', // Pass full label for tooltip
+                                orderCount: chartData.datasets[0]?.orderCounts?.[index] || 0, // Embed order count
                                 labelTextStyle: { color: theme.colors.onSurfaceVariant, fontSize: 10 },
-                                dataPointText: `₹${Math.round(value)}`,
                             }))}
                             height={200}
                             width={Math.max(screenWidth - 40, chartData.labels.length * 60)} // Wider for scrolling
                             scrollable={true}
                             curved
                             areaChart
-                            animateOnDataChange
-                            animationDuration={1000}
-                            onDataChangeAnimationDuration={300}
+                            animateOnDataChange={false} // Disable animation to prevent crash with dynamic data
                             color={theme.colors.primary}
                             thickness={3}
                             startFillColor={theme.colors.primary}
@@ -317,23 +357,37 @@ const StatsScreen = ({ navigation }) => {
                                 activatePointersOnLongPress: false,
                                 autoAdjustPointerLabelPosition: true,
                                 pointerLabelComponent: items => {
+                                    const point = items[0];
+                                    const orderCount = point.orderCount || 0;
+                                    const fullLabel = point.fullLabel || point.label || '';
+                                    // Split "18 Dec 2pm" into "18 Dec" and "2pm"
+                                    const parts = fullLabel.split(' ');
+                                    const datePart = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : fullLabel;
+                                    const timePart = parts.length >= 3 ? parts[2] : '';
+
                                     return (
                                         <View
                                             style={{
-                                                height: 70,
-                                                width: 90,
+                                                height: 100,
+                                                width: 110,
                                                 justifyContent: 'center',
                                                 backgroundColor: theme.colors.primaryContainer,
-                                                borderRadius: 8,
-                                                padding: 8,
-                                                borderWidth: 1,
+                                                borderRadius: 12,
+                                                padding: 12,
+                                                borderWidth: 1.5,
                                                 borderColor: theme.colors.primary,
                                             }}>
                                             <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
-                                                {items[0].label}
+                                                {datePart}
                                             </Text>
-                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>
+                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 11, textAlign: 'center', marginTop: 2, opacity: 0.8 }}>
+                                                {timePart}
+                                            </Text>
+                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 6 }}>
                                                 ₹{Math.round(items[0].value).toLocaleString()}
+                                            </Text>
+                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 11, textAlign: 'center', marginTop: 4, opacity: 0.9 }}>
+                                                {orderCount} {orderCount === 1 ? 'Order' : 'Orders'}
                                             </Text>
                                         </View>
                                     );
