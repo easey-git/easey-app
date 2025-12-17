@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, useTheme, Appbar, List, Switch, Divider, Surface, Avatar } from 'react-native-paper';
+import { Text, useTheme, Appbar, List, Switch, Divider, Surface, Avatar, Button, Dialog, Portal } from 'react-native-paper';
 import { usePreferences } from '../context/PreferencesContext';
+import { useAuth } from '../context/AuthContext';
 
 const SettingsScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { user, logout } = useAuth();
+    const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
     const {
         isThemeDark,
         toggleTheme,
@@ -13,6 +16,11 @@ const SettingsScreen = ({ navigation }) => {
         biometricsEnabled,
         toggleBiometrics
     } = usePreferences();
+
+    const handleLogout = async () => {
+        await logout();
+        setLogoutDialogVisible(false);
+    };
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -26,10 +34,10 @@ const SettingsScreen = ({ navigation }) => {
                 {/* Profile Section */}
                 <Surface style={[styles.profileCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Avatar.Text size={56} label="MK" style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />
-                        <View style={{ marginLeft: 16 }}>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Mack Ruize</Text>
-                            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Admin</Text>
+                        <Avatar.Text size={56} label={user?.email?.charAt(0).toUpperCase() || "U"} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />
+                        <View style={{ marginLeft: 16, flex: 1 }}>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{user?.displayName || "User"}</Text>
+                            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{user?.email || "No email"}</Text>
                         </View>
                     </View>
                 </Surface>
@@ -99,7 +107,39 @@ const SettingsScreen = ({ navigation }) => {
                     />
                 </List.Section>
 
+                <Divider />
+
+                {/* Logout Button */}
+                <View style={{ marginTop: 24, marginBottom: 32 }}>
+                    <Button
+                        mode="outlined"
+                        onPress={() => setLogoutDialogVisible(true)}
+                        icon="logout"
+                        textColor={theme.colors.error}
+                        style={{ borderColor: theme.colors.error }}
+                    >
+                        Sign Out
+                    </Button>
+                </View>
+
             </ScrollView>
+
+            {/* Logout Confirmation Dialog */}
+            <Portal>
+                <Dialog visible={logoutDialogVisible} onDismiss={() => setLogoutDialogVisible(false)}>
+                    <Dialog.Icon icon="logout" />
+                    <Dialog.Title style={{ textAlign: 'center' }}>Sign Out</Dialog.Title>
+                    <Dialog.Content>
+                        <Text variant="bodyMedium" style={{ textAlign: 'center' }}>
+                            Are you sure you want to sign out?
+                        </Text>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setLogoutDialogVisible(false)}>Cancel</Button>
+                        <Button onPress={handleLogout} textColor={theme.colors.error}>Sign Out</Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
         </View>
     );
 };

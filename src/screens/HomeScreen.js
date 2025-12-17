@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
-import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon } from 'react-native-paper';
-import { collection, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
+import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon, Menu, Divider } from 'react-native-paper';
+import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useAuth } from '../context/AuthContext';
 
 const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { user, logout } = useAuth();
     const [timeRange, setTimeRange] = useState('today');
     const [stats, setStats] = useState({
         sales: 0,
@@ -15,6 +17,61 @@ const HomeScreen = ({ navigation }) => {
     });
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState({
+        firestore: true, // Always true if we can query
+        shiprocket: false,
+        shopify: false
+    });
+    const [menuVisible, setMenuVisible] = useState(false);
+
+    const openMenu = () => setMenuVisible(true);
+    const closeMenu = () => setMenuVisible(false);
+
+    const handleLogout = async () => {
+        closeMenu();
+        await logout();
+    };
+
+    const handleSettings = () => {
+        closeMenu();
+        navigation.navigate('Settings');
+    };
+
+    // Check webhook health
+    useEffect(() => {
+        const checkWebhookHealth = async () => {
+            try {
+                // Check if we have recent Shiprocket data (last 24 hours)
+                const shiprocketQuery = query(
+                    collection(db, "checkouts"),
+                    where("updatedAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))),
+                    orderBy("updatedAt", "desc"),
+                    limit(1)
+                );
+
+                const shiprocketSnapshot = await getDocs(shiprocketQuery);
+                setConnectionStatus(prev => ({ ...prev, shiprocket: !shiprocketSnapshot.empty }));
+
+                // Check if we have recent Shopify orders (last 24 hours)
+                const shopifyQuery = query(
+                    collection(db, "orders"),
+                    where("createdAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))),
+                    orderBy("createdAt", "desc"),
+                    limit(1)
+                );
+
+                const shopifySnapshot = await getDocs(shopifyQuery);
+                setConnectionStatus(prev => ({ ...prev, shopify: !shopifySnapshot.empty }));
+            } catch (error) {
+                console.log("Health check error:", error);
+            }
+        };
+
+        checkWebhookHealth();
+        // Re-check every 5 minutes
+        const interval = setInterval(checkWebhookHealth, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     const getStartDate = (range) => {
         const now = new Date();
@@ -59,6 +116,10 @@ const HomeScreen = ({ navigation }) => {
                 aov: totalOrders > 0 ? Math.round(totalSales / totalOrders) : 0
             }));
             setLoading(false);
+            // Update Shopify status if we got data
+            if (snapshot.size > 0) {
+                setConnectionStatus(prev => ({ ...prev, shopify: true }));
+            }
         });
 
         // 2. Active Carts Query (Last 24h)
@@ -89,6 +150,10 @@ const HomeScreen = ({ navigation }) => {
                 ...prev,
                 activeCarts: activeCount
             }));
+            // Update Shiprocket status if we got data
+            if (snapshot.size > 0) {
+                setConnectionStatus(prev => ({ ...prev, shiprocket: true }));
+            }
         });
 
         return () => {
@@ -143,7 +208,47 @@ const HomeScreen = ({ navigation }) => {
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0 }}>
                 <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold', fontSize: 24, color: theme.colors.onBackground }} />
-                <Avatar.Text size={36} label="MK" style={{ backgroundColor: theme.colors.primaryContainer, marginRight: 16 }} color={theme.colors.onPrimaryContainer} />
+
+                {/* User Menu */}
+                <Menu
+                    visible={menuVisible}
+                    onDismiss={closeMenu}
+                    anchor={
+                        <Button onPress={openMenu} style={{ marginRight: 8 }}>
+                            <Avatar.Text
+                                size={36}
+                                label={user?.email?.charAt(0).toUpperCase() || "U"}
+                                style={{ backgroundColor: theme.colors.primaryContainer }}
+                                color={theme.colors.onPrimaryContainer}
+                            />
+                        </Button>
+                    }
+                    anchorPosition="bottom"
+                >
+                    <Menu.Item
+                        leadingIcon="account"
+                        title={user?.displayName || user?.email || "User"}
+                        disabled
+                        titleStyle={{ fontWeight: 'bold' }}
+                    />
+                    <Menu.Item
+                        title={user?.email || "No email"}
+                        disabled
+                        titleStyle={{ fontSize: 12, color: theme.colors.onSurfaceVariant }}
+                    />
+                    <Divider />
+                    <Menu.Item
+                        leadingIcon="cog"
+                        onPress={handleSettings}
+                        title="Settings"
+                    />
+                    <Menu.Item
+                        leadingIcon="logout"
+                        onPress={handleLogout}
+                        title="Sign Out"
+                        titleStyle={{ color: theme.colors.error }}
+                    />
+                </Menu>
             </Appbar.Header>
 
             <ScrollView
@@ -225,9 +330,40 @@ const HomeScreen = ({ navigation }) => {
                     ))}
                 </View>
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 32, justifyContent: 'center', opacity: 0.5 }}>
-                    <Icon source="database" size={16} color={theme.colors.onBackground} />
-                    <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>Firestore Connected</Text>
+                {/* Connection Status Indicators */}
+                <View style={{ marginTop: 32, gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
+                        <Icon
+                            source={connectionStatus.firestore ? "check-circle" : "alert-circle"}
+                            size={16}
+                            color={connectionStatus.firestore ? "#4ade80" : theme.colors.error}
+                        />
+                        <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
+                            Firestore {connectionStatus.firestore ? "Connected" : "Disconnected"}
+                        </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
+                        <Icon
+                            source={connectionStatus.shiprocket ? "check-circle" : "alert-circle"}
+                            size={16}
+                            color={connectionStatus.shiprocket ? "#4ade80" : "#fbbf24"}
+                        />
+                        <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
+                            Shiprocket {connectionStatus.shiprocket ? "Active" : "No Data (24h)"}
+                        </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
+                        <Icon
+                            source={connectionStatus.shopify ? "check-circle" : "alert-circle"}
+                            size={16}
+                            color={connectionStatus.shopify ? "#4ade80" : "#fbbf24"}
+                        />
+                        <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
+                            Shopify {connectionStatus.shopify ? "Active" : "No Data (24h)"}
+                        </Text>
+                    </View>
                 </View>
             </ScrollView>
         </View>

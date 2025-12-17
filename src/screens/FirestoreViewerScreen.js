@@ -153,15 +153,15 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
     // Recursive Field Renderer
     const RenderField = ({ label, value, depth = 0, parentKey = null }) => {
-        const paddingLeft = depth * 16;
+        const paddingLeft = depth * 12;
 
         // 1. Handle Timestamps (Read-only for now)
         if (value && typeof value === 'object' && value.seconds) {
             const date = new Date(value.seconds * 1000).toLocaleString();
             return (
                 <View style={[styles.fieldRow, { paddingLeft }]}>
-                    <Text variant="labelSmall" style={{ color: theme.colors.primary }}>{label}</Text>
-                    <Text variant="bodyMedium">{date}</Text>
+                    <Text variant="labelSmall" style={{ color: theme.colors.primary, fontSize: 11 }}>{label}</Text>
+                    <Text variant="bodySmall" style={{ fontSize: 12 }}>{date}</Text>
                 </View>
             );
         }
@@ -174,8 +174,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             return (
                 <List.Accordion
                     title={label}
-                    titleStyle={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 14 }}
-                    style={{ backgroundColor: theme.colors.surface, paddingLeft: Math.max(0, paddingLeft - 16), paddingVertical: 0 }}
+                    titleStyle={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 12 }}
+                    style={{ backgroundColor: theme.colors.surface, paddingLeft: Math.max(0, paddingLeft - 12), paddingVertical: 0, minHeight: 36 }}
                 >
                     {Object.entries(value).map(([k, v]) => (
                         <RenderField
@@ -195,7 +195,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         if (typeof value === 'boolean') {
             return (
                 <View style={[styles.fieldRow, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft }]}>
-                    <Text variant="bodyMedium">{label}</Text>
+                    <Text variant="bodySmall" style={{ fontSize: 12 }}>{label}</Text>
                     {isEditing ? (
                         <Switch
                             value={value}
@@ -203,7 +203,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                             color={theme.colors.primary}
                         />
                     ) : (
-                        <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>{value ? 'True' : 'False'}</Text>
+                        <Text variant="bodySmall" style={{ fontWeight: 'bold', fontSize: 12 }}>{value ? 'True' : 'False'}</Text>
                     )}
                 </View>
             );
@@ -212,17 +212,17 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         // 4. Handle Strings/Numbers
         return (
             <View style={[styles.fieldRow, { paddingLeft }]}>
-                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{label}</Text>
+                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 11 }}>{label}</Text>
                 {isEditing ? (
                     <TextInput
                         mode="outlined"
                         value={String(value)}
                         onChangeText={(text) => updateField(label, text, parentKey)}
-                        style={{ backgroundColor: theme.colors.surface, height: 40 }}
+                        style={{ backgroundColor: theme.colors.surface, height: 36, fontSize: 12 }}
                         dense
                     />
                 ) : (
-                    <Text variant="bodyMedium" selectable>{String(value)}</Text>
+                    <Text variant="bodySmall" selectable style={{ fontSize: 12 }}>{String(value)}</Text>
                 )}
             </View>
         );
@@ -419,22 +419,29 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             />
 
             <Portal>
-                <Modal visible={visible} onDismiss={() => setVisible(false)} contentContainerStyle={{ padding: 16, alignItems: 'center' }}>
+                <Modal visible={visible} onDismiss={() => setVisible(false)} contentContainerStyle={{ padding: 8, alignItems: 'center' }}>
                     <Surface style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', flex: 1 }}>
                                 {isEditing ? 'Edit Document' : 'Document Details'}
                             </Text>
                             <View style={{ flexDirection: 'row' }}>
                                 <IconButton
                                     icon={isEditing ? "close" : "pencil"}
                                     onPress={() => setIsEditing(!isEditing)}
+                                    size={20}
+                                    style={{ margin: 0 }}
                                 />
-                                <IconButton icon="close" onPress={() => setVisible(false)} />
+                                <IconButton
+                                    icon="close"
+                                    onPress={() => setVisible(false)}
+                                    size={20}
+                                    style={{ margin: 0 }}
+                                />
                             </View>
                         </View>
 
-                        <ScrollView style={{ marginBottom: 16, flexShrink: 1 }}>
+                        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
                             {editedDoc && Object.entries(editedDoc).map(([key, value]) => (
                                 key !== 'id' && (
                                     <RenderField key={key} label={key} value={value} />
@@ -443,15 +450,16 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                         </ScrollView>
 
                         {isEditing ? (
-                            <Button mode="contained" onPress={handleSave} style={{ marginTop: 8 }}>
+                            <Button mode="contained" onPress={handleSave} style={{ marginTop: 12 }} compact>
                                 Save Changes
                             </Button>
                         ) : (
                             <Button
                                 mode="outlined"
                                 textColor={theme.colors.error}
-                                style={{ marginTop: 8, borderColor: theme.colors.error }}
+                                style={{ marginTop: 12, borderColor: theme.colors.error }}
                                 onPress={() => handleDelete(selectedDoc.id)}
+                                compact
                             >
                                 Delete Document
                             </Button>
@@ -505,15 +513,15 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         borderRadius: 12,
-        padding: 16,
-        maxHeight: '70%',
-        width: '100%',
-        maxWidth: 500,
+        padding: 12,
+        maxHeight: '85%',
+        width: '95%',
+        maxWidth: 600,
         alignSelf: 'center'
     },
     fieldRow: {
-        marginBottom: 4,
-        paddingVertical: 2
+        marginBottom: 2,
+        paddingVertical: 1
     }
 });
 
