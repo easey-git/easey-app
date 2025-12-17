@@ -71,7 +71,7 @@ function AppNavigator() {
       if (!hasHardware || !isEnrolled) {
         // Fallback or just unlock if hardware became unavailable (edge case)
         // For security, we might want to force logout, but for now let's just log
-        console.log('Biometrics not available');
+
         setIsAuthenticating(false);
         return;
       }
@@ -87,7 +87,7 @@ function AppNavigator() {
         setIsLocked(false);
       }
     } catch (e) {
-      console.log('Auth failed', e);
+
     } finally {
       setIsAuthenticating(false);
     }

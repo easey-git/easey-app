@@ -71,16 +71,16 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setConfirmMessage(`Delete ${selectedItems.size} documents?`);
         setOnConfirm(() => async () => {
             setLoading(true);
-            console.log(`Attempting bulk delete of ${selectedItems.size} items from ${selectedCollection}`);
+
             try {
                 const batch = writeBatch(db);
                 selectedItems.forEach(id => {
-                    console.log(`Queueing delete for: ${id}`);
+
                     const ref = doc(db, selectedCollection, id);
                     batch.delete(ref);
                 });
                 await batch.commit();
-                console.log("Batch commit successful");
+
                 setSelectedItems(new Set());
                 fetchDocuments();
                 showSnackbar("Documents deleted successfully");
@@ -98,11 +98,11 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setConfirmTitle("Delete Document");
         setConfirmMessage("Are you sure you want to delete this document?");
         setOnConfirm(() => async () => {
-            console.log(`Attempting to delete document: ${id} from collection: ${selectedCollection}`);
+
             try {
                 const docRef = doc(db, selectedCollection, id);
                 await deleteDoc(docRef);
-                console.log("Delete successful");
+
                 setVisible(false);
                 fetchDocuments();
                 showSnackbar("Document deleted successfully");

@@ -47,7 +47,7 @@ export async function registerForPushNotificationsAsync(userId) {
 
     // Get the token that uniquely identifies this device
     token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log('Expo Push Token:', token);
+
 
     // Save token to Firestore
     if (token) {
@@ -65,7 +65,7 @@ export async function registerForPushNotificationsAsync(userId) {
             }
 
             await setDoc(doc(db, 'push_tokens', token), tokenData, { merge: true });
-            console.log('Push token saved to Firestore');
+
         } catch (error) {
             console.error('Error saving push token:', error);
         }
@@ -90,7 +90,7 @@ export async function unregisterPushNotificationsAsync() {
         const token = (await Notifications.getExpoPushTokenAsync()).data;
         if (token) {
             await deleteDoc(doc(db, 'push_tokens', token));
-            console.log('Push token removed from Firestore');
+
         }
     } catch (error) {
         console.error('Error removing push token:', error);

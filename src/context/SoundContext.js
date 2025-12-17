@@ -19,7 +19,7 @@ export const SoundProvider = ({ children }) => {
                     playThroughEarpieceAndroid: false,
                 });
             } catch (error) {
-                console.log('Error configuring audio:', error);
+
             }
         };
         configureAudio();
@@ -37,7 +37,7 @@ export const SoundProvider = ({ children }) => {
     const playSound = async (type) => {
         if (!soundEnabled) return;
 
-        console.log(`[Sound] Triggered: ${type}`);
+
 
         try {
             // Simplified: Always use 'live' sound for now as requested
@@ -53,10 +53,10 @@ export const SoundProvider = ({ children }) => {
                     }
                 });
             } else {
-                console.log(`[Sound] No file loaded for ${soundKey}. Please add files to assets/sounds/ and uncomment in SoundContext.js`);
+
             }
         } catch (error) {
-            console.log('Error playing sound:', error);
+
         }
     };
 

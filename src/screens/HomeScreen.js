@@ -66,7 +66,7 @@ const HomeScreen = ({ navigation }) => {
                 const shopifySnapshot = await getDocs(shopifyQuery);
                 setConnectionStatus(prev => ({ ...prev, shopify: !shopifySnapshot.empty }));
             } catch (error) {
-                console.log("Health check error:", error);
+
             }
         };
 
