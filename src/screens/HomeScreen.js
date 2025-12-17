@@ -146,7 +146,7 @@ const HomeScreen = ({ navigation }) => {
                             { value: 'week', label: '7 Days' },
                             { value: 'month', label: '30 Days' },
                         ]}
-                        style={{ backgroundColor: theme.colors.elevation.level1 }}
+                        style={{ backgroundColor: theme.colors.elevation.level1, borderRadius: 20 }}
                     />
                 </View>
 
