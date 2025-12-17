@@ -162,41 +162,43 @@ function AppNavigator() {
   }
 
   return (
-    <NavigationContainer theme={activeTheme}>
-      <StatusBar barStyle={isThemeDark ? "light-content" : "dark-content"} backgroundColor={activeTheme.colors.background} />
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-          animation: 'fade_from_bottom',
-          contentStyle: { backgroundColor: activeTheme.colors.background }
-        }}
-      >
-        {!user ? (
-          // Unauthenticated Stack
-          <Stack.Screen name="Login" component={LoginScreen} />
-        ) : (
-          // Authenticated Stack
-          <>
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen
-              name="DatabaseManager"
-              component={FirestoreViewerScreen}
-              options={{ title: 'Database' }}
-            />
-            <Stack.Screen
-              name="Stats"
-              component={StatsScreen}
-              options={{ title: 'Analytics' }}
-            />
-            <Stack.Screen
-              name="Settings"
-              component={SettingsScreen}
-              options={{ title: 'Settings' }}
-            />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <View style={{ flex: 1, backgroundColor: activeTheme.colors.background }}>
+      <NavigationContainer theme={activeTheme}>
+        <StatusBar barStyle={isThemeDark ? "light-content" : "dark-content"} backgroundColor={activeTheme.colors.background} />
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
+            animation: 'fade_from_bottom',
+            contentStyle: { backgroundColor: activeTheme.colors.background }
+          }}
+        >
+          {!user ? (
+            // Unauthenticated Stack
+            <Stack.Screen name="Login" component={LoginScreen} />
+          ) : (
+            // Authenticated Stack
+            <>
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen
+                name="DatabaseManager"
+                component={FirestoreViewerScreen}
+                options={{ title: 'Database' }}
+              />
+              <Stack.Screen
+                name="Stats"
+                component={StatsScreen}
+                options={{ title: 'Analytics' }}
+              />
+              <Stack.Screen
+                name="Settings"
+                component={SettingsScreen}
+                options={{ title: 'Settings' }}
+              />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </View>
   );
 }
 
