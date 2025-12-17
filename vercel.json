@@ -4,12 +4,20 @@
         {
             "src": "api/webhook.js",
             "use": "@vercel/node"
+        },
+        {
+            "src": "api/ga4-visitors.js",
+            "use": "@vercel/node"
         }
     ],
     "routes": [
         {
             "src": "/api/webhook",
             "dest": "/api/webhook.js"
+        },
+        {
+            "src": "/api/ga4-visitors",
+            "dest": "/api/ga4-visitors.js"
         }
     ]
 }

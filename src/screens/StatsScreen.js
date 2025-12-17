@@ -4,6 +4,7 @@ import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divid
 import { LineChart } from 'react-native-chart-kit';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { getCachedActiveVisitors } from '../services/ga4Service';
 
 const StatsScreen = ({ navigation }) => {
     const theme = useTheme();
@@ -12,6 +13,7 @@ const StatsScreen = ({ navigation }) => {
     const [todaysSales, setTodaysSales] = useState(0);
     const [activeCarts, setActiveCarts] = useState(0);
     const [abandonedCarts, setAbandonedCarts] = useState(0);
+    const [activeVisitors, setActiveVisitors] = useState(0); // New state for active visitors
     const [recentActivity, setRecentActivity] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState(null);
@@ -71,6 +73,7 @@ const StatsScreen = ({ navigation }) => {
             const activities = [];
             let active = 0;
             let abandoned = 0;
+            const activeVisitorIds = new Set(); // Track unique active visitors
 
             docs.forEach(doc => {
                 const data = doc.data();
@@ -97,6 +100,12 @@ const StatsScreen = ({ navigation }) => {
                     active++;
                 }
 
+                // Count unique active visitors (within last 5 minutes, not ordered)
+                if (diffMinutes <= 5 && !isOrdered) {
+                    const visitorId = data.customerId || data.phone || data.email || doc.id;
+                    activeVisitorIds.add(visitorId);
+                }
+
                 // Only show in feed if updated within last 5 minutes (gives 2 mins to see "Abandoned" status)
                 if (diffMinutes <= 5) {
                     activities.push({
@@ -110,6 +119,8 @@ const StatsScreen = ({ navigation }) => {
 
             setActiveCarts(active);
             setAbandonedCarts(abandoned);
+            // Keep Firebase-calculated visitors as fallback
+            // setActiveVisitors(activeVisitorIds.size); 
             setRecentActivity(activities);
             setLoading(false);
         };
@@ -130,6 +141,29 @@ const StatsScreen = ({ navigation }) => {
             unsubscribeOrders();
             unsubscribeCheckouts();
             clearInterval(intervalId);
+        };
+    }, []);
+
+    // Fetch GA4 Active Visitors
+    useEffect(() => {
+        const fetchGA4Visitors = async () => {
+            try {
+                const visitors = await getCachedActiveVisitors();
+                setActiveVisitors(visitors);
+            } catch (error) {
+                console.error('Error fetching GA4 visitors:', error);
+                // Keep previous value on error
+            }
+        };
+
+        // Fetch immediately on mount
+        fetchGA4Visitors();
+
+        // Refresh every 30 seconds (cached on service side)
+        const ga4Interval = setInterval(fetchGA4Visitors, 30000);
+
+        return () => {
+            clearInterval(ga4Interval);
         };
     }, []);
 
@@ -168,8 +202,14 @@ const StatsScreen = ({ navigation }) => {
                 style={styles.content}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
             >
-                {/* Key Metrics - Simple Cards */}
-                <View style={styles.metricsRow}>
+                {/* Key Metrics - Horizontal Scrollable Cards (Shopify-style) */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.metricsScrollContent}
+                    style={styles.metricsScroll}
+                >
+                    {/* Total Revenue Card */}
                     <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
                         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>TOTAL REVENUE</Text>
                         <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>₹{todaysSales.toLocaleString()}</Text>
@@ -179,6 +219,7 @@ const StatsScreen = ({ navigation }) => {
                         </View>
                     </Surface>
 
+                    {/* Active Carts Card */}
                     <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
                         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE CARTS</Text>
                         <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeCarts}</Text>
@@ -188,7 +229,18 @@ const StatsScreen = ({ navigation }) => {
                         </View>
                     </Surface>
 
+                    {/* Active Visitors Card */}
                     <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE VISITORS</Text>
+                        <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeVisitors}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                            <Icon source="clock-outline" size={16} color="#f59e0b" />
+                            <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Last 5 min</Text>
+                        </View>
+                    </Surface>
+
+                    {/* Abandoned Carts Card */}
+                    <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant, marginRight: 16 }]} elevation={1}>
                         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ABANDONED</Text>
                         <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{abandonedCarts}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -196,7 +248,7 @@ const StatsScreen = ({ navigation }) => {
                             <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Lost</Text>
                         </View>
                     </Surface>
-                </View>
+                </ScrollView>
 
                 {/* Chart Section */}
                 <Surface style={[styles.chartSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
@@ -393,13 +445,21 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { justifyContent: 'center', alignItems: 'center' },
     content: { flex: 1 },
+    metricsScroll: {
+        paddingVertical: 16,
+    },
+    metricsScrollContent: {
+        paddingHorizontal: 16,
+        gap: 12,
+    },
     metricsRow: {
         flexDirection: 'row',
         padding: 16,
         gap: 16,
     },
     metricCard: {
-        flex: 1,
+        width: Dimensions.get('window').width * 0.42, // Fixed width for horizontal scroll
+        minWidth: 160,
         padding: 16,
         borderRadius: 8,
         borderWidth: 1,
