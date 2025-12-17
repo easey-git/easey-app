@@ -4,10 +4,13 @@ import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
+import { useSound } from '../context/SoundContext';
 
 const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
     const { user, logout } = useAuth();
+    const { playSound } = useSound();
+    const prevOrdersRef = React.useRef(0);
     const [timeRange, setTimeRange] = useState('today');
     const [stats, setStats] = useState({
         sales: 0,
@@ -90,6 +93,7 @@ const HomeScreen = ({ navigation }) => {
 
     const fetchStats = useCallback(() => {
         setLoading(true);
+        prevOrdersRef.current = 0;
         const startDate = getStartDate(timeRange);
         const startTimestamp = Timestamp.fromDate(startDate);
 
@@ -115,6 +119,13 @@ const HomeScreen = ({ navigation }) => {
                 orders: totalOrders,
                 aov: totalOrders > 0 ? Math.round(totalSales / totalOrders) : 0
             }));
+
+            // Play sound if new order detected
+            if (!loading && totalOrders > prevOrdersRef.current && prevOrdersRef.current > 0) {
+                playSound('ORDER_PLACED');
+            }
+            prevOrdersRef.current = totalOrders;
+
             setLoading(false);
             // Update Shopify status if we got data
             if (snapshot.size > 0) {

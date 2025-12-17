@@ -5,9 +5,11 @@ import { LineChart } from 'react-native-gifted-charts';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getCachedActiveVisitors } from '../services/ga4Service';
+import { useSound } from '../context/SoundContext';
 
 const StatsScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { playSound } = useSound();
     const screenWidth = Dimensions.get('window').width;
     const [loading, setLoading] = useState(true);
     const [todaysSales, setTodaysSales] = useState(0);
@@ -18,6 +20,10 @@ const StatsScreen = ({ navigation }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
+
+    // Refs for sound logic
+    const lastMaxTimestampRef = React.useRef(0);
+    const isFirstLoadRef = React.useRef(true);
 
     const [chartData, setChartData] = useState({
         labels: ["12am", "2am", "4am", "6am", "8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm", "10pm"],
@@ -159,6 +165,20 @@ const StatsScreen = ({ navigation }) => {
             setAbandonedCarts(abandoned);
             // Keep Firebase-calculated visitors as fallback
             // setActiveVisitors(activeVisitorIds.size); 
+
+            // Find the latest timestamp in the current activities
+            const currentMaxTimestamp = activities.length > 0
+                ? Math.max(...activities.map(a => a.jsDate ? a.jsDate.getTime() : 0))
+                : 0;
+
+            // Play sound if we have a newer activity than before (and not first load)
+            if (!isFirstLoadRef.current && currentMaxTimestamp > lastMaxTimestampRef.current) {
+                playSound('LIVE_FEED');
+            }
+
+            lastMaxTimestampRef.current = currentMaxTimestamp;
+            isFirstLoadRef.current = false;
+
             setRecentActivity(activities);
             setLoading(false);
         };

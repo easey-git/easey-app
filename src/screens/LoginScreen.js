@@ -1,16 +1,29 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, SafeAreaView, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, TextInput, Button, useTheme, Surface, ActivityIndicator, Icon } from 'react-native-paper';
+import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 
 const LoginScreen = () => {
     const theme = useTheme();
     const { login } = useAuth();
+    const { biometricsEnabled } = usePreferences();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            const compatible = await LocalAuthentication.hasHardwareAsync();
+            setIsBiometricSupported(compatible);
+        })();
+    }, []);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -25,9 +38,47 @@ const LoginScreen = () => {
 
         if (!result.success) {
             setError(result.error || 'Login failed. Please check your credentials.');
+        } else {
+            // Save credentials if biometrics enabled
+            if (biometricsEnabled) {
+                try {
+                    await SecureStore.setItemAsync('user_email', email);
+                    await SecureStore.setItemAsync('user_password', password);
+                } catch (e) {
+                    console.error('Failed to save credentials for biometrics', e);
+                }
+            }
         }
 
         setLoading(false);
+    };
+
+    const handleBiometricLogin = async () => {
+        try {
+            const hasAuth = await LocalAuthentication.authenticateAsync({
+                promptMessage: 'Authenticate to login',
+                fallbackLabel: 'Use Password',
+            });
+
+            if (hasAuth.success) {
+                setLoading(true);
+                const savedEmail = await SecureStore.getItemAsync('user_email');
+                const savedPassword = await SecureStore.getItemAsync('user_password');
+
+                if (savedEmail && savedPassword) {
+                    const result = await login(savedEmail, savedPassword);
+                    if (!result.success) {
+                        setError(result.error || 'Biometric login failed. Please use password.');
+                    }
+                } else {
+                    setError('No credentials saved. Please login with password first.');
+                }
+                setLoading(false);
+            }
+        } catch (e) {
+            console.error('Biometric auth error', e);
+            setError('Biometric authentication failed');
+        }
     };
 
     return (
@@ -102,6 +153,18 @@ const LoginScreen = () => {
                         >
                             {loading ? 'Signing in...' : 'Sign In'}
                         </Button>
+
+                        {biometricsEnabled && isBiometricSupported && (
+                            <Button
+                                mode="outlined"
+                                onPress={handleBiometricLogin}
+                                disabled={loading}
+                                style={{ marginTop: 16 }}
+                                icon="fingerprint"
+                            >
+                                Login with Biometrics
+                            </Button>
+                        )}
                     </Surface>
 
                     {/* Footer */}

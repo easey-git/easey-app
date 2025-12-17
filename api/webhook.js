@@ -142,6 +142,48 @@ module.exports = async (req, res) => {
                 await docRef.set(checkoutData, { merge: true });
 
                 console.log(`Shiprocket Event: ${eventType} (${readableStage}) for ${customerName}`);
+
+                // ---------------------------------------------------------
+                // SEND PUSH NOTIFICATION (True Background Solution)
+                // ---------------------------------------------------------
+                try {
+                    const { Expo } = require('expo-server-sdk');
+                    const expo = new Expo();
+
+                    // Fetch all registered push tokens
+                    const tokensSnapshot = await db.collection('push_tokens').get();
+                    const pushTokens = tokensSnapshot.docs.map(doc => doc.id);
+
+                    const messages = [];
+                    for (let pushToken of pushTokens) {
+                        if (!Expo.isExpoPushToken(pushToken)) {
+                            console.error(`Push token ${pushToken} is not a valid Expo push token`);
+                            continue;
+                        }
+
+                        messages.push({
+                            to: pushToken,
+                            sound: 'live.mp3', // For iOS (must be in bundle)
+                            channelId: 'custom-sound', // For Android
+                            title: 'New Live Activity',
+                            body: `${customerName} is active: ${readableStage}`,
+                            data: { checkoutId },
+                        });
+                    }
+
+                    const chunks = expo.chunkPushNotifications(messages);
+                    for (let chunk of chunks) {
+                        try {
+                            await expo.sendPushNotificationsAsync(chunk);
+                        } catch (error) {
+                            console.error('Error sending push notification chunk:', error);
+                        }
+                    }
+                    console.log(`Sent ${messages.length} push notifications`);
+                } catch (error) {
+                    console.error('Error sending push notifications:', error);
+                }
+
                 return res.status(200).send("OK");
             }
 
@@ -266,6 +308,39 @@ module.exports = async (req, res) => {
                 }
 
                 console.log(`Shopify Order ${data.order_number} saved.`);
+
+                // ---------------------------------------------------------
+                // SEND PUSH NOTIFICATION (True Background Solution)
+                // ---------------------------------------------------------
+                try {
+                    const { Expo } = require('expo-server-sdk');
+                    const expo = new Expo();
+
+                    const tokensSnapshot = await db.collection('push_tokens').get();
+                    const pushTokens = tokensSnapshot.docs.map(doc => doc.id);
+
+                    const messages = [];
+                    for (let pushToken of pushTokens) {
+                        if (Expo.isExpoPushToken(pushToken)) {
+                            messages.push({
+                                to: pushToken,
+                                sound: 'live.mp3',
+                                channelId: 'custom-sound',
+                                title: 'New Order Received! 💰',
+                                body: `Order #${data.order_number} from ${data.customer ? data.customer.first_name : 'Guest'} - ₹${data.total_price}`,
+                                data: { orderId: data.id },
+                            });
+                        }
+                    }
+
+                    const chunks = expo.chunkPushNotifications(messages);
+                    for (let chunk of chunks) {
+                        await expo.sendPushNotificationsAsync(chunk);
+                    }
+                } catch (error) {
+                    console.error('Error sending order push notifications:', error);
+                }
+
                 return res.status(200).json({ success: true });
             }
 

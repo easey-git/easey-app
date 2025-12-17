@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, useTheme, Appbar, List, Switch, Divider, Surface, Avatar, Button, Dialog, Portal } from 'react-native-paper';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { usePreferences } from '../context/PreferencesContext';
 import { useAuth } from '../context/AuthContext';
+import { useSound } from '../context/SoundContext';
 
 const SettingsScreen = ({ navigation }) => {
     const theme = useTheme();
     const { user, logout } = useAuth();
     const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
+    const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            const compatible = await LocalAuthentication.hasHardwareAsync();
+            setIsBiometricSupported(compatible);
+        })();
+    }, []);
+
     const {
         isThemeDark,
         toggleTheme,
@@ -16,6 +27,7 @@ const SettingsScreen = ({ navigation }) => {
         biometricsEnabled,
         toggleBiometrics
     } = usePreferences();
+    const { soundEnabled, setSoundEnabled } = useSound();
 
     const handleLogout = async () => {
         await logout();
@@ -61,12 +73,15 @@ const SettingsScreen = ({ navigation }) => {
                         right={() => <Switch value={notificationsEnabled} onValueChange={toggleNotifications} />}
                         style={styles.listItem}
                     />
+                </List.Section>
+
+                <Divider />
+
+                <List.Section title="Sounds">
                     <List.Item
-                        title="Email Alerts"
-                        description="Daily summary reports"
-                        left={props => <List.Icon {...props} icon="email-outline" />}
-                        right={() => <List.Icon icon="chevron-right" />}
-                        onPress={() => { }}
+                        title="Enable Sounds"
+                        left={props => <List.Icon {...props} icon="volume-high" />}
+                        right={() => <Switch value={soundEnabled} onValueChange={setSoundEnabled} />}
                         style={styles.listItem}
                     />
                 </List.Section>
@@ -77,14 +92,7 @@ const SettingsScreen = ({ navigation }) => {
                     <List.Item
                         title="Biometric Login"
                         left={props => <List.Icon {...props} icon="fingerprint" />}
-                        right={() => <Switch value={biometricsEnabled} onValueChange={toggleBiometrics} />}
-                        style={styles.listItem}
-                    />
-                    <List.Item
-                        title="Change Password"
-                        left={props => <List.Icon {...props} icon="lock-outline" />}
-                        right={() => <List.Icon icon="chevron-right" />}
-                        onPress={() => { }}
+                        right={() => <Switch value={biometricsEnabled} onValueChange={toggleBiometrics} disabled={!isBiometricSupported} />}
                         style={styles.listItem}
                     />
                 </List.Section>
@@ -96,13 +104,6 @@ const SettingsScreen = ({ navigation }) => {
                         title="Version"
                         description="1.0.0 (Build 2025.12.17)"
                         left={props => <List.Icon {...props} icon="information-outline" />}
-                        style={styles.listItem}
-                    />
-                    <List.Item
-                        title="Help & Support"
-                        left={props => <List.Icon {...props} icon="help-circle-outline" />}
-                        right={() => <List.Icon icon="chevron-right" />}
-                        onPress={() => { }}
                         style={styles.listItem}
                     />
                 </List.Section>

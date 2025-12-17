@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider as PaperProvider, adaptNavigationTheme, MD3DarkTheme, MD3LightTheme } from 'react-native-paper';
@@ -12,6 +12,8 @@ import LoginScreen from './src/screens/LoginScreen';
 import { theme } from './src/theme/theme';
 import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { SoundProvider } from './src/context/SoundContext';
+import { registerForPushNotificationsAsync, unregisterPushNotificationsAsync } from './src/services/notificationService';
 
 const Stack = createNativeStackNavigator();
 
@@ -94,10 +96,21 @@ function AppNavigator() {
 }
 
 function Main() {
-  const { isThemeDark } = usePreferences();
+  const { isThemeDark, notificationsEnabled } = usePreferences();
+  const { user } = useAuth();
   const [fontsLoaded] = useFonts({
     'MaterialCommunityIcons': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
   });
+
+  useEffect(() => {
+    if (user) {
+      if (notificationsEnabled) {
+        registerForPushNotificationsAsync(user.uid);
+      } else {
+        unregisterPushNotificationsAsync();
+      }
+    }
+  }, [user, notificationsEnabled]);
 
   if (!fontsLoaded) {
     return <ActivityIndicator size="large" style={{ flex: 1, justifyContent: 'center' }} />;
@@ -116,7 +129,9 @@ export default function App() {
   return (
     <PreferencesProvider>
       <AuthProvider>
-        <Main />
+        <SoundProvider>
+          <Main />
+        </SoundProvider>
       </AuthProvider>
     </PreferencesProvider>
   );

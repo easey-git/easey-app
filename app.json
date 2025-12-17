@@ -12,7 +12,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Allow Easey CRM to use FaceID for secure login."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,6 +31,17 @@
       "eas": {
         "projectId": "194232ae-d544-4928-92bf-6cd52d54e1e5"
       }
-    }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/live.mp3"
+          ]
+        }
+      ],
+      "expo-secure-store"
+    ]
   }
 }
