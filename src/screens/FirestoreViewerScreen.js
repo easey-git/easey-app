@@ -481,7 +481,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 duration={3000}
                 style={{ backgroundColor: snackbarColor }}
             >
-                {snackbarMessage}
+                <Text style={{ color: theme.colors.inverseOnSurface }}>{snackbarMessage}</Text>
             </Snackbar>
         </View>
     );
