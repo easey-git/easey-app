@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Animated, Easing } from 'react-native';
-import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divider, Avatar, useTheme, Button, Chip } from 'react-native-paper';
+import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog } from 'react-native-paper';
 import { LineChart } from 'react-native-chart-kit';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -14,6 +14,8 @@ const StatsScreen = ({ navigation }) => {
     const [abandonedCarts, setAbandonedCarts] = useState(0);
     const [recentActivity, setRecentActivity] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [selectedDoc, setSelectedDoc] = useState(null);
+    const [modalVisible, setModalVisible] = useState(false);
 
     const [chartData, setChartData] = useState({
         labels: ["00", "04", "08", "12", "16", "20"],
@@ -253,12 +255,136 @@ const StatsScreen = ({ navigation }) => {
                                 )}
                                 left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />}
                                 right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.amount || 0}</Text>}
+                                onPress={() => {
+                                    setSelectedDoc(item);
+                                    setModalVisible(true);
+                                }}
                             />
                             <Divider />
                         </React.Fragment>
                     ))}
-                </View >
+                </View>
             </ScrollView >
+
+            {/* Document Details Dialog */}
+            <Portal>
+                <Dialog
+                    visible={modalVisible}
+                    onDismiss={() => setModalVisible(false)}
+                    style={{ maxHeight: '85%' }}
+                >
+                    <Dialog.Title>Checkout Details</Dialog.Title>
+                    <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0 }}>
+                        <ScrollView>
+                            {selectedDoc && (
+                                <View style={{ paddingHorizontal: 24 }}>
+                                    {/* Customer Info */}
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Customer</Text>
+                                        <Text variant="bodyLarge">{selectedDoc.customerName || 'Guest'}</Text>
+                                    </View>
+
+                                    {selectedDoc.email && (
+                                        <View style={{ marginBottom: 16 }}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Email</Text>
+                                            <Text variant="bodyMedium">{selectedDoc.email}</Text>
+                                        </View>
+                                    )}
+
+                                    {selectedDoc.phone && (
+                                        <View style={{ marginBottom: 16 }}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Phone</Text>
+                                            <Text variant="bodyMedium">{selectedDoc.phone}</Text>
+                                        </View>
+                                    )}
+
+                                    {/* Status */}
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Status</Text>
+                                        <Chip
+                                            mode="flat"
+                                            compact
+                                            style={{
+                                                backgroundColor: selectedDoc.status === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer,
+                                                alignSelf: 'flex-start'
+                                            }}
+                                            textStyle={{
+                                                color: selectedDoc.status === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
+                                                fontWeight: 'bold'
+                                            }}
+                                        >
+                                            {selectedDoc.status || 'Active'}
+                                        </Chip>
+                                    </View>
+
+                                    {/* Amount */}
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Amount</Text>
+                                        <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || selectedDoc.amount || 0}</Text>
+                                    </View>
+
+                                    {/* Items */}
+                                    {selectedDoc.items && selectedDoc.items.length > 0 && (
+                                        <View style={{ marginBottom: 16 }}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>Items</Text>
+                                            {selectedDoc.items.map((item, index) => (
+                                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: index < selectedDoc.items.length - 1 ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text variant="bodyMedium">{item.name || 'Unknown Item'}</Text>
+                                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Qty: {item.quantity || 1}</Text>
+                                                    </View>
+                                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>₹{item.price || 0}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    {/* Address */}
+                                    {(selectedDoc.city || selectedDoc.state || selectedDoc.pincode) && (
+                                        <View style={{ marginBottom: 16 }}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Location</Text>
+                                            <Text variant="bodyMedium">
+                                                {[selectedDoc.city, selectedDoc.state, selectedDoc.pincode].filter(Boolean).join(', ')}
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    {/* Source */}
+                                    {selectedDoc.source && (
+                                        <View style={{ marginBottom: 16 }}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Source</Text>
+                                            <Text variant="bodyMedium">{selectedDoc.source}</Text>
+                                        </View>
+                                    )}
+
+                                    {/* Timestamp */}
+                                    {selectedDoc.jsDate && (
+                                        <View style={{ marginBottom: 16 }}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Last Updated</Text>
+                                            <Text variant="bodyMedium">
+                                                {selectedDoc.jsDate.toLocaleString()}
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    {/* Checkout ID */}
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Checkout ID</Text>
+                                        <Text variant="bodySmall" style={{ fontFamily: 'monospace', color: theme.colors.onSurfaceVariant }}>{selectedDoc.id}</Text>
+                                    </View>
+                                </View>
+                            )}
+                        </ScrollView>
+                    </Dialog.ScrollArea>
+                    <Dialog.Actions>
+                        <Button onPress={() => setModalVisible(false)}>Close</Button>
+                        <Button onPress={() => {
+                            setModalVisible(false);
+                            navigation.navigate('DatabaseManager', { collection: 'checkouts' });
+                        }}>View in Database</Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
         </View >
     );
 };

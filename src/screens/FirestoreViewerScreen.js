@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
-import { Text, useTheme, Appbar, Surface, IconButton, Portal, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Dialog, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
+import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
 import { collection, getDocs, deleteDoc, updateDoc, doc, limit, query, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -419,53 +419,45 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             />
 
             <Portal>
-                <Modal visible={visible} onDismiss={() => setVisible(false)} contentContainerStyle={{ padding: 8, alignItems: 'center' }}>
-                    <Surface style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold', flex: 1 }}>
-                                {isEditing ? 'Edit Document' : 'Document Details'}
-                            </Text>
-                            <View style={{ flexDirection: 'row' }}>
-                                <IconButton
-                                    icon={isEditing ? "close" : "pencil"}
-                                    onPress={() => setIsEditing(!isEditing)}
-                                    size={20}
-                                    style={{ margin: 0 }}
-                                />
-                                <IconButton
-                                    icon="close"
-                                    onPress={() => setVisible(false)}
-                                    size={20}
-                                    style={{ margin: 0 }}
-                                />
+                <Dialog visible={visible} onDismiss={() => setVisible(false)} style={{ maxHeight: '90%' }}>
+                    <Dialog.Title>
+                        {isEditing ? 'Edit Document' : 'Document Details'}
+                    </Dialog.Title>
+
+                    <Dialog.ScrollArea style={{ paddingHorizontal: 0 }}>
+                        <ScrollView>
+                            <View style={{ paddingHorizontal: 24 }}>
+                                {editedDoc && Object.entries(editedDoc).map(([key, value]) => (
+                                    key !== 'id' && (
+                                        <RenderField key={key} label={key} value={value} />
+                                    )
+                                ))}
                             </View>
-                        </View>
-
-                        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
-                            {editedDoc && Object.entries(editedDoc).map(([key, value]) => (
-                                key !== 'id' && (
-                                    <RenderField key={key} label={key} value={value} />
-                                )
-                            ))}
                         </ScrollView>
+                    </Dialog.ScrollArea>
 
+                    <Dialog.Actions>
+                        <IconButton
+                            icon={isEditing ? "close" : "pencil"}
+                            onPress={() => setIsEditing(!isEditing)}
+                            size={20}
+                        />
                         {isEditing ? (
-                            <Button mode="contained" onPress={handleSave} style={{ marginTop: 12 }} compact>
+                            <Button mode="contained" onPress={handleSave}>
                                 Save Changes
                             </Button>
                         ) : (
                             <Button
                                 mode="outlined"
                                 textColor={theme.colors.error}
-                                style={{ marginTop: 12, borderColor: theme.colors.error }}
                                 onPress={() => handleDelete(selectedDoc.id)}
-                                compact
                             >
-                                Delete Document
+                                Delete
                             </Button>
                         )}
-                    </Surface>
-                </Modal>
+                        <Button onPress={() => setVisible(false)}>Close</Button>
+                    </Dialog.Actions>
+                </Dialog>
             </Portal>
 
             {/* Confirmation Dialog */}

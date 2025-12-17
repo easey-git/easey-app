@@ -94,6 +94,7 @@ function AppNavigator() {
 }
 
 function Main() {
+  const { isThemeDark } = usePreferences();
   const [fontsLoaded] = useFonts({
     'MaterialCommunityIcons': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
   });
@@ -102,8 +103,10 @@ function Main() {
     return <ActivityIndicator size="large" style={{ flex: 1, justifyContent: 'center' }} />;
   }
 
+  const activeTheme = isThemeDark ? CombinedDarkTheme : CombinedLightTheme;
+
   return (
-    <PaperProvider theme={CombinedDarkTheme}>
+    <PaperProvider theme={activeTheme}>
       <AppNavigator />
     </PaperProvider>
   );
