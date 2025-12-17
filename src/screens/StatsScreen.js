@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Animated, Easing } from 'react-native';
 import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog } from 'react-native-paper';
-import { LineChart } from 'react-native-chart-kit';
+import { LineChart } from 'react-native-gifted-charts';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getCachedActiveVisitors } from '../services/ga4Service';
@@ -34,7 +34,8 @@ const StatsScreen = ({ navigation }) => {
 
         const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
             let total = 0;
-            const hourlyData = new Array(6).fill(0);
+            // 12 buckets for 2-hour intervals (0-1, 2-3, 4-5, ... 22-23)
+            const hourlyData = new Array(12).fill(0);
 
             snapshot.docs.forEach(doc => {
                 const data = doc.data();
@@ -42,15 +43,16 @@ const StatsScreen = ({ navigation }) => {
 
                 const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
                 const hour = date.getHours();
-                const bucketIndex = Math.floor(hour / 4);
-                if (bucketIndex >= 0 && bucketIndex < 6) {
+                // 2-hour buckets: 0-1, 2-3, 4-5, etc.
+                const bucketIndex = Math.floor(hour / 2);
+                if (bucketIndex >= 0 && bucketIndex < 12) {
                     hourlyData[bucketIndex] += parseFloat(data.totalPrice || 0);
                 }
             });
 
             setTodaysSales(total);
             setChartData({
-                labels: ["12am", "4am", "8am", "12pm", "4pm", "8pm"],
+                labels: ["12am", "2am", "4am", "6am", "8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm", "10pm"],
                 datasets: [{
                     data: hourlyData,
                     color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
@@ -172,16 +174,6 @@ const StatsScreen = ({ navigation }) => {
         setTimeout(() => setRefreshing(false), 1000);
     }, []);
 
-    const chartConfig = {
-        backgroundGradientFrom: theme.colors.surface,
-        backgroundGradientTo: theme.colors.surface,
-        decimalPlaces: 0,
-        color: (opacity = 1) => `rgba(138, 180, 248, ${opacity})`, // Google Blue
-        labelColor: (opacity = 1) => theme.colors.onSurfaceVariant,
-        style: { borderRadius: 0 },
-        propsForDots: { r: "4", strokeWidth: "2", stroke: theme.colors.primary }
-    };
-
     if (loading) {
         return (
             <View style={[styles.container, styles.center, { backgroundColor: theme.colors.background }]}>
@@ -252,18 +244,103 @@ const StatsScreen = ({ navigation }) => {
 
                 {/* Chart Section */}
                 <Surface style={[styles.chartSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                    <Text variant="titleMedium" style={{ paddingHorizontal: 16, paddingTop: 16, fontWeight: 'bold', color: theme.colors.onSurface }}>Sales Trend</Text>
-                    <LineChart
-                        data={chartData}
-                        width={screenWidth}
-                        height={220}
-                        chartConfig={chartConfig}
-                        bezier
-                        withDots={false}
-                        withInnerLines={true}
-                        withOuterLines={false}
-                        style={{ marginTop: 16 }}
-                    />
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16 }}>
+                        <View>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Sales Trend</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>Tap on points to see values</Text>
+                        </View>
+                        <Chip mode="flat" compact style={{ backgroundColor: theme.colors.primaryContainer }}>
+                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 12, fontWeight: 'bold' }}>₹{todaysSales.toLocaleString()}</Text>
+                        </Chip>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
+                        <LineChart
+                            data={chartData.datasets[0].data.map((value, index) => ({
+                                value: value,
+                                label: chartData.labels[index],
+                                labelTextStyle: { color: theme.colors.onSurfaceVariant, fontSize: 10 },
+                                dataPointText: `₹${Math.round(value)}`,
+                            }))}
+                            height={200}
+                            width={Math.max(screenWidth - 40, chartData.labels.length * 60)} // Wider for scrolling
+                            scrollable={true}
+                            curved
+                            areaChart
+                            animateOnDataChange
+                            animationDuration={1000}
+                            onDataChangeAnimationDuration={300}
+                            color={theme.colors.primary}
+                            thickness={3}
+                            startFillColor={theme.colors.primary}
+                            endFillColor={theme.colors.surface}
+                            startOpacity={0.3}
+                            endOpacity={0.05}
+                            spacing={45}
+                            backgroundColor={theme.colors.surface}
+                            hideDataPoints={false}
+                            dataPointsHeight={8}
+                            dataPointsWidth={8}
+                            dataPointsColor={theme.colors.primary}
+                            dataPointsRadius={4}
+                            textColor={theme.colors.onSurface}
+                            textFontSize={11}
+                            textShiftY={-8}
+                            textShiftX={-10}
+                            yAxisColor={theme.colors.outlineVariant}
+                            xAxisColor={theme.colors.outlineVariant}
+                            yAxisTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                            xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                            rulesType="solid"
+                            rulesColor={theme.colors.outlineVariant}
+                            rulesThickness={0.5}
+                            showVerticalLines={false}
+                            verticalLinesColor={theme.colors.outlineVariant}
+                            yAxisThickness={1}
+                            xAxisThickness={1}
+                            initialSpacing={10}
+                            endSpacing={20}
+                            noOfSections={4}
+                            maxValue={Math.max(...chartData.datasets[0].data) * 1.2}
+                            yAxisLabelPrefix="₹"
+                            formatYLabel={(value) => {
+                                if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+                                return value.toString();
+                            }}
+                            pointerConfig={{
+                                pointerStripHeight: 180,
+                                pointerStripColor: theme.colors.primary,
+                                pointerStripWidth: 2,
+                                pointerColor: theme.colors.primary,
+                                radius: 6,
+                                pointerLabelWidth: 100,
+                                pointerLabelHeight: 90,
+                                activatePointersOnLongPress: false,
+                                autoAdjustPointerLabelPosition: true,
+                                pointerLabelComponent: items => {
+                                    return (
+                                        <View
+                                            style={{
+                                                height: 70,
+                                                width: 90,
+                                                justifyContent: 'center',
+                                                backgroundColor: theme.colors.primaryContainer,
+                                                borderRadius: 8,
+                                                padding: 8,
+                                                borderWidth: 1,
+                                                borderColor: theme.colors.primary,
+                                            }}>
+                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
+                                                {items[0].label}
+                                            </Text>
+                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>
+                                                ₹{Math.round(items[0].value).toLocaleString()}
+                                            </Text>
+                                        </View>
+                                    );
+                                },
+                            }}
+                        />
+                    </ScrollView>
                 </Surface>
 
                 {/* Recent Activity List */}
