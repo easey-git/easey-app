@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, RefreshControl } from 'react-native';
-import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divider, Avatar, useTheme } from 'react-native-paper';
+import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divider, Avatar, useTheme, Button } from 'react-native-paper';
 import { LineChart } from 'react-native-chart-kit';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -70,10 +70,10 @@ const StatsScreen = ({ navigation }) => {
             snapshot.docs.forEach(doc => {
                 const data = doc.data();
 
-                // Correct Logic: Active vs Abandoned
+                // Correct Logic: Active vs Abandoned vs Completed
                 if (data.eventType === 'ABANDONED') {
                     abandoned++;
-                } else {
+                } else if (!data.orderId && data.status !== 'completed' && data.eventType !== 'ORDER_PLACED' && data.status !== 'Payment Started') {
                     active++;
                 }
 
@@ -179,7 +179,17 @@ const StatsScreen = ({ navigation }) => {
 
                 {/* Recent Activity List */}
                 <View style={[styles.listSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-                    <Text variant="titleMedium" style={{ padding: 16, fontWeight: 'bold', backgroundColor: theme.colors.surfaceVariant, color: theme.colors.onSurfaceVariant }}>Live Feed</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: theme.colors.surfaceVariant }}>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant }}>Live Feed</Text>
+                        <Button
+                            mode="text"
+                            compact
+                            onPress={() => navigation.navigate('DatabaseManager', { collection: 'checkouts' })}
+                            textColor={theme.colors.primary}
+                        >
+                            History
+                        </Button>
+                    </View>
                     <Divider />
                     {recentActivity.map((item) => (
                         <React.Fragment key={item.id}>

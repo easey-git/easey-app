@@ -4,9 +4,9 @@ import { Text, useTheme, Appbar, Surface, IconButton, Portal, Modal, Button, Div
 import { collection, getDocs, deleteDoc, updateDoc, doc, limit, query, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-const FirestoreViewerScreen = ({ navigation }) => {
+const FirestoreViewerScreen = ({ navigation, route }) => {
     const [collections, setCollections] = useState(['orders', 'checkouts', 'customers']);
-    const [selectedCollection, setSelectedCollection] = useState('orders');
+    const [selectedCollection, setSelectedCollection] = useState(route.params?.collection || 'orders');
     const [documents, setDocuments] = useState([]);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [editedDoc, setEditedDoc] = useState(null);
@@ -269,7 +269,6 @@ const FirestoreViewerScreen = ({ navigation }) => {
                             style={{ backgroundColor: theme.colors.secondaryContainer, marginLeft: 4, marginTop: 4 }}
                             color={theme.colors.onSecondaryContainer}
                         />
-
                         <View style={{ flex: 1, marginLeft: 12 }}>
                             {/* Name & Status */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2, flexWrap: 'wrap' }}>
