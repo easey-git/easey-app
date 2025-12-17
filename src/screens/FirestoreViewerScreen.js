@@ -262,7 +262,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                 onPress={() => toggleSelection(item.id)}
                             />
                         </View>
-
                         <Avatar.Icon
                             size={40}
                             icon="package-variant-closed"
@@ -270,7 +269,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                             color={theme.colors.onSecondaryContainer}
                         />
                         <View style={{ flex: 1, marginLeft: 12 }}>
-                            {/* Name & Status */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2, flexWrap: 'wrap' }}>
                                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginRight: 8 }}>
                                     {item.customerName || 'No Name'}
@@ -296,13 +294,9 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                     {isCOD ? 'COD' : 'PAID'}
                                 </Chip>
                             </View>
-
-                            {/* Order Number */}
                             <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontFamily: 'monospace', marginBottom: 6 }}>
                                 Order #: {item.orderNumber || item.id}
                             </Text>
-
-                            {/* Phone */}
                             {item.phone && (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
                                     <Icon source="phone" size={14} color={theme.colors.onSurfaceVariant} />
@@ -311,8 +305,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                     </Text>
                                 </View>
                             )}
-
-                            {/* Email */}
                             {item.email && (
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     <Icon source="email" size={14} color={theme.colors.onSurfaceVariant} />
@@ -322,7 +314,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                 </View>
                             )}
                         </View>
-
                         <IconButton icon="chevron-right" size={20} style={{ marginTop: 0 }} />
                     </View>
                 </TouchableOpacity>
