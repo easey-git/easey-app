@@ -32,6 +32,12 @@
         "projectId": "194232ae-d544-4928-92bf-6cd52d54e1e5"
       }
     },
+    "updates": {
+      "url": "https://u.expo.dev/194232ae-d544-4928-92bf-6cd52d54e1e5"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "plugins": [
       [
         "expo-notifications",

@@ -1,14 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Image } from 'react-native';
-import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon, Menu, Divider } from 'react-native-paper';
+import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon } from 'react-native-paper';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { useAuth } from '../context/AuthContext';
 import { useSound } from '../context/SoundContext';
 
 const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { user, logout } = useAuth();
     const { playSound } = useSound();
     const prevOrdersRef = React.useRef(0);
     const [timeRange, setTimeRange] = useState('today');
@@ -25,20 +23,6 @@ const HomeScreen = ({ navigation }) => {
         shiprocket: false,
         shopify: false
     });
-    const [menuVisible, setMenuVisible] = useState(false);
-
-    const openMenu = () => setMenuVisible(true);
-    const closeMenu = () => setMenuVisible(false);
-
-    const handleLogout = async () => {
-        closeMenu();
-        await logout();
-    };
-
-    const handleSettings = () => {
-        closeMenu();
-        navigation.navigate('Settings');
-    };
 
     // Check webhook health
     useEffect(() => {
@@ -225,46 +209,6 @@ const HomeScreen = ({ navigation }) => {
                     />
                 </View>
 
-                {/* User Menu */}
-                <Menu
-                    visible={menuVisible}
-                    onDismiss={closeMenu}
-                    anchor={
-                        <Button onPress={openMenu} style={{ marginRight: 8 }}>
-                            <Avatar.Text
-                                size={36}
-                                label={user?.email?.charAt(0).toUpperCase() || "U"}
-                                style={{ backgroundColor: theme.colors.primaryContainer }}
-                                color={theme.colors.onPrimaryContainer}
-                            />
-                        </Button>
-                    }
-                    anchorPosition="bottom"
-                >
-                    <Menu.Item
-                        leadingIcon="account"
-                        title={user?.displayName || user?.email || "User"}
-                        disabled
-                        titleStyle={{ fontWeight: 'bold' }}
-                    />
-                    <Menu.Item
-                        title={user?.email || "No email"}
-                        disabled
-                        titleStyle={{ fontSize: 12, color: theme.colors.onSurfaceVariant }}
-                    />
-                    <Divider />
-                    <Menu.Item
-                        leadingIcon="cog"
-                        onPress={handleSettings}
-                        title="Settings"
-                    />
-                    <Menu.Item
-                        leadingIcon="logout"
-                        onPress={handleLogout}
-                        title="Sign Out"
-                        titleStyle={{ color: theme.colors.error }}
-                    />
-                </Menu>
             </Appbar.Header>
 
             <ScrollView
@@ -382,7 +326,7 @@ const HomeScreen = ({ navigation }) => {
                     </View>
                 </View>
             </ScrollView>
-        </View>
+        </View >
     );
 };
 
