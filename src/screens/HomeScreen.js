@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Image } from 'react-native';
 import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon, Menu, Divider } from 'react-native-paper';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -206,8 +206,13 @@ const HomeScreen = ({ navigation }) => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0 }}>
-                <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold', fontSize: 24, color: theme.colors.onBackground }} />
+            <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0, height: 70, paddingHorizontal: 0 }}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', marginLeft: -20 }}>
+                    <Image
+                        source={theme.dark ? require('../../logo/easey-white.png') : require('../../logo/easey-dark.png')}
+                        style={{ width: 180, height: 60, resizeMode: 'contain' }}
+                    />
+                </View>
 
                 {/* User Menu */}
                 <Menu

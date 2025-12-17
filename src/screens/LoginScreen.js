@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, SafeAreaView, Image } from 'react-native';
 import { Text, TextInput, Button, useTheme, Surface, ActivityIndicator, Icon } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 
@@ -39,8 +39,11 @@ const LoginScreen = () => {
                 <View style={styles.content}>
                     {/* Logo/Brand Section */}
                     <View style={styles.header}>
-                        <Surface style={[styles.logoContainer, { backgroundColor: theme.colors.primaryContainer }]} elevation={0}>
-                            <Icon source="shopping" size={48} color={theme.colors.onPrimaryContainer} />
+                        <Surface style={[styles.logoContainer, { backgroundColor: '#FF6B6B' }]} elevation={0}>
+                            <Image
+                                source={require('../../logo/easey-white.png')}
+                                style={{ width: 80, height: 80, resizeMode: 'contain' }}
+                            />
                         </Surface>
                         <Text variant="headlineLarge" style={{ fontWeight: 'bold', marginTop: 24, color: theme.colors.onBackground }}>
                             Easey CRM
@@ -104,7 +107,7 @@ const LoginScreen = () => {
                     {/* Footer */}
                     <View style={styles.footer}>
                         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
-                            Secure authentication powered by Firebase
+                            support@easey.in
                         </Text>
                     </View>
                 </View>
