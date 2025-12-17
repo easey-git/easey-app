@@ -78,7 +78,7 @@ const HomeScreen = ({ navigation }) => {
                 const diffMinutes = Math.abs(now.getTime() - updatedAt.getTime()) / (1000 * 60);
 
                 const isOrdered = rawStage === 'ORDER_PLACED' || rawStage === 'PAYMENT_INITIATED' || rawStage === 'COMPLETED' || !!data.orderId;
-                const isAbandoned = rawStage === 'CHECKOUT_ABANDONED' || diffMinutes > 3;
+                const isAbandoned = !isOrdered && (rawStage === 'CHECKOUT_ABANDONED' || data.eventType === 'ABANDONED' || diffMinutes > 10);
 
                 if (!isOrdered && !isAbandoned) {
                     activeCount++;

@@ -14,28 +14,6 @@ const StatsScreen = ({ navigation }) => {
     const [abandonedCarts, setAbandonedCarts] = useState(0);
     const [recentActivity, setRecentActivity] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
-    const pulseAnim = React.useRef(new Animated.Value(1)).current;
-
-    useEffect(() => {
-        if (recentActivity.length === 0) {
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(pulseAnim, {
-                        toValue: 1.5,
-                        duration: 1500,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: false,
-                    }),
-                    Animated.timing(pulseAnim, {
-                        toValue: 1,
-                        duration: 1500,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: false,
-                    })
-                ])
-            ).start();
-        }
-    }, [recentActivity.length]);
 
     const [chartData, setChartData] = useState({
         labels: ["00", "04", "08", "12", "16", "20"],
@@ -84,12 +62,15 @@ const StatsScreen = ({ navigation }) => {
             limit(20)
         );
 
-        const unsubscribeCheckouts = onSnapshot(qCheckouts, (snapshot) => {
+        // Store docs in a ref to access them in the interval
+        let currentDocs = [];
+
+        const processDocs = (docs) => {
             const activities = [];
             let active = 0;
             let abandoned = 0;
 
-            snapshot.docs.forEach(doc => {
+            docs.forEach(doc => {
                 const data = doc.data();
                 const rawStage = data.latest_stage || '';
                 const displayStage = data.stage || data.eventType || rawStage;
@@ -103,11 +84,14 @@ const StatsScreen = ({ navigation }) => {
                 // Abandoned: Explicitly abandoned or old (> 5 mins)
 
                 const isOrdered = rawStage === 'ORDER_PLACED' || rawStage === 'PAYMENT_INITIATED' || rawStage === 'COMPLETED' || !!data.orderId;
-                const isAbandoned = rawStage === 'CHECKOUT_ABANDONED' || diffMinutes > 3;
+                // Only mark as abandoned if NOT ordered AND (explicitly abandoned OR timed out)
+                const isAbandoned = !isOrdered && (rawStage === 'CHECKOUT_ABANDONED' || data.eventType === 'ABANDONED' || diffMinutes > 10);
 
-                if (isAbandoned) {
+                if (isOrdered) {
+                    // Converted - do not count as active or abandoned
+                } else if (isAbandoned) {
                     abandoned++;
-                } else if (!isOrdered) {
+                } else {
                     active++;
                 }
 
@@ -126,11 +110,24 @@ const StatsScreen = ({ navigation }) => {
             setAbandonedCarts(abandoned);
             setRecentActivity(activities);
             setLoading(false);
+        };
+
+        const unsubscribeCheckouts = onSnapshot(qCheckouts, (snapshot) => {
+            currentDocs = snapshot.docs;
+            processDocs(currentDocs);
         });
+
+        // Re-process every 30 seconds to update time-based status (Active -> Abandoned -> Vanished)
+        const intervalId = setInterval(() => {
+            if (currentDocs.length > 0) {
+                processDocs(currentDocs);
+            }
+        }, 30000);
 
         return () => {
             unsubscribeOrders();
             unsubscribeCheckouts();
+            clearInterval(intervalId);
         };
     }, []);
 
@@ -229,77 +226,40 @@ const StatsScreen = ({ navigation }) => {
                         </Button>
                     </View>
                     <Divider />
-                    {recentActivity.length === 0 ? (
-                        <View style={{ padding: 40, alignItems: 'center', justifyContent: 'center', minHeight: 250 }}>
-                            <Animated.View style={{
-                                position: 'absolute',
-                                width: 80,
-                                height: 80,
-                                borderRadius: 40,
-                                backgroundColor: theme.colors.primary,
-                                opacity: pulseAnim.interpolate({
-                                    inputRange: [1, 1.5],
-                                    outputRange: [0.3, 0]
-                                }),
-                                transform: [{ scale: pulseAnim }]
-                            }} />
-                            <Animated.View style={{
-                                position: 'absolute',
-                                width: 80,
-                                height: 80,
-                                borderRadius: 40,
-                                borderWidth: 1,
-                                borderColor: theme.colors.primary,
-                                opacity: pulseAnim.interpolate({
-                                    inputRange: [1, 1.5],
-                                    outputRange: [1, 0]
-                                }),
-                                transform: [{ scale: pulseAnim }]
-                            }} />
-                            <Icon source="access-point" size={48} color={theme.colors.primary} />
-                            <Text variant="titleMedium" style={{ color: theme.colors.onSurface, marginTop: 24, fontWeight: 'bold', letterSpacing: 1.5 }}>
-                                SCANNING
-                            </Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 8, letterSpacing: 0.5 }}>
-                                Waiting for live activity...
-                            </Text>
-                        </View>
-                    ) : (
-                        recentActivity.map((item) => (
-                            <React.Fragment key={item.id}>
-                                <List.Item
-                                    title={item.customerName || 'Guest User'}
-                                    titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }}
-                                    description={() => (
-                                        <View>
-                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                                {item.items && item.items.length > 0 ? item.items[0].name : 'Browsing'}
+                    {recentActivity.map((item) => (
+                        <React.Fragment key={item.id}>
+                            <List.Item
+                                title={item.customerName || 'Guest User'}
+                                titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }}
+                                description={() => (
+                                    <View>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                            {item.items && item.items.length > 0 ? item.items[0].name : 'Browsing'}
+                                        </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                            <Chip
+                                                mode="flat"
+                                                compact
+                                                style={{ backgroundColor: item.status === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer, height: 20, borderRadius: 4, paddingHorizontal: 0 }}
+                                                textStyle={{ fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 8, color: item.status === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer, fontWeight: 'bold' }}
+                                            >
+                                                {item.status || 'Active'}
+                                            </Chip>
+                                            <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
+                                                • {item.jsDate ? item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                                             </Text>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                                <Chip
-                                                    mode="flat"
-                                                    compact
-                                                    style={{ backgroundColor: item.status === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer, height: 20, borderRadius: 4, paddingHorizontal: 0 }}
-                                                    textStyle={{ fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 8, color: item.status === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer, fontWeight: 'bold' }}
-                                                >
-                                                    {item.status || 'Active'}
-                                                </Chip>
-                                                <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
-                                                    • {item.jsDate ? item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                                                </Text>
-                                            </View>
                                         </View>
-                                    )}
-                                    left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />}
-                                    right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.amount || 0}</Text>}
-                                />
-                                <Divider />
-                            </React.Fragment>
-                        ))
-                    )}
-                </View>
-            </ScrollView>
-        </View>
+                                    </View>
+                                )}
+                                left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />}
+                                right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.amount || 0}</Text>}
+                            />
+                            <Divider />
+                        </React.Fragment>
+                    ))}
+                </View >
+            </ScrollView >
+        </View >
     );
 };
 
@@ -325,6 +285,7 @@ const styles = StyleSheet.create({
     },
     listSection: {
         borderTopWidth: 1,
+        paddingBottom: 20,
     },
 });
 

@@ -35,7 +35,8 @@ module.exports = async (req, res) => {
                     "PHONE_RECEIVED": "Entered Phone",
                     "EMAIL_RECEIVED": "Entered Email",
                     "ADDRESS_RECEIVED": "Entered Address",
-                    "PAYMENT_INITIATED": "Payment Started"
+                    "PAYMENT_INITIATED": "Payment Started",
+                    "OTP_VERIFIED": "OTP Verified"
                 };
                 const readableStage = stageMap[stage] || stage;
 

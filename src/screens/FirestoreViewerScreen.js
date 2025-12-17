@@ -273,26 +273,53 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginRight: 8 }}>
                                     {item.customerName || 'No Name'}
                                 </Text>
-                                <Chip
-                                    mode="flat"
-                                    compact
-                                    style={{
-                                        backgroundColor: isCOD ? theme.colors.errorContainer : theme.colors.primaryContainer,
-                                        height: 20,
-                                        borderRadius: 4,
-                                        paddingHorizontal: 0
-                                    }}
-                                    textStyle={{
-                                        fontSize: 10,
-                                        lineHeight: 10,
-                                        marginVertical: 0,
-                                        marginHorizontal: 8,
-                                        color: isCOD ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
-                                        fontWeight: 'bold'
-                                    }}
-                                >
-                                    {isCOD ? 'COD' : 'PAID'}
-                                </Chip>
+                                {selectedCollection === 'checkouts' ? (
+                                    <Chip
+                                        mode="flat"
+                                        compact
+                                        style={{
+                                            backgroundColor: (item.latest_stage === 'ORDER_PLACED' || item.latest_stage === 'PAYMENT_INITIATED') ? theme.colors.primaryContainer :
+                                                (item.latest_stage === 'CHECKOUT_ABANDONED' || item.eventType === 'ABANDONED') ? theme.colors.errorContainer :
+                                                    theme.colors.secondaryContainer,
+                                            height: 20,
+                                            borderRadius: 4,
+                                            paddingHorizontal: 0
+                                        }}
+                                        textStyle={{
+                                            fontSize: 10,
+                                            lineHeight: 10,
+                                            marginVertical: 0,
+                                            marginHorizontal: 8,
+                                            color: (item.latest_stage === 'ORDER_PLACED' || item.latest_stage === 'PAYMENT_INITIATED') ? theme.colors.onPrimaryContainer :
+                                                (item.latest_stage === 'CHECKOUT_ABANDONED' || item.eventType === 'ABANDONED') ? theme.colors.onErrorContainer :
+                                                    theme.colors.onSecondaryContainer,
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {item.stage || item.latest_stage || 'ACTIVE'}
+                                    </Chip>
+                                ) : (
+                                    <Chip
+                                        mode="flat"
+                                        compact
+                                        style={{
+                                            backgroundColor: isCOD ? theme.colors.errorContainer : theme.colors.primaryContainer,
+                                            height: 20,
+                                            borderRadius: 4,
+                                            paddingHorizontal: 0
+                                        }}
+                                        textStyle={{
+                                            fontSize: 10,
+                                            lineHeight: 10,
+                                            marginVertical: 0,
+                                            marginHorizontal: 8,
+                                            color: isCOD ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {isCOD ? 'COD' : 'PAID'}
+                                    </Chip>
+                                )}
                             </View>
                             <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontFamily: 'monospace', marginBottom: 6 }}>
                                 Order #: {item.orderNumber || item.id}
@@ -317,7 +344,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                         <IconButton icon="chevron-right" size={20} style={{ marginTop: 0 }} />
                     </View>
                 </TouchableOpacity>
-            </Surface>
+            </Surface >
         );
     };
 
