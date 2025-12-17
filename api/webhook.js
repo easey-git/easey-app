@@ -28,6 +28,7 @@ module.exports = async (req, res) => {
 
                 if (queryParams.abandoned === "1") {
                     eventType = "ABANDONED";
+                    stage = "CHECKOUT_ABANDONED"; // Explicitly mark as abandoned
                 }
 
                 // Map technical stages to human readable text
