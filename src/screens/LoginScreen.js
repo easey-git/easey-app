@@ -68,7 +68,7 @@ const LoginScreen = () => {
                 if (savedEmail && savedPassword) {
                     const result = await login(savedEmail, savedPassword);
                     if (!result.success) {
-                        setError(result.error || 'Biometric login failed. Please use password.');
+                        setError(result.error || 'Fingerprint login failed. Please use password.');
                     }
                 } else {
                     setError('No credentials saved. Please login with password first.');
@@ -77,9 +77,16 @@ const LoginScreen = () => {
             }
         } catch (e) {
             console.error('Biometric auth error', e);
-            setError('Biometric authentication failed');
+            setError('Fingerprint authentication failed');
         }
     };
+
+    // Auto-trigger fingerprint login if enabled
+    useEffect(() => {
+        if (biometricsEnabled && isBiometricSupported) {
+            handleBiometricLogin();
+        }
+    }, [biometricsEnabled, isBiometricSupported]);
 
     return (
         <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
@@ -162,7 +169,7 @@ const LoginScreen = () => {
                                 style={{ marginTop: 16 }}
                                 icon="fingerprint"
                             >
-                                Login with Biometrics
+                                Login with Fingerprint
                             </Button>
                         )}
                     </Surface>

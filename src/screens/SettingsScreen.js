@@ -90,7 +90,7 @@ const SettingsScreen = ({ navigation }) => {
 
                 <List.Section title="Security">
                     <List.Item
-                        title="Biometric Login"
+                        title="Fingerprint Login"
                         left={props => <List.Icon {...props} icon="fingerprint" />}
                         right={() => <Switch value={biometricsEnabled} onValueChange={toggleBiometrics} disabled={!isBiometricSupported} />}
                         style={styles.listItem}
