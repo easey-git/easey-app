@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import messaging from '@react-native-firebase/messaging';
 
 // Configure how notifications behave when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -32,30 +33,24 @@ export async function registerForPushNotificationsAsync(userId) {
         });
     }
 
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    // Request permission
+    const authStatus = await messaging().requestPermission();
+    const enabled =
+        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-    if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-    }
-
-    if (finalStatus !== 'granted') {
+    if (!enabled) {
         alert('Failed to get push token for push notification!');
         return;
     }
 
-    // Get the token that uniquely identifies this device
-    token = (await Notifications.getExpoPushTokenAsync({
-        projectId: '194232ae-d544-4928-92bf-6cd52d54e1e5'
-    })).data;
-
+    // Get FCM token (works in production builds)
+    token = await messaging().getToken();
 
     // Save token to Firestore
     if (token) {
         try {
             // Use token as doc ID to prevent duplicates
-            // If userId is provided, save it, otherwise just save the token
             const tokenData = {
                 token: token,
                 updatedAt: serverTimestamp(),
@@ -89,12 +84,9 @@ export async function sendLocalNotification(title, body) {
 
 export async function unregisterPushNotificationsAsync() {
     try {
-        const token = (await Notifications.getExpoPushTokenAsync({
-            projectId: '194232ae-d544-4928-92bf-6cd52d54e1e5'
-        })).data;
+        const token = await messaging().getToken();
         if (token) {
             await deleteDoc(doc(db, 'push_tokens', token));
-
         }
     } catch (error) {
         console.error('Error removing push token:', error);

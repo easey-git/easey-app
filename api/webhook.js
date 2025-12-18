@@ -144,42 +144,40 @@ module.exports = async (req, res) => {
                 console.log(`Shiprocket Event: ${eventType} (${readableStage}) for ${customerName}`);
 
                 // ---------------------------------------------------------
-                // SEND PUSH NOTIFICATION (True Background Solution)
+                // SEND PUSH NOTIFICATION (FCM for Production Builds)
                 // ---------------------------------------------------------
                 try {
-                    const { Expo } = require('expo-server-sdk');
-                    const expo = new Expo();
-
                     // Fetch all registered push tokens
                     const tokensSnapshot = await db.collection('push_tokens').get();
-                    const pushTokens = tokensSnapshot.docs.map(doc => doc.id);
+                    const pushTokens = tokensSnapshot.docs.map(doc => doc.data().token);
 
-                    const messages = [];
-                    for (let pushToken of pushTokens) {
-                        if (!Expo.isExpoPushToken(pushToken)) {
-                            console.error(`Push token ${pushToken} is not a valid Expo push token`);
-                            continue;
-                        }
-
-                        messages.push({
-                            to: pushToken,
-                            sound: 'live.mp3', // For iOS (must be in bundle)
-                            channelId: 'custom-sound', // For Android
+                    // Send FCM notifications
+                    const messages = pushTokens.map(token => ({
+                        token: token,
+                        notification: {
                             title: 'New Live Activity',
                             body: `${customerName} is active: ${readableStage}`,
-                            data: { checkoutId },
-                        });
+                        },
+                        android: {
+                            notification: {
+                                sound: 'live.mp3',
+                                channelId: 'custom-sound',
+                            }
+                        },
+                        data: {
+                            checkoutId: checkoutId || '',
+                            type: 'live_activity'
+                        }
+                    }));
+
+                    // Send in batches (FCM allows 500 per batch)
+                    const batchSize = 500;
+                    for (let i = 0; i < messages.length; i += batchSize) {
+                        const batch = messages.slice(i, i + batchSize);
+                        await admin.messaging().sendEach(batch);
                     }
 
-                    const chunks = expo.chunkPushNotifications(messages);
-                    for (let chunk of chunks) {
-                        try {
-                            await expo.sendPushNotificationsAsync(chunk);
-                        } catch (error) {
-                            console.error('Error sending push notification chunk:', error);
-                        }
-                    }
-                    console.log(`Sent ${messages.length} push notifications`);
+                    console.log(`Sent ${messages.length} FCM push notifications`);
                 } catch (error) {
                     console.error('Error sending push notifications:', error);
                 }
@@ -310,33 +308,38 @@ module.exports = async (req, res) => {
                 console.log(`Shopify Order ${data.order_number} saved.`);
 
                 // ---------------------------------------------------------
-                // SEND PUSH NOTIFICATION (True Background Solution)
+                // SEND PUSH NOTIFICATION (FCM for Production Builds)
                 // ---------------------------------------------------------
                 try {
-                    const { Expo } = require('expo-server-sdk');
-                    const expo = new Expo();
-
                     const tokensSnapshot = await db.collection('push_tokens').get();
-                    const pushTokens = tokensSnapshot.docs.map(doc => doc.id);
+                    const pushTokens = tokensSnapshot.docs.map(doc => doc.data().token);
 
-                    const messages = [];
-                    for (let pushToken of pushTokens) {
-                        if (Expo.isExpoPushToken(pushToken)) {
-                            messages.push({
-                                to: pushToken,
+                    const messages = pushTokens.map(token => ({
+                        token: token,
+                        notification: {
+                            title: 'New Order Received! 💰',
+                            body: `Order #${data.order_number} from ${data.customer ? data.customer.first_name : 'Guest'} - ₹${data.total_price}`,
+                        },
+                        android: {
+                            notification: {
                                 sound: 'live.mp3',
                                 channelId: 'custom-sound',
-                                title: 'New Order Received! 💰',
-                                body: `Order #${data.order_number} from ${data.customer ? data.customer.first_name : 'Guest'} - ₹${data.total_price}`,
-                                data: { orderId: data.id },
-                            });
+                            }
+                        },
+                        data: {
+                            orderId: String(data.id),
+                            type: 'new_order'
                         }
+                    }));
+
+                    // Send in batches
+                    const batchSize = 500;
+                    for (let i = 0; i < messages.length; i += batchSize) {
+                        const batch = messages.slice(i, i + batchSize);
+                        await admin.messaging().sendEach(batch);
                     }
 
-                    const chunks = expo.chunkPushNotifications(messages);
-                    for (let chunk of chunks) {
-                        await expo.sendPushNotificationsAsync(chunk);
-                    }
+                    console.log(`Sent ${messages.length} FCM order notifications`);
                 } catch (error) {
                     console.error('Error sending order push notifications:', error);
                 }
