@@ -13,12 +13,34 @@ Notifications.setNotificationHandler({
     }),
 });
 
+// Handle FCM messages when app is in foreground
+messaging().onMessage(async remoteMessage => {
+    console.log('FCM Message received in foreground:', remoteMessage);
+
+    // Display notification using Expo Notifications
+    await Notifications.scheduleNotificationAsync({
+        content: {
+            title: remoteMessage.notification?.title || 'New Notification',
+            body: remoteMessage.notification?.body || '',
+            sound: 'live.mp3',
+            channelId: 'custom-sound-v2',
+            data: remoteMessage.data,
+        },
+        trigger: null, // Show immediately
+    });
+});
+
+// Handle background messages
+messaging().setBackgroundMessageHandler(async remoteMessage => {
+    console.log('FCM Message handled in background:', remoteMessage);
+});
+
 export async function registerForPushNotificationsAsync(userId) {
     let token;
 
     if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('custom-sound', {
-            name: 'Custom Sound',
+        await Notifications.setNotificationChannelAsync('custom-sound-v2', {
+            name: 'Live Notifications',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
             lightColor: '#FF231F7C',
@@ -34,18 +56,24 @@ export async function registerForPushNotificationsAsync(userId) {
     }
 
     // Request permission
+    console.log('Requesting FCM permission...');
     const authStatus = await messaging().requestPermission();
+    console.log('FCM permission status:', authStatus);
+
     const enabled =
         authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
         authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
     if (!enabled) {
+        console.log('FCM permission denied!');
         alert('Failed to get push token for push notification!');
         return;
     }
 
     // Get FCM token (works in production builds)
+    console.log('Getting FCM token...');
     token = await messaging().getToken();
+    console.log('FCM Token:', token ? token.substring(0, 20) + '...' : 'NULL');
 
     // Save token to Firestore
     if (token) {
@@ -62,6 +90,7 @@ export async function registerForPushNotificationsAsync(userId) {
             }
 
             await setDoc(doc(db, 'push_tokens', token), tokenData, { merge: true });
+            console.log('FCM token saved to Firestore successfully');
 
         } catch (error) {
             console.error('Error saving push token:', error);

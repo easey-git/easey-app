@@ -147,9 +147,16 @@ module.exports = async (req, res) => {
                 // SEND PUSH NOTIFICATION (FCM for Production Builds)
                 // ---------------------------------------------------------
                 try {
+                    console.log('Fetching push tokens from Firestore...');
                     // Fetch all registered push tokens
                     const tokensSnapshot = await db.collection('push_tokens').get();
                     const pushTokens = tokensSnapshot.docs.map(doc => doc.data().token);
+                    console.log(`Found ${pushTokens.length} push tokens:`, pushTokens.map(t => t.substring(0, 20) + '...'));
+
+                    if (pushTokens.length === 0) {
+                        console.log('No push tokens found, skipping notification');
+                        return res.status(200).send("OK");
+                    }
 
                     // Send FCM notifications
                     const messages = pushTokens.map(token => ({
@@ -160,8 +167,8 @@ module.exports = async (req, res) => {
                         },
                         android: {
                             notification: {
-                                sound: 'live.mp3',
-                                channelId: 'custom-sound',
+                                sound: 'live',  // Without .mp3 extension for Android
+                                channelId: 'custom-sound-v2',
                             }
                         },
                         data: {
@@ -170,11 +177,17 @@ module.exports = async (req, res) => {
                         }
                     }));
 
+                    console.log('Sending FCM notifications...');
                     // Send in batches (FCM allows 500 per batch)
                     const batchSize = 500;
                     for (let i = 0; i < messages.length; i += batchSize) {
                         const batch = messages.slice(i, i + batchSize);
-                        await admin.messaging().sendEach(batch);
+                        const result = await admin.messaging().sendEach(batch);
+                        console.log(`Batch ${i / batchSize + 1} result:`, {
+                            successCount: result.successCount,
+                            failureCount: result.failureCount,
+                            responses: result.responses.map(r => ({ success: r.success, error: r.error?.message }))
+                        });
                     }
 
                     console.log(`Sent ${messages.length} FCM push notifications`);
@@ -311,8 +324,15 @@ module.exports = async (req, res) => {
                 // SEND PUSH NOTIFICATION (FCM for Production Builds)
                 // ---------------------------------------------------------
                 try {
+                    console.log('Fetching push tokens for order notification...');
                     const tokensSnapshot = await db.collection('push_tokens').get();
                     const pushTokens = tokensSnapshot.docs.map(doc => doc.data().token);
+                    console.log(`Found ${pushTokens.length} push tokens for order`);
+
+                    if (pushTokens.length === 0) {
+                        console.log('No push tokens found for order, skipping notification');
+                        return res.status(200).json({ success: true });
+                    }
 
                     const messages = pushTokens.map(token => ({
                         token: token,
@@ -322,8 +342,8 @@ module.exports = async (req, res) => {
                         },
                         android: {
                             notification: {
-                                sound: 'live.mp3',
-                                channelId: 'custom-sound',
+                                sound: 'live',  // Without .mp3 extension for Android
+                                channelId: 'custom-sound-v2',
                             }
                         },
                         data: {
@@ -332,11 +352,16 @@ module.exports = async (req, res) => {
                         }
                     }));
 
+                    console.log('Sending order FCM notifications...');
                     // Send in batches
                     const batchSize = 500;
                     for (let i = 0; i < messages.length; i += batchSize) {
                         const batch = messages.slice(i, i + batchSize);
-                        await admin.messaging().sendEach(batch);
+                        const result = await admin.messaging().sendEach(batch);
+                        console.log(`Order notification batch result:`, {
+                            successCount: result.successCount,
+                            failureCount: result.failureCount
+                        });
                     }
 
                     console.log(`Sent ${messages.length} FCM order notifications`);
