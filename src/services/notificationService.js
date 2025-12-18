@@ -55,17 +55,20 @@ export async function registerForPushNotificationsAsync(userId) {
         });
     }
 
-    // Request permission
-    console.log('Requesting FCM permission...');
-    const authStatus = await messaging().requestPermission();
-    console.log('FCM permission status:', authStatus);
+    // Request permission (works on both Android and iOS)
+    console.log('Requesting notification permission...');
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
 
-    const enabled =
-        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+    if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+    }
 
-    if (!enabled) {
-        console.log('FCM permission denied!');
+    console.log('Notification permission status:', finalStatus);
+
+    if (finalStatus !== 'granted') {
+        console.log('Notification permission denied!');
         alert('Failed to get push token for push notification!');
         return;
     }
