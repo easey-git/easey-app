@@ -18,10 +18,7 @@
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./logo/easey.jpg",
-        "backgroundColor": "#ffffff"
-      },
+      "icon": "./logo/easey.jpg",
       "package": "com.easey.crm",
       "googleServicesFile": "./google-services.json"
     },
