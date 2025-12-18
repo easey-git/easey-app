@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Image, TouchableOpacity } from 'react-native';
 import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon } from 'react-native-paper';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -264,29 +264,28 @@ const HomeScreen = ({ navigation }) => {
 
                 <View style={styles.menuGrid}>
                     {menuItems.map((item) => (
-                        <Surface
+                        <TouchableOpacity
                             key={item.id}
-                            style={[styles.menuCard, { backgroundColor: theme.colors.secondaryContainer }]}
-                            elevation={0}
+                            onPress={() => navigation.navigate(item.screen)}
+                            activeOpacity={0.7}
+                            style={styles.menuCard}
                         >
-                            <Button
-                                mode="text"
-                                contentStyle={{ height: 140, flexDirection: 'column', justifyContent: 'center' }}
-                                onPress={() => navigation.navigate(item.screen)}
-                                textColor={theme.colors.onSecondaryContainer}
+                            <Surface
+                                style={{ backgroundColor: theme.colors.surfaceVariant, borderRadius: 16, overflow: 'hidden' }}
+                                elevation={0}
                             >
-                                <View style={{ alignItems: 'center' }}>
+                                <View style={{ alignItems: 'center', padding: 20 }}>
                                     <Avatar.Icon
                                         size={48}
                                         icon={item.icon}
-                                        style={{ backgroundColor: 'transparent', marginBottom: 8 }}
-                                        color={theme.colors.onSecondaryContainer}
+                                        style={{ backgroundColor: 'transparent', marginBottom: 12 }}
+                                        color={theme.colors.onSurfaceVariant}
                                     />
-                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer }}>{item.title}</Text>
-                                    <Text variant="bodySmall" style={{ color: theme.colors.onSecondaryContainer, opacity: 0.7 }}>{item.subtitle}</Text>
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>{item.title}</Text>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, opacity: 0.7 }}>{item.subtitle}</Text>
                                 </View>
-                            </Button>
-                        </Surface>
+                            </Surface>
+                        </TouchableOpacity>
                     ))}
                 </View>
 
