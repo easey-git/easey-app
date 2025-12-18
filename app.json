@@ -22,7 +22,8 @@
         "foregroundImage": "./logo/easey.jpg",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.easey.crm"
+      "package": "com.easey.crm",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"

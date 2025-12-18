@@ -46,7 +46,9 @@ export async function registerForPushNotificationsAsync(userId) {
     }
 
     // Get the token that uniquely identifies this device
-    token = (await Notifications.getExpoPushTokenAsync()).data;
+    token = (await Notifications.getExpoPushTokenAsync({
+        projectId: '194232ae-d544-4928-92bf-6cd52d54e1e5'
+    })).data;
 
 
     // Save token to Firestore
@@ -87,7 +89,9 @@ export async function sendLocalNotification(title, body) {
 
 export async function unregisterPushNotificationsAsync() {
     try {
-        const token = (await Notifications.getExpoPushTokenAsync()).data;
+        const token = (await Notifications.getExpoPushTokenAsync({
+            projectId: '194232ae-d544-4928-92bf-6cd52d54e1e5'
+        })).data;
         if (token) {
             await deleteDoc(doc(db, 'push_tokens', token));
 
