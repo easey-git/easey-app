@@ -14,6 +14,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     // Data State
     const [codOrders, setCodOrders] = useState([]);
     const [abandonedCarts, setAbandonedCarts] = useState([]);
+    const [recentActivity, setRecentActivity] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sendingId, setSendingId] = useState(null);
 
@@ -74,9 +75,25 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             setLoading(false);
         });
 
+        // 3. Fetch Recent Activity
+        const qActivity = query(
+            collection(db, "whatsapp_messages"),
+            orderBy("timestamp", "desc"),
+            limit(5)
+        );
+
+        const unsubActivity = onSnapshot(qActivity, (snapshot) => {
+            const activity = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setRecentActivity(activity);
+        });
+
         return () => {
             unsubOrders();
             unsubCarts();
+            unsubActivity();
         };
     }, []);
 
@@ -196,6 +213,35 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     labelTextStyle={{ color: theme.colors.onSurfaceVariant }}
                     hideRules
                 />
+            </Surface>
+
+            {/* Recent Activity Section */}
+            <Surface style={[styles.listCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
+                <View style={styles.cardHeader}>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Recent Activity</Text>
+                </View>
+                {recentActivity.map((msg) => (
+                    <View key={msg.id} style={styles.listItem}>
+                        <Avatar.Icon
+                            size={36}
+                            icon={msg.direction === 'outbound' ? 'arrow-top-right' : 'arrow-bottom-left'}
+                            style={{ backgroundColor: msg.direction === 'outbound' ? theme.colors.primaryContainer : theme.colors.secondaryContainer }}
+                            color={msg.direction === 'outbound' ? theme.colors.primary : theme.colors.secondary}
+                        />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>{msg.phone}</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
+                                {msg.body || (msg.type === 'template' ? `Template: ${msg.templateName}` : 'Message')}
+                            </Text>
+                        </View>
+                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                            {msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </Text>
+                    </View>
+                ))}
+                {recentActivity.length === 0 && (
+                    <Text style={{ textAlign: 'center', padding: 16, color: theme.colors.onSurfaceVariant }}>No recent activity.</Text>
+                )}
             </Surface>
         </ScrollView>
     );
