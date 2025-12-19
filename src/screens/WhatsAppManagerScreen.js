@@ -246,29 +246,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 icon="message-text-outline"
                                 compact
                                 onPress={() => openChat(order)}
-                                style={{ marginRight: 'auto' }}
                             >
-                                View Chat
+                                Chat
                             </Button>
-
-                            {codTab === 'pending' && (
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                    <Button mode="outlined" compact onPress={() => handleVerifyOrder(order.id, 'approved')}>
-                                        Verify
-                                    </Button>
-                                    <Button
-                                        mode="contained"
-                                        icon="whatsapp"
-                                        buttonColor="#25D366"
-                                        compact
-                                        loading={sendingId === order.id}
-                                        disabled={sendingId === order.id}
-                                        onPress={() => handleSendVerification(order)}
-                                    >
-                                        Send
-                                    </Button>
-                                </View>
-                            )}
                         </View>
                     </Surface>
                 ))}
@@ -313,7 +293,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         >
                             Chat
                         </Button>
-                        <Button mode="contained" icon="whatsapp" buttonColor="#25D366" compact>Recover</Button>
                     </View>
                 </Surface>
             ))}
@@ -398,7 +377,7 @@ const styles = StyleSheet.create({
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     listItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#eee' },
     actionCard: { padding: 16, borderRadius: 12, marginBottom: 12 },
-    cardActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 8 },
+    cardActions: { flexDirection: 'row', justifyContent: 'flex-start', marginTop: 12 },
     infoBanner: { flexDirection: 'row', padding: 12, borderRadius: 8, marginBottom: 16, alignItems: 'center' }
 });
 
