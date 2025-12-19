@@ -1,7 +1,24 @@
 const admin = require("firebase-admin");
-// const fetch = require('node-fetch'); // Removed: node-fetch v3 is ESM-only
 
-// Helper: Send WhatsApp Message
+// Initialize Firebase Admin (Singleton)
+if (!admin.apps.length) {
+    try {
+        admin.initializeApp({
+            credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
+        });
+    } catch (error) {
+        console.error('Firebase Admin Init Error:', error);
+    }
+}
+const db = admin.firestore();
+
+// ---------------------------------------------------------
+// HELPERS
+// ---------------------------------------------------------
+
+/**
+ * Sends a WhatsApp Template Message.
+ */
 const sendWhatsAppMessage = async (to, templateName, components) => {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -9,7 +26,6 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
     if (!token || !phoneId || !to) return;
 
     try {
-        // const { default: fetch } = await import('node-fetch'); // Removed: Use native fetch
         const url = `https://graph.facebook.com/v17.0/${phoneId}/messages`;
         const body = {
             messaging_product: "whatsapp",
@@ -32,58 +48,88 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
         });
 
         const data = await response.json();
-        if (!response.ok) console.error('WhatsApp Auto-Send Error:', data);
-        else console.log(`WhatsApp template ${templateName} sent to ${to}`);
-
-        // Log to Firestore
-        if (response.ok) {
-            const db = admin.firestore();
-            await db.collection('whatsapp_messages').add({
-                phone: to,
-                phoneNormalized: to.replace(/\D/g, '').slice(-10),
-                direction: 'outbound',
-                type: 'template',
-                body: `Auto-Template: ${templateName}`,
-                templateName: templateName,
-                timestamp: admin.firestore.Timestamp.now(),
-                whatsappId: data.messages?.[0]?.id
-            });
+        if (!response.ok) {
+            console.error(`WhatsApp Error (${templateName}):`, data);
+            return;
         }
+
+        console.log(`WhatsApp template '${templateName}' sent to ${to}`);
+
+        // Log to Firestore (Fire & Forget)
+        db.collection('whatsapp_messages').add({
+            phone: to,
+            phoneNormalized: to.replace(/\D/g, '').slice(-10),
+            direction: 'outbound',
+            type: 'template',
+            body: `Auto-Template: ${templateName}`,
+            templateName: templateName,
+            timestamp: admin.firestore.Timestamp.now(),
+            whatsappId: data.messages?.[0]?.id
+        }).catch(err => console.error("Error logging outbound msg:", err));
 
     } catch (e) {
         console.error('WhatsApp Send Exception:', e);
     }
 };
 
-// Initialize Firebase Admin if it hasn't been initialized yet
-if (!admin.apps.length) {
+/**
+ * Sends FCM Push Notifications in batches.
+ */
+const sendFCMNotifications = async (title, body, dataPayload) => {
     try {
-        admin.initializeApp({
-            credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
-        });
-    } catch (error) {
-        console.error('Firebase Admin Init Error:', error);
-    }
-}
+        const tokensSnapshot = await db.collection('push_tokens').get();
+        if (tokensSnapshot.empty) return;
 
-const db = admin.firestore();
+        const pushTokens = tokensSnapshot.docs.map(doc => doc.data().token);
+        const messages = pushTokens.map(token => ({
+            token: token,
+            notification: { title, body },
+            android: {
+                notification: {
+                    sound: 'live',
+                    channelId: 'custom-sound-v2',
+                }
+            },
+            data: dataPayload
+        }));
+
+        const batchSize = 500;
+        const batches = [];
+        for (let i = 0; i < messages.length; i += batchSize) {
+            const batch = messages.slice(i, i + batchSize);
+            batches.push(admin.messaging().sendEach(batch));
+        }
+
+        await Promise.all(batches);
+        console.log(`Sent FCM notifications to ${pushTokens.length} devices.`);
+    } catch (error) {
+        console.error('Error sending FCM:', error);
+    }
+};
+
+/**
+ * Normalizes phone number to last 10 digits.
+ */
+const normalizePhone = (phone) => {
+    if (!phone) return null;
+    return phone.replace(/\D/g, '').slice(-10);
+};
+
+// ---------------------------------------------------------
+// MAIN HANDLER
+// ---------------------------------------------------------
 
 module.exports = async (req, res) => {
-    // ---------------------------------------------------------
-    // 0. WHATSAPP WEBHOOK VERIFICATION (GET)
-    // ---------------------------------------------------------
+    // 1. WhatsApp Webhook Verification
     if (req.method === 'GET' && req.query['hub.mode'] === 'subscribe') {
         const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'easeycrm_whatsapp_verify';
         if (req.query['hub.verify_token'] === verifyToken) {
-            console.log("WhatsApp Webhook Verified!");
             return res.status(200).send(req.query['hub.challenge']);
         }
         return res.status(403).send('Forbidden');
     }
 
-    // ---------------------------------------------------------
-    // 1. WHATSAPP INCOMING MESSAGES (POST)
-    // ---------------------------------------------------------
+    // 2. WhatsApp Incoming Messages
     if (req.method === 'POST' && req.body.object === 'whatsapp_business_account') {
         try {
             const entry = req.body.entry?.[0];
@@ -92,497 +138,240 @@ module.exports = async (req, res) => {
 
             if (value?.messages?.[0]) {
                 const message = value.messages[0];
-                const senderPhone = message.from; // e.g., "919876543210"
-                const phoneNormalized = senderPhone.replace(/\D/g, '').slice(-10);
+                const senderPhone = message.from;
+                const phoneNormalized = normalizePhone(senderPhone);
                 const msgId = message.id;
-                const timestamp = admin.firestore.Timestamp.now();
+                const type = message.type;
 
                 let body = '';
-                let type = message.type;
+                let payload = '';
 
                 if (type === 'text') {
                     body = message.text.body;
                 } else if (type === 'button') {
-                    body = message.button.text; // The text on the button
-                    const payload = message.button.payload; // The hidden payload
-                    console.log(`DEBUG: Button Clicked. Payload: '${payload}', Body: '${body}'`);
+                    body = message.button.text;
+                    payload = message.button.payload;
+                }
 
-                    // AUTOMATION: Handle COD Confirmation (Step 1)
-                    // Check for Payload OR Button Text (Meta defaults payload to text if not set)
+                // Log Inbound Message
+                await db.collection('whatsapp_messages').add({
+                    id: msgId,
+                    phone: senderPhone,
+                    phoneNormalized,
+                    direction: 'inbound',
+                    type,
+                    body,
+                    payload, // Log payload for debugging
+                    raw: JSON.stringify(message),
+                    timestamp: admin.firestore.Timestamp.now()
+                });
+
+                // ---------------------------------------------------------
+                // AUTOMATION LOGIC
+                // ---------------------------------------------------------
+                if (type === 'button') {
+                    const ordersRef = db.collection('orders');
+
+                    // Helper to find latest COD order
+                    const findLatestOrder = async () => {
+                        const snapshot = await ordersRef
+                            .orderBy('createdAt', 'desc')
+                            .limit(20) // Limit search space for performance
+                            .get();
+
+                        return snapshot.docs.find(doc => {
+                            const data = doc.data();
+                            const p = normalizePhone(data.phone);
+                            return p === phoneNormalized && data.status === 'COD';
+                        });
+                    };
+
+                    // CASE 1: Confirm Order (Step 1)
                     if (payload === 'CONFIRM_COD_YES' || payload === 'Confirm Order' || body === 'Confirm Order') {
-                        console.log(`Step 1: Customer confirmed interest for ${phoneNormalized}. Payload: ${payload}, Body: ${body}`);
+                        let messagePayload = null;
 
-                        // 1. Find the order (Simplified Query)
-                        const ordersRef = db.collection('orders');
-                        try {
-                            // Fetch last 20 orders WITHOUT filters to avoid index issues
-                            const snapshot = await ordersRef
-                                .orderBy('createdAt', 'desc')
-                                .limit(20)
-                                .get();
+                        await db.runTransaction(async (t) => {
+                            const orderDoc = await findLatestOrder();
+                            if (!orderDoc) return;
 
-                            console.log(`Firestore Query Result: Fetched ${snapshot.size} recent orders.`);
+                            const orderRef = ordersRef.doc(orderDoc.id);
+                            const freshSnap = await t.get(orderRef);
+                            const data = freshSnap.data();
 
-                            const matchingOrder = snapshot.docs.find(doc => {
-                                const data = doc.data();
-                                const p = data.phone || '';
-                                const match = p.replace(/\D/g, '').slice(-10) === phoneNormalized;
+                            // Idempotency Check
+                            if (data.verificationStatus === 'verified_pending_address' || data.verificationStatus === 'approved') {
+                                console.log(`Order ${orderDoc.id} already processed. Skipping.`);
+                                return;
+                            }
 
-                                // Debug log for the first few to see what we are checking
-                                // console.log(`Checking ${doc.id}: ${p} -> ${match}`);
-
-                                return match && data.status === 'COD';
+                            // Update Status
+                            t.update(orderRef, {
+                                verificationStatus: 'verified_pending_address',
+                                updatedAt: admin.firestore.Timestamp.now()
                             });
 
-                            if (matchingOrder) {
-                                const orderData = matchingOrder.data();
-
-                                // Idempotency / Duplicate Check
-                                if (orderData.verificationStatus === 'verified_pending_address' || orderData.verificationStatus === 'approved') {
-                                    console.log(`Order ${matchingOrder.id} already processed (Status: ${orderData.verificationStatus}). Skipping duplicate.`);
-                                    return;
-                                }
-
-                                console.log(`Found Matching Order: ${matchingOrder.id}. Sending Step 2 Template...`);
-
-                                // Update status to 'verified_pending_address' (intermediate state)
-                                await ordersRef.doc(matchingOrder.id).update({
-                                    verificationStatus: 'verified_pending_address',
-                                    updatedAt: admin.firestore.Timestamp.now()
-                                });
-
-                                // 2. Send Step 2: Address Verification Template
-                                // Template Name: order_confirm_auto_schedule
-                                const address = `${orderData.address1}, ${orderData.city}, ${orderData.state || ''}`;
-
-                                console.log(`Sending Address Verification to ${senderPhone} with params: ${orderData.orderNumber}, ${address}, ${orderData.zip}, ${orderData.phone}`);
-
-                                await sendWhatsAppMessage(senderPhone, 'order_confirm_auto_schedule', [
+                            // Prepare Message (Don't send yet)
+                            const address = `${data.address1}, ${data.city}, ${data.state || ''}`;
+                            messagePayload = {
+                                to: senderPhone,
+                                template: 'order_confirm_auto_schedule',
+                                components: [
                                     {
                                         type: 'body',
                                         parameters: [
-                                            { type: 'text', text: String(orderData.orderNumber) }, // {{1}} Order ID
-                                            { type: 'text', text: address },                       // {{2}} Address
-                                            { type: 'text', text: String(orderData.zip) },         // {{3}} Pincode
-                                            { type: 'text', text: String(orderData.phone) }        // {{4}} Phone
+                                            { type: 'text', text: String(data.orderNumber) },
+                                            { type: 'text', text: address },
+                                            { type: 'text', text: String(data.zip) },
+                                            { type: 'text', text: String(data.phone) }
                                         ]
                                     }
-                                ]);
-                                console.log("Step 2 Message Sent Successfully!");
-                            } else {
-                                console.log("No matching order found for this phone number.");
-                            }
-                        } catch (err) {
-                            console.error("Error in Step 1 Logic:", err);
+                                ]
+                            };
+                        });
+
+                        // Send Message OUTSIDE transaction
+                        if (messagePayload) {
+                            await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
                         }
                     }
 
-                    // AUTOMATION: Handle Cancel Request (Button: "cancel")
-                    if (payload === 'CONFIRM_COD_NO') {
-                        console.log(`Customer cancelled order for ${phoneNormalized}`);
-                        const ordersRef = db.collection('orders');
-                        const snapshot = await ordersRef
-                            .where('status', '==', 'COD')
-                            .where('verificationStatus', '!=', 'approved')
-                            .orderBy('createdAt', 'desc')
-                            .limit(5)
-                            .get();
+                    // CASE 2: Address Correct (Step 2)
+                    else if (payload === 'ADDRESS_CORRECT' || payload === 'Confirm Address' || body === 'Confirm Address' || body === 'Yes, Correct' || body === 'Correct') {
+                        let messagePayload = null;
 
-                        const matchingOrder = snapshot.docs.find(doc => {
-                            const p = doc.data().phone || '';
-                            return p.replace(/\D/g, '').slice(-10) === phoneNormalized;
+                        await db.runTransaction(async (t) => {
+                            const orderDoc = await findLatestOrder();
+                            if (!orderDoc) return;
+
+                            const orderRef = ordersRef.doc(orderDoc.id);
+                            const freshSnap = await t.get(orderRef);
+                            const data = freshSnap.data();
+
+                            if (data.verificationStatus === 'approved') return;
+
+                            t.update(orderRef, {
+                                verificationStatus: 'approved',
+                                updatedAt: admin.firestore.Timestamp.now()
+                            });
+
+                            messagePayload = {
+                                to: senderPhone,
+                                template: 'cod_confirmed',
+                                components: [
+                                    {
+                                        type: 'body',
+                                        parameters: [{ type: 'text', text: String(data.orderNumber) }]
+                                    }
+                                ]
+                            };
                         });
 
-                        if (matchingOrder) {
-                            await ordersRef.doc(matchingOrder.id).update({
+                        if (messagePayload) {
+                            await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
+                        }
+                    }
+
+                    // CASE 3: Make Changes (Step 2)
+                    else if (payload === 'ADDRESS_EDIT' || payload === 'Make Changes' || body === 'Make Changes' || body === 'Edit Address') {
+                        const orderDoc = await findLatestOrder();
+                        if (orderDoc) {
+                            await ordersRef.doc(orderDoc.id).update({
+                                verificationStatus: 'address_change_requested',
+                                updatedAt: admin.firestore.Timestamp.now()
+                            });
+                            await sendWhatsAppMessage(senderPhone, 'update_address', [
+                                { type: 'body', parameters: [{ type: 'text', text: orderDoc.data().customerName || 'Customer' }] }
+                            ]);
+                        }
+                    }
+
+                    // CASE 4: Cancel Order
+                    else if (payload === 'CONFIRM_COD_NO' || payload === 'Cancel' || body === 'Cancel' || payload === 'cancel' || body === 'cancel') {
+                        const orderDoc = await findLatestOrder();
+                        if (orderDoc) {
+                            await ordersRef.doc(orderDoc.id).update({
+                                status: 'CANCELLED',
                                 verificationStatus: 'cancelled',
-                                status: 'CANCELLED', // Optional: Update main status too
-                                updatedAt: timestamp
+                                updatedAt: admin.firestore.Timestamp.now()
                             });
+                            await sendWhatsAppMessage(senderPhone, 'cod_cancel', [
+                                {
+                                    type: 'body', parameters: [
+                                        { type: 'text', text: orderDoc.data().customerName || 'Customer' },
+                                        { type: 'text', text: String(orderDoc.data().orderNumber) }
+                                    ]
+                                }
+                            ]);
                         }
                     }
-
-                    // AUTOMATION: Handle Reschedule Request
-                    if (payload === 'CONFIRM_COD_RESCHEDULE') {
-                        console.log(`Customer requested reschedule for ${phoneNormalized}`);
-                        // Update order status or log it
-                        const ordersRef = db.collection('orders');
-                        const snapshot = await ordersRef
-                            .where('status', '==', 'COD')
-                            .where('verificationStatus', '!=', 'approved')
-                            .orderBy('createdAt', 'desc')
-                            .limit(5)
-                            .get();
-
-                        const matchingOrder = snapshot.docs.find(doc => {
-                            const p = doc.data().phone || '';
-                            return p.replace(/\D/g, '').slice(-10) === phoneNormalized;
-                        });
-
-                        if (matchingOrder) {
-                            await ordersRef.doc(matchingOrder.id).update({
-                                verificationStatus: 'reschedule_requested',
-                                updatedAt: timestamp
-                            });
-                            // Optional: Send a manual follow-up message or alert admin
-                        }
-                    }
-
-                    // AUTOMATION: Handle Address Confirmation (Step 2)
-                    // Check for Payload OR Button Text
-                    if (payload === 'ADDRESS_CORRECT' || payload === 'Confirm Address' || body === 'Confirm Address' || body === 'Yes, Correct' || body === 'Correct') {
-                        console.log(`Step 2: Address verified for ${phoneNormalized}. Payload: ${payload}`);
-
-                        // Find and Approve Order (Simplified Query)
-                        const ordersRef = db.collection('orders');
-                        try {
-                            const snapshot = await ordersRef
-                                .orderBy('createdAt', 'desc')
-                                .limit(20)
-                                .get();
-
-                            const matchingOrder = snapshot.docs.find(doc => {
-                                const data = doc.data();
-                                const p = data.phone || '';
-                                const match = p.replace(/\D/g, '').slice(-10) === phoneNormalized;
-                                return match && data.status === 'COD' && data.verificationStatus !== 'approved';
-                            });
-
-                            if (matchingOrder) {
-                                console.log(`Approving Order ${matchingOrder.id}...`);
-                                await ordersRef.doc(matchingOrder.id).update({
-                                    verificationStatus: 'approved',
-                                    updatedAt: admin.firestore.Timestamp.now()
-                                });
-
-                                // Send Final Confirmation Message
-                                await sendWhatsAppMessage(senderPhone, 'cod_confirmed', [
-                                    {
-                                        type: 'body',
-                                        parameters: [
-                                            { type: 'text', text: String(matchingOrder.data().orderNumber) }
-                                        ]
-                                    }
-                                ]);
-                                console.log("Final Confirmation Sent!");
-                            } else {
-                                console.log("No pending order found to approve.");
-                            }
-                        } catch (err) {
-                            console.error("Error in Step 2 Logic:", err);
-                        }
-                    }
-
-                    // AUTOMATION: Handle Address Change Request (Step 2: Make Changes)
-                    if (payload === 'ADDRESS_EDIT' || payload === 'Make Changes' || body === 'Make Changes' || body === 'Edit Address') {
-                        console.log(`Step 2: Address change requested for ${phoneNormalized}`);
-
-                        const ordersRef = db.collection('orders');
-                        try {
-                            const snapshot = await ordersRef.orderBy('createdAt', 'desc').limit(20).get();
-                            const matchingOrder = snapshot.docs.find(doc => {
-                                const data = doc.data();
-                                const p = data.phone || '';
-                                const match = p.replace(/\D/g, '').slice(-10) === phoneNormalized;
-                                return match && data.status === 'COD';
-                            });
-
-                            if (matchingOrder) {
-                                await ordersRef.doc(matchingOrder.id).update({
-                                    verificationStatus: 'address_change_requested',
-                                    updatedAt: admin.firestore.Timestamp.now()
-                                });
-
-                                // Send Update Address Template
-                                await sendWhatsAppMessage(senderPhone, 'update_address', [
-                                    { type: 'body', parameters: [{ type: 'text', text: matchingOrder.data().customerName || 'Customer' }] }
-                                ]);
-                                console.log("Address Change Template Sent!");
-                            }
-                        } catch (err) { console.error("Error in Address Change Logic:", err); }
-                    }
-
-                    // AUTOMATION: Handle Cancel Request (Step 1: Cancel)
-                    if (payload === 'CONFIRM_COD_NO' || payload === 'Cancel' || body === 'Cancel' || payload === 'cancel' || body === 'cancel') {
-                        console.log(`Step 1: Customer cancelled order for ${phoneNormalized}`);
-
-                        const ordersRef = db.collection('orders');
-                        try {
-                            const snapshot = await ordersRef.orderBy('createdAt', 'desc').limit(20).get();
-                            const matchingOrder = snapshot.docs.find(doc => {
-                                const data = doc.data();
-                                const p = data.phone || '';
-                                const match = p.replace(/\D/g, '').slice(-10) === phoneNormalized;
-                                return match && data.status === 'COD';
-                            });
-
-                            if (matchingOrder) {
-                                await ordersRef.doc(matchingOrder.id).update({
-                                    status: 'CANCELLED',
-                                    verificationStatus: 'cancelled',
-                                    updatedAt: admin.firestore.Timestamp.now()
-                                });
-
-                                // Send Cancel Template
-                                await sendWhatsAppMessage(senderPhone, 'cod_cancel', [
-                                    {
-                                        type: 'body', parameters: [
-                                            { type: 'text', text: matchingOrder.data().customerName || 'Customer' },
-                                            { type: 'text', text: String(matchingOrder.data().orderNumber) }
-                                        ]
-                                    }
-                                ]);
-                                console.log("Cancel Template Sent!");
-                            }
-                        } catch (err) { console.error("Error in Cancel Logic:", err); }
-                    }
-
-                    // Save to Firestore for Chat View
-                    await db.collection('whatsapp_messages').add({
-                        id: msgId,
-                        phone: senderPhone,
-                        phoneNormalized: phoneNormalized,
-                        direction: 'inbound',
-                        type: type,
-                        body: body,
-                        raw: JSON.stringify(message),
-                        timestamp: timestamp
-                    });
-
-                    return res.status(200).send('EVENT_RECEIVED');
                 }
 
-                // Handle Status Updates (Sent, Delivered, Read)
-                if (value?.statuses?.[0]) {
-                    return res.status(200).send('STATUS_RECEIVED');
-                }
+                return res.status(200).send('EVENT_RECEIVED');
             }
+
+            if (value?.statuses?.[0]) return res.status(200).send('STATUS_RECEIVED');
+
         } catch (error) {
-            console.error("Error processing WhatsApp webhook:", error);
+            console.error("WhatsApp Webhook Error:", error);
             return res.status(500).send("Error");
         }
-    } // End of WhatsApp Block
+    }
 
-    // ---------------------------------------------------------
-    // 2. Handle Shopify/Shiprocket POST
-    // ---------------------------------------------------------
+    // 3. Shopify / Shiprocket Webhook
     if (!req.body.object) {
         try {
             const data = req.body;
             const queryParams = req.query || {};
 
-            // ---------------------------------------------------------
-            // A. SHIPROCKET CHECKOUT / ABANDONED CART
-            // ---------------------------------------------------------
-            // Detect if it's a Shiprocket event (has cart_id or latest_stage)
+            // A. SHIPROCKET / ABANDONED CART
             if (data.cart_id || data.latest_stage) {
-
-                // 1. Determine Event Type & Stage
-                let eventType = "ACTIVE_CART";
-                let stage = data.latest_stage || "BROWSING";
-
-                if (queryParams.abandoned === "1") {
-                    eventType = "ABANDONED";
-                    stage = "CHECKOUT_ABANDONED"; // Explicitly mark as abandoned
-                }
-
-                // Map technical stages to human readable text
-                const stageMap = {
-                    "PHONE_RECEIVED": "Entered Phone",
-                    "EMAIL_RECEIVED": "Entered Email",
-                    "ADDRESS_RECEIVED": "Entered Address",
-                    "PAYMENT_INITIATED": "Payment Started",
-                    "OTP_VERIFIED": "OTP Verified"
-                };
-                const readableStage = stageMap[stage] || stage;
-
                 const checkoutId = data.cart_id || "";
-                const orderId = data.order_id || "";
+                const phoneNormalized = normalizePhone(data.phone_number);
+                let eventType = queryParams.abandoned === "1" ? "ABANDONED" : "ACTIVE_CART";
 
-                // 2. Extract Data
-                const amount = data.total_price || 0;
-                const currency = data.currency || "INR";
-                const address = data.shipping_address || data.billing_address || {};
-
-                // Name Logic: Try Name -> Phone -> "Visitor"
-                let firstName = data.first_name || address.first_name || "";
-                let lastName = data.last_name || address.last_name || "";
-                let customerName = `${firstName} ${lastName}`.trim();
-
-                const phone = data.phone_number || "";
-                const phoneNormalized = phone ? phone.replace(/\D/g, '').slice(-10) : null;
-
-                if (!customerName && phone) {
-                    // Mask phone: 7488377378 -> 74883...378
-                    customerName = `Visitor (${phone.slice(0, 5)}...)`;
-                } else if (!customerName) {
-                    customerName = "Visitor";
-                }
-
-                const email = data.email || "";
-
-                // Items Logic
-                let items = null;
-                if (Array.isArray(data.items) && data.items.length > 0) {
-                    items = data.items.map(i => ({
-                        name: i.name || i.title || "Unknown Item",
-                        quantity: i.quantity || 1,
-                        price: i.price || 0,
-                        image: i.image || null
-                    }));
-                }
-
-                const city = address.city || "";
-                const state = address.state || "";
-                const pincode = address.zip || "";
-
-                // Marketing Data (UTM) & Cart Token
-                const attributes = data.cart_attributes || {};
-                const shopifyCartToken = attributes.shopifyCartToken || null;
-                let source = data.source_name || "Direct";
-
-                // Try to extract UTM from landing_page_url if available
-                if (attributes.landing_page_url) {
-                    try {
-                        const url = new URL(attributes.landing_page_url);
-                        const utmSource = url.searchParams.get("utm_source");
-                        const utmMedium = url.searchParams.get("utm_medium");
-                        if (utmSource) source = `${utmSource} / ${utmMedium || ''}`;
-                    } catch (e) {
-                        // Ignore URL parsing errors
-                    }
-                }
-
-                // 3. Duplicate Prevention & Save to Firestore
+                // Save Checkout Data
                 const docId = checkoutId ? `checkout_${checkoutId}` : `unknown_${Date.now()}`;
-                const docRef = db.collection("checkouts").doc(docId);
-
-                // Check existing state to prevent regression (e.g. ORDER_PLACED -> PAYMENT_INITIATED)
-                const docSnap = await docRef.get();
-                if (docSnap.exists) {
-                    const existingData = docSnap.data();
-                    if (existingData.latest_stage === 'ORDER_PLACED' && stage === 'PAYMENT_INITIATED') {
-                        console.log(`Ignoring PAYMENT_INITIATED for ${docId} as it is already ORDER_PLACED`);
-                        return res.status(200).send("OK");
-                    }
-                }
-
-                const checkoutData = {
+                await db.collection("checkouts").doc(docId).set({
+                    ...data,
                     eventType,
-                    latest_stage: stage, // Save raw stage for logic
-                    stage: readableStage, // Save readable stage for display
-                    checkoutId,
-                    shopifyCartToken, // Save token to link with Order later
-                    orderId,
-                    totalPrice: amount, // Standardize to totalPrice
-                    currency,
-                    customerName,
-                    email,
-                    phone,
-                    phoneNormalized, // For smart matching
-                    city,
-                    state,
-                    pincode,
-                    source, // Marketing Source
-                    ip: attributes.ipv4_address || null,
+                    phoneNormalized,
                     updatedAt: admin.firestore.Timestamp.now(),
-                    rawJson: JSON.stringify(data)
-                };
+                    rawJson: JSON.stringify(data) // Keep raw data for debugging if needed
+                }, { merge: true });
 
-                // Only update items if we have valid item data (prevents overwriting with empty/placeholder)
-                if (items) {
-                    checkoutData.items = items;
-                }
-
-                await docRef.set(checkoutData, { merge: true });
-
-                console.log(`Shiprocket Event: ${eventType} (${readableStage}) for ${customerName}`);
-
-                // ---------------------------------------------------------
-                // AUTOMATION: Send Abandoned Cart Recovery
-                // ---------------------------------------------------------
-                if (eventType === 'ABANDONED' && phoneNormalized && amount > 0) {
-                    // Check if we haven't sent one recently (optional optimization omitted for brevity)
-                    // Send Recovery Template
-                    // Template: cart_recovery (Variables: Name, Amount, CheckoutURL)
-                    // Note: We need a checkout URL. Using a placeholder or constructing one if possible.
-                    const checkoutUrl = attributes.landing_page_url || `https://yourstore.com/cart`;
-
+                // Abandoned Cart Recovery
+                if (eventType === 'ABANDONED' && phoneNormalized && data.total_price > 0) {
+                    const checkoutUrl = data.cart_attributes?.landing_page_url || `https://yourstore.com/cart`;
                     await sendWhatsAppMessage(`91${phoneNormalized}`, 'cart_recovery', [
                         {
                             type: 'body',
                             parameters: [
-                                { type: 'text', text: customerName || 'Shopper' },
-                                { type: 'text', text: String(amount) },
-                                { type: 'text', text: checkoutUrl } // Ensure template has 3 variables or adjust
+                                { type: 'text', text: data.first_name || 'Shopper' },
+                                { type: 'text', text: String(data.total_price) },
+                                { type: 'text', text: checkoutUrl }
                             ]
                         }
                     ]);
                 }
 
-                // ---------------------------------------------------------
-                // SEND PUSH NOTIFICATION (FCM for Production Builds)
-                // ---------------------------------------------------------
-                try {
-                    console.log('Fetching push tokens from Firestore...');
-                    // Fetch all registered push tokens
-                    const tokensSnapshot = await db.collection('push_tokens').get();
-                    const pushTokens = tokensSnapshot.docs.map(doc => doc.data().token);
-                    console.log(`Found ${pushTokens.length} push tokens:`, pushTokens.map(t => t.substring(0, 20) + '...'));
-
-                    if (pushTokens.length === 0) {
-                        console.log('No push tokens found, skipping notification');
-                        return res.status(200).send("OK");
-                    }
-
-                    // Send FCM notifications
-                    const messages = pushTokens.map(token => ({
-                        token: token,
-                        notification: {
-                            title: 'New Live Activity',
-                            body: `${customerName} is active: ${readableStage}`,
-                        },
-                        android: {
-                            notification: {
-                                sound: 'live',  // Without .mp3 extension for Android
-                                channelId: 'custom-sound-v2',
-                            }
-                        },
-                        data: {
-                            checkoutId: checkoutId || '',
-                            type: 'live_activity'
-                        }
-                    }));
-
-                    console.log('Sending FCM notifications...');
-                    // Send in batches (FCM allows 500 per batch)
-                    const batchSize = 500;
-                    for (let i = 0; i < messages.length; i += batchSize) {
-                        const batch = messages.slice(i, i + batchSize);
-                        const result = await admin.messaging().sendEach(batch);
-                        console.log(`Batch ${i / batchSize + 1} result:`, {
-                            successCount: result.successCount,
-                            failureCount: result.failureCount,
-                            responses: result.responses.map(r => ({ success: r.success, error: r.error?.message }))
-                        });
-                    }
-
-                    console.log(`Sent ${messages.length} FCM push notifications`);
-                } catch (error) {
-                    console.error('Error sending push notifications:', error);
-                }
+                // Push Notification
+                const customerName = data.first_name ? `${data.first_name} ${data.last_name || ''}` : 'Visitor';
+                await sendFCMNotifications(
+                    'New Live Activity',
+                    `${customerName} is active: ${data.latest_stage || 'Browsing'}`,
+                    { checkoutId, type: 'live_activity' }
+                );
 
                 return res.status(200).send("OK");
             }
 
-            // ---------------------------------------------------------
-            // B. SHOPIFY ORDER CREATION (Fallback)
-            // ---------------------------------------------------------
+            // B. SHOPIFY ORDER CREATION
             if (data.order_number) {
-                const shipping = data.shipping_address || {};
+                const orderId = String(data.id);
+                const orderRef = db.collection("orders").doc(orderId);
+                const phoneNormalized = normalizePhone(data.phone || data.customer?.phone || data.shipping_address?.phone);
 
-                console.log(`Order ${data.order_number} Gateway: ${data.gateway}, Payment Names: ${JSON.stringify(data.payment_gateway_names)}`);
-
+                // 1. Save Order (Idempotent Set)
                 const orderData = {
                     orderId: data.id,
                     orderNumber: data.order_number,
@@ -590,213 +379,90 @@ module.exports = async (req, res) => {
                     currency: data.currency || 'INR',
                     customerName: data.customer ? `${data.customer.first_name} ${data.customer.last_name}` : "Guest",
                     email: data.email || null,
-                    phone: data.phone || (data.customer && data.customer.phone) || (data.shipping_address && data.shipping_address.phone) || (data.billing_address && data.billing_address.phone) || null,
+                    phone: data.phone || data.customer?.phone || null,
+                    status: (data.gateway?.toLowerCase().includes('cod') || data.payment_gateway_names?.some(n => n.toLowerCase().includes('cod'))) ? "COD" : "Paid",
+                    items: data.line_items?.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })) || [],
+                    address1: data.shipping_address?.address1 || "",
+                    city: data.shipping_address?.city || "",
+                    state: data.shipping_address?.province || "",
+                    zip: data.shipping_address?.zip || "",
                     createdAt: admin.firestore.Timestamp.now(),
-                    updatedAt: admin.firestore.Timestamp.now(),
-                    status: (
-                        (data.gateway && (data.gateway.toLowerCase().includes('cash') || data.gateway.toLowerCase().includes('cod') || data.gateway.toLowerCase().includes('manual'))) ||
-                        (data.payment_gateway_names && data.payment_gateway_names.some(name => name.toLowerCase().includes('cash') || name.toLowerCase().includes('cod') || name.toLowerCase().includes('manual')))
-                    ) ? "COD" : "Paid",
-                    paymentMethod: data.gateway || "Unknown",
-
-                    // Address Details
-                    address1: shipping.address1 || "",
-                    city: shipping.city || "",
-                    province: shipping.province || "",
-                    zip: shipping.zip || "",
-                    country: shipping.country || "",
-
-                    items: data.line_items ? data.line_items.map(item => ({
-                        name: item.name || item.title || "Unknown Item",
-                        quantity: item.quantity || 1,
-                        price: item.price || "0"
-                    })) : []
+                    updatedAt: admin.firestore.Timestamp.now()
                 };
 
-                // 1. Save Order
-                await db.collection("orders").doc(String(data.id)).set(orderData);
+                await orderRef.set(orderData, { merge: true });
 
-                // 2. CLEANUP: Robust "Industry Standard" Cart Removal
-                // We try to find the cart by Token, Email, or Phone and delete it.
-                // This ensures no "stuck" active carts after a purchase.
+                // 2. Cleanup Carts (Batch Delete)
+                if (phoneNormalized || data.email) {
+                    const batch = db.batch();
+                    const checkoutsRef = db.collection("checkouts");
+                    let queryRefs = [];
 
-                const batch = db.batch();
-                let docsToDelete = new Set();
+                    if (data.checkout_token) queryRefs.push(checkoutsRef.where("shopifyCartToken", "==", data.checkout_token));
+                    if (data.email) queryRefs.push(checkoutsRef.where("email", "==", data.email));
+                    if (phoneNormalized) queryRefs.push(checkoutsRef.where("phoneNormalized", "==", phoneNormalized));
 
-                // A. Match by Token (Most accurate)
-                if (data.checkout_token) {
-                    const tokenQuery = await db.collection("checkouts")
-                        .where("shopifyCartToken", "==", data.checkout_token)
-                        .get();
-                    tokenQuery.docs.forEach(doc => docsToDelete.add(doc.ref));
+                    const snapshots = await Promise.all(queryRefs.map(q => q.get()));
+                    const docsToDelete = new Set();
+                    snapshots.forEach(snap => snap.docs.forEach(doc => docsToDelete.add(doc.ref.path)));
+
+                    docsToDelete.forEach(path => batch.delete(db.doc(path)));
+                    if (docsToDelete.size > 0) await batch.commit();
                 }
 
-                // B. Match by Email (Fallback)
-                if (data.email) {
-                    const emailQuery = await db.collection("checkouts")
-                        .where("email", "==", data.email)
-                        .get();
-                    emailQuery.docs.forEach(doc => docsToDelete.add(doc.ref));
-                }
+                // 3. Send COD Confirmation (Transaction for Duplicate Protection)
+                if (orderData.status === 'COD' && phoneNormalized) {
+                    let messagePayload = null;
 
-                // Helper to normalize phone (last 10 digits)
-                const normalizePhone = (p) => {
-                    if (!p) return null;
-                    const digits = p.replace(/\D/g, '');
-                    return digits.slice(-10);
-                };
-
-                // C. Match by Phone (Shotgun Approach)
-                // We search for the phone in multiple formats against the 'phone' field
-                // to catch cases where the data was saved differently.
-                const rawPhone = data.phone || (data.customer ? data.customer.phone : null);
-
-                if (rawPhone) {
-                    const phoneVariations = new Set();
-
-                    // 1. Exact Match
-                    phoneVariations.add(rawPhone);
-
-                    // 2. Without +91 (if present)
-                    if (rawPhone.includes('+91')) {
-                        phoneVariations.add(rawPhone.replace('+91', ''));
-                    }
-
-                    // 3. Last 10 Digits (Normalized)
-                    const normalized = normalizePhone(rawPhone);
-                    if (normalized) {
-                        phoneVariations.add(normalized);
-                        // Also try adding +91 to normalized
-                        phoneVariations.add(`+91${normalized}`);
-                    }
-
-                    // Run queries for ALL variations
-                    for (const phoneVar of phoneVariations) {
-                        // Query against the standard 'phone' field
-                        const query1 = await db.collection("checkouts").where("phone", "==", phoneVar).get();
-                        query1.docs.forEach(doc => docsToDelete.add(doc.ref));
-
-                        // Query against the new 'phoneNormalized' field (if it exists)
-                        if (normalized) {
-                            const query2 = await db.collection("checkouts").where("phoneNormalized", "==", normalized).get();
-                            query2.docs.forEach(doc => docsToDelete.add(doc.ref));
+                    await db.runTransaction(async (t) => {
+                        const freshDoc = await t.get(orderRef);
+                        if (freshDoc.exists && freshDoc.data().whatsappSent) {
+                            console.log(`Duplicate Order Webhook for ${orderData.orderNumber}. Skipping WhatsApp.`);
+                            return;
                         }
+
+                        t.update(orderRef, { whatsappSent: true });
+
+                        const itemName = orderData.items[0]?.name || 'Your Order';
+                        messagePayload = {
+                            to: `91${phoneNormalized}`,
+                            template: 'cod_auto_confirmation',
+                            components: [
+                                {
+                                    type: 'body',
+                                    parameters: [
+                                        { type: 'text', text: orderData.customerName },
+                                        { type: 'text', text: String(orderData.orderNumber) },
+                                        { type: 'text', text: itemName },
+                                        { type: 'text', text: String(orderData.totalPrice) }
+                                    ]
+                                }
+                            ]
+                        };
+                    });
+
+                    if (messagePayload) {
+                        await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
                     }
                 }
 
-                // Execute Delete Batch
-                if (docsToDelete.size > 0) {
-                    docsToDelete.forEach(ref => batch.delete(ref));
-                    await batch.commit();
-                    console.log(`Cleaned up ${docsToDelete.size} cart(s) for Order ${data.order_number}`);
-                } else {
-                    console.log(`No matching active carts found for Order ${data.order_number}`);
-                    // Optional: Log what we tried to find for debugging
-                    console.log(`Tried matching: Token=${data.checkout_token}, Email=${data.email}, Phone=${rawPhone}`);
-                }
-
-                console.log(`Shopify Order ${data.order_number} saved.`);
-
-                // ---------------------------------------------------------
-                // AUTOMATION: Send COD Confirmation
-                // ---------------------------------------------------------
-                console.log(`Checking Automation for Order ${orderData.orderNumber}: Status=${orderData.status}, Phone=${orderData.phone}`);
-
-                // Check if we already sent the message (Prevent Duplicates)
-                const existingOrderRef = db.collection("orders").doc(String(data.id));
-                const existingOrderSnap = await existingOrderRef.get();
-                if (existingOrderSnap.exists && existingOrderSnap.data().whatsappSent) {
-                    console.log(`WhatsApp already sent for Order ${orderData.orderNumber}. Skipping duplicate.`);
-                } else if (orderData.status === 'COD' && orderData.phone) {
-                    const cleanPhone = orderData.phone.replace(/\D/g, '').slice(-10);
-                    console.log(`Preparing to send WhatsApp to: 91${cleanPhone}`);
-
-                    if (cleanPhone) {
-                        // Use first item name or "Order"
-                        const itemName = orderData.items && orderData.items.length > 0 ? orderData.items[0].name : 'Your Order';
-
-                        // Template: cod_auto_confirmation
-                        // Params: {{1}}=Name, {{2}}=OrderNum, {{3}}=Item, {{4}}=Price
-                        await sendWhatsAppMessage(`91${cleanPhone}`, 'cod_auto_confirmation', [
-                            {
-                                type: 'body',
-                                parameters: [
-                                    { type: 'text', text: orderData.customerName },
-                                    { type: 'text', text: String(orderData.orderNumber) },
-                                    { type: 'text', text: itemName },
-                                    { type: 'text', text: String(orderData.totalPrice) }
-                                ]
-                            }
-                        ]);
-                        console.log(`WhatsApp COD Confirmation sent to 91${cleanPhone}`);
-
-                        // Mark as sent to prevent duplicates
-                        await existingOrderRef.update({ whatsappSent: true });
-                    }
-                }
-
-                // ---------------------------------------------------------
-                // SEND PUSH NOTIFICATION (FCM for Production Builds)
-                // ---------------------------------------------------------
-                try {
-                    console.log('Fetching push tokens for order notification...');
-                    const tokensSnapshot = await db.collection('push_tokens').get();
-                    const pushTokens = tokensSnapshot.docs.map(doc => doc.data().token);
-                    console.log(`Found ${pushTokens.length} push tokens for order`);
-
-                    if (pushTokens.length === 0) {
-                        console.log('No push tokens found for order, skipping notification');
-                        return res.status(200).json({ success: true });
-                    }
-
-                    const messages = pushTokens.map(token => ({
-                        token: token,
-                        notification: {
-                            title: 'New Order Received! 💰',
-                            body: `Order #${data.order_number} from ${data.customer ? data.customer.first_name : 'Guest'} - ₹${data.total_price}`,
-                        },
-                        android: {
-                            notification: {
-                                sound: 'live',  // Without .mp3 extension for Android
-                                channelId: 'custom-sound-v2',
-                            }
-                        },
-                        data: {
-                            orderId: String(data.id),
-                            type: 'new_order'
-                        }
-                    }));
-
-                    console.log('Sending order FCM notifications...');
-                    // Send in batches
-                    const batchSize = 500;
-                    for (let i = 0; i < messages.length; i += batchSize) {
-                        const batch = messages.slice(i, i + batchSize);
-                        const result = await admin.messaging().sendEach(batch);
-                        console.log(`Order notification batch result:`, {
-                            successCount: result.successCount,
-                            failureCount: result.failureCount
-                        });
-                    }
-
-                    console.log(`Sent ${messages.length} FCM order notifications`);
-                } catch (error) {
-                    console.error('Error sending order push notifications:', error);
-                }
+                // 4. Send Push Notification
+                await sendFCMNotifications(
+                    'New Order Received! 💰',
+                    `Order #${data.order_number} from ${orderData.customerName} - ₹${data.total_price}`,
+                    { orderId, type: 'new_order' }
+                );
 
                 return res.status(200).json({ success: true });
             }
 
-            return res.status(200).json({ message: "Webhook received but no action taken" });
+            return res.status(200).json({ message: "No action taken" });
 
         } catch (error) {
-            console.error("CRITICAL WEBHOOK ERROR:", error);
-            return res.status(500).json({ error: error.message, stack: error.stack });
+            console.error("Webhook Error:", error);
+            return res.status(500).json({ error: error.message });
         }
     }
 
-    // Handle GET requests (Health check)
-    res.status(200).send("Easey CRM Webhook Listener is Active 🟢");
+    res.status(200).send("Active 🟢");
 };
-
-
