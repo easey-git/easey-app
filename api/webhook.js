@@ -57,9 +57,13 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
 
 // Initialize Firebase Admin if it hasn't been initialized yet
 if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
-    });
+    try {
+        admin.initializeApp({
+            credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
+        });
+    } catch (error) {
+        console.error('Firebase Admin Init Error:', error);
+    }
 }
 
 const db = admin.firestore();
@@ -101,43 +105,75 @@ module.exports = async (req, res) => {
                 } else if (type === 'button') {
                     body = message.button.text; // The text on the button
                     const payload = message.button.payload; // The hidden payload
+                    console.log(`DEBUG: Button Clicked. Payload: '${payload}', Body: '${body}'`);
 
                     // AUTOMATION: Handle COD Confirmation (Step 1)
-                    if (payload === 'CONFIRM_COD_YES') {
-                        console.log(`Step 1: Customer confirmed interest for ${phoneNormalized}`);
+                    // Check for Payload OR Button Text (Meta defaults payload to text if not set)
+                    if (payload === 'CONFIRM_COD_YES' || payload === 'Confirm Order' || body === 'Confirm Order') {
+                        console.log(`Step 1: Customer confirmed interest for ${phoneNormalized}. Payload: ${payload}, Body: ${body}`);
 
-                        // 1. Find the order
+                        // 1. Find the order (Simplified Query)
                         const ordersRef = db.collection('orders');
-                        const snapshot = await ordersRef
-                            .where('status', '==', 'COD')
-                            .where('verificationStatus', '!=', 'approved')
-                            .orderBy('createdAt', 'desc')
-                            .limit(5)
-                            .get();
+                        try {
+                            // Fetch last 20 orders WITHOUT filters to avoid index issues
+                            const snapshot = await ordersRef
+                                .orderBy('createdAt', 'desc')
+                                .limit(20)
+                                .get();
 
-                        const matchingOrder = snapshot.docs.find(doc => {
-                            const p = doc.data().phone || '';
-                            return p.replace(/\D/g, '').slice(-10) === phoneNormalized;
-                        });
+                            console.log(`Firestore Query Result: Fetched ${snapshot.size} recent orders.`);
 
-                        if (matchingOrder) {
-                            const orderData = matchingOrder.data();
+                            const matchingOrder = snapshot.docs.find(doc => {
+                                const data = doc.data();
+                                const p = data.phone || '';
+                                const match = p.replace(/\D/g, '').slice(-10) === phoneNormalized;
 
-                            // 2. Send Step 2: Address Verification Template
-                            // Template Name from User Screenshot: order_confirm_auto_schedule
-                            const address = `${orderData.address1}, ${orderData.city}, ${orderData.state}`;
+                                // Debug log for the first few to see what we are checking
+                                // console.log(`Checking ${doc.id}: ${p} -> ${match}`);
 
-                            await sendWhatsAppMessage(senderPhone, 'order_confirm_auto_schedule', [
-                                {
-                                    type: 'body',
-                                    parameters: [
-                                        { type: 'text', text: String(orderData.orderNumber) }, // {{1}} Order ID
-                                        { type: 'text', text: address },                       // {{2}} Address
-                                        { type: 'text', text: String(orderData.zip) },         // {{3}} Pincode
-                                        { type: 'text', text: String(orderData.phone) }        // {{4}} Phone
-                                    ]
+                                return match && data.status === 'COD';
+                            });
+
+                            if (matchingOrder) {
+                                const orderData = matchingOrder.data();
+
+                                // Idempotency / Duplicate Check
+                                if (orderData.verificationStatus === 'verified_pending_address' || orderData.verificationStatus === 'approved') {
+                                    console.log(`Order ${matchingOrder.id} already processed (Status: ${orderData.verificationStatus}). Skipping duplicate.`);
+                                    return;
                                 }
-                            ]);
+
+                                console.log(`Found Matching Order: ${matchingOrder.id}. Sending Step 2 Template...`);
+
+                                // Update status to 'verified_pending_address' (intermediate state)
+                                await ordersRef.doc(matchingOrder.id).update({
+                                    verificationStatus: 'verified_pending_address',
+                                    updatedAt: admin.firestore.Timestamp.now()
+                                });
+
+                                // 2. Send Step 2: Address Verification Template
+                                // Template Name: order_confirm_auto_schedule
+                                const address = `${orderData.address1}, ${orderData.city}, ${orderData.state || ''}`;
+
+                                console.log(`Sending Address Verification to ${senderPhone} with params: ${orderData.orderNumber}, ${address}, ${orderData.zip}, ${orderData.phone}`);
+
+                                await sendWhatsAppMessage(senderPhone, 'order_confirm_auto_schedule', [
+                                    {
+                                        type: 'body',
+                                        parameters: [
+                                            { type: 'text', text: String(orderData.orderNumber) }, // {{1}} Order ID
+                                            { type: 'text', text: address },                       // {{2}} Address
+                                            { type: 'text', text: String(orderData.zip) },         // {{3}} Pincode
+                                            { type: 'text', text: String(orderData.phone) }        // {{4}} Phone
+                                        ]
+                                    }
+                                ]);
+                                console.log("Step 2 Message Sent Successfully!");
+                            } else {
+                                console.log("No matching order found for this phone number.");
+                            }
+                        } catch (err) {
+                            console.error("Error in Step 1 Logic:", err);
                         }
                     }
 
@@ -193,58 +229,144 @@ module.exports = async (req, res) => {
                     }
 
                     // AUTOMATION: Handle Address Confirmation (Step 2)
-                    if (payload === 'ADDRESS_CORRECT') {
-                        console.log(`Step 2: Address verified for ${phoneNormalized}`);
+                    // Check for Payload OR Button Text
+                    if (payload === 'ADDRESS_CORRECT' || payload === 'Confirm Address' || body === 'Confirm Address' || body === 'Yes, Correct' || body === 'Correct') {
+                        console.log(`Step 2: Address verified for ${phoneNormalized}. Payload: ${payload}`);
 
-                        // Find and Approve Order
+                        // Find and Approve Order (Simplified Query)
                         const ordersRef = db.collection('orders');
-                        const snapshot = await ordersRef
-                            .where('status', '==', 'COD')
-                            .where('verificationStatus', '!=', 'approved')
-                            .orderBy('createdAt', 'desc')
-                            .limit(5)
-                            .get();
+                        try {
+                            const snapshot = await ordersRef
+                                .orderBy('createdAt', 'desc')
+                                .limit(20)
+                                .get();
 
-                        const matchingOrder = snapshot.docs.find(doc => {
-                            const p = doc.data().phone || '';
-                            return p.replace(/\D/g, '').slice(-10) === phoneNormalized;
-                        });
-
-                        if (matchingOrder) {
-                            await ordersRef.doc(matchingOrder.id).update({
-                                verificationStatus: 'approved',
-                                updatedAt: timestamp
+                            const matchingOrder = snapshot.docs.find(doc => {
+                                const data = doc.data();
+                                const p = data.phone || '';
+                                const match = p.replace(/\D/g, '').slice(-10) === phoneNormalized;
+                                return match && data.status === 'COD' && data.verificationStatus !== 'approved';
                             });
+
+                            if (matchingOrder) {
+                                console.log(`Approving Order ${matchingOrder.id}...`);
+                                await ordersRef.doc(matchingOrder.id).update({
+                                    verificationStatus: 'approved',
+                                    updatedAt: admin.firestore.Timestamp.now()
+                                });
+
+                                // Send Final Confirmation Message
+                                await sendWhatsAppMessage(senderPhone, 'cod_confirmed', [
+                                    {
+                                        type: 'body',
+                                        parameters: [
+                                            { type: 'text', text: String(matchingOrder.data().orderNumber) }
+                                        ]
+                                    }
+                                ]);
+                                console.log("Final Confirmation Sent!");
+                            } else {
+                                console.log("No pending order found to approve.");
+                            }
+                        } catch (err) {
+                            console.error("Error in Step 2 Logic:", err);
                         }
                     }
+
+                    // AUTOMATION: Handle Address Change Request (Step 2: Make Changes)
+                    if (payload === 'ADDRESS_EDIT' || payload === 'Make Changes' || body === 'Make Changes' || body === 'Edit Address') {
+                        console.log(`Step 2: Address change requested for ${phoneNormalized}`);
+
+                        const ordersRef = db.collection('orders');
+                        try {
+                            const snapshot = await ordersRef.orderBy('createdAt', 'desc').limit(20).get();
+                            const matchingOrder = snapshot.docs.find(doc => {
+                                const data = doc.data();
+                                const p = data.phone || '';
+                                const match = p.replace(/\D/g, '').slice(-10) === phoneNormalized;
+                                return match && data.status === 'COD';
+                            });
+
+                            if (matchingOrder) {
+                                await ordersRef.doc(matchingOrder.id).update({
+                                    verificationStatus: 'address_change_requested',
+                                    updatedAt: admin.firestore.Timestamp.now()
+                                });
+
+                                // Send Update Address Template
+                                await sendWhatsAppMessage(senderPhone, 'update_address', [
+                                    { type: 'body', parameters: [{ type: 'text', text: matchingOrder.data().customerName || 'Customer' }] }
+                                ]);
+                                console.log("Address Change Template Sent!");
+                            }
+                        } catch (err) { console.error("Error in Address Change Logic:", err); }
+                    }
+
+                    // AUTOMATION: Handle Cancel Request (Step 1: Cancel)
+                    if (payload === 'CONFIRM_COD_NO' || payload === 'Cancel' || body === 'Cancel' || payload === 'cancel' || body === 'cancel') {
+                        console.log(`Step 1: Customer cancelled order for ${phoneNormalized}`);
+
+                        const ordersRef = db.collection('orders');
+                        try {
+                            const snapshot = await ordersRef.orderBy('createdAt', 'desc').limit(20).get();
+                            const matchingOrder = snapshot.docs.find(doc => {
+                                const data = doc.data();
+                                const p = data.phone || '';
+                                const match = p.replace(/\D/g, '').slice(-10) === phoneNormalized;
+                                return match && data.status === 'COD';
+                            });
+
+                            if (matchingOrder) {
+                                await ordersRef.doc(matchingOrder.id).update({
+                                    status: 'CANCELLED',
+                                    verificationStatus: 'cancelled',
+                                    updatedAt: admin.firestore.Timestamp.now()
+                                });
+
+                                // Send Cancel Template
+                                await sendWhatsAppMessage(senderPhone, 'cod_cancel', [
+                                    {
+                                        type: 'body', parameters: [
+                                            { type: 'text', text: matchingOrder.data().customerName || 'Customer' },
+                                            { type: 'text', text: String(matchingOrder.data().orderNumber) }
+                                        ]
+                                    }
+                                ]);
+                                console.log("Cancel Template Sent!");
+                            }
+                        } catch (err) { console.error("Error in Cancel Logic:", err); }
+                    }
+
+                    // Save to Firestore for Chat View
+                    await db.collection('whatsapp_messages').add({
+                        id: msgId,
+                        phone: senderPhone,
+                        phoneNormalized: phoneNormalized,
+                        direction: 'inbound',
+                        type: type,
+                        body: body,
+                        raw: JSON.stringify(message),
+                        timestamp: timestamp
+                    });
+
+                    return res.status(200).send('EVENT_RECEIVED');
                 }
 
-                // Save to Firestore for Chat View
-                await db.collection('whatsapp_messages').add({
-                    id: msgId,
-                    phone: senderPhone,
-                    phoneNormalized: phoneNormalized,
-                    direction: 'inbound',
-                    type: type,
-                    body: body,
-                    raw: JSON.stringify(message),
-                    timestamp: timestamp
-                });
-
-                return res.status(200).send('EVENT_RECEIVED');
-            }
-            // Handle Status Updates (Sent, Delivered, Read) - Optional for now
-            if (value?.statuses?.[0]) {
-                return res.status(200).send('STATUS_RECEIVED');
+                // Handle Status Updates (Sent, Delivered, Read)
+                if (value?.statuses?.[0]) {
+                    return res.status(200).send('STATUS_RECEIVED');
+                }
             }
         } catch (error) {
             console.error("Error processing WhatsApp webhook:", error);
             return res.status(500).send("Error");
         }
-    }
+    } // End of WhatsApp Block
 
-    // 1. Handle Shopify/Shiprocket POST
-    if (req.method === 'POST') {
+    // ---------------------------------------------------------
+    // 2. Handle Shopify/Shiprocket POST
+    // ---------------------------------------------------------
+    if (!req.body.object) {
         try {
             const data = req.body;
             const queryParams = req.query || {};
@@ -465,10 +587,10 @@ module.exports = async (req, res) => {
                     orderId: data.id,
                     orderNumber: data.order_number,
                     totalPrice: data.total_price,
-                    currency: data.currency,
+                    currency: data.currency || 'INR',
                     customerName: data.customer ? `${data.customer.first_name} ${data.customer.last_name}` : "Guest",
-                    email: data.email,
-                    phone: data.phone || (data.customer ? data.customer.phone : null),
+                    email: data.email || null,
+                    phone: data.phone || (data.customer && data.customer.phone) || (data.shipping_address && data.shipping_address.phone) || (data.billing_address && data.billing_address.phone) || null,
                     createdAt: admin.firestore.Timestamp.now(),
                     updatedAt: admin.firestore.Timestamp.now(),
                     status: (
@@ -484,11 +606,11 @@ module.exports = async (req, res) => {
                     zip: shipping.zip || "",
                     country: shipping.country || "",
 
-                    items: data.line_items.map(item => ({
-                        name: item.title,
-                        quantity: item.quantity,
-                        price: item.price
-                    }))
+                    items: data.line_items ? data.line_items.map(item => ({
+                        name: item.name || item.title || "Unknown Item",
+                        quantity: item.quantity || 1,
+                        price: item.price || "0"
+                    })) : []
                 };
 
                 // 1. Save Order
@@ -578,23 +700,38 @@ module.exports = async (req, res) => {
                 // ---------------------------------------------------------
                 // AUTOMATION: Send COD Confirmation
                 // ---------------------------------------------------------
-                if (orderData.status === 'COD' && orderData.phone) {
+                console.log(`Checking Automation for Order ${orderData.orderNumber}: Status=${orderData.status}, Phone=${orderData.phone}`);
+
+                // Check if we already sent the message (Prevent Duplicates)
+                const existingOrderRef = db.collection("orders").doc(String(data.id));
+                const existingOrderSnap = await existingOrderRef.get();
+                if (existingOrderSnap.exists && existingOrderSnap.data().whatsappSent) {
+                    console.log(`WhatsApp already sent for Order ${orderData.orderNumber}. Skipping duplicate.`);
+                } else if (orderData.status === 'COD' && orderData.phone) {
                     const cleanPhone = orderData.phone.replace(/\D/g, '').slice(-10);
+                    console.log(`Preparing to send WhatsApp to: 91${cleanPhone}`);
+
                     if (cleanPhone) {
                         // Use first item name or "Order"
                         const itemName = orderData.items && orderData.items.length > 0 ? orderData.items[0].name : 'Your Order';
 
-                        await sendWhatsAppMessage(`91${cleanPhone}`, 'order_auto_confirmation', [
+                        // Template: cod_auto_confirmation
+                        // Params: {{1}}=Name, {{2}}=OrderNum, {{3}}=Item, {{4}}=Price
+                        await sendWhatsAppMessage(`91${cleanPhone}`, 'cod_auto_confirmation', [
                             {
                                 type: 'body',
                                 parameters: [
                                     { type: 'text', text: orderData.customerName },
                                     { type: 'text', text: String(orderData.orderNumber) },
                                     { type: 'text', text: itemName },
-                                    { type: 'text', text: String(orderData.totalPrice) } // {{4}} Total Price
+                                    { type: 'text', text: String(orderData.totalPrice) }
                                 ]
                             }
                         ]);
+                        console.log(`WhatsApp COD Confirmation sent to 91${cleanPhone}`);
+
+                        // Mark as sent to prevent duplicates
+                        await existingOrderRef.update({ whatsappSent: true });
                     }
                 }
 
@@ -653,11 +790,13 @@ module.exports = async (req, res) => {
             return res.status(200).json({ message: "Webhook received but no action taken" });
 
         } catch (error) {
-            console.error("Error processing webhook:", error);
-            return res.status(500).json({ error: "Internal Server Error" });
+            console.error("CRITICAL WEBHOOK ERROR:", error);
+            return res.status(500).json({ error: error.message, stack: error.stack });
         }
     }
 
     // Handle GET requests (Health check)
     res.status(200).send("Easey CRM Webhook Listener is Active 🟢");
 };
+
+
