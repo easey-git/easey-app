@@ -146,7 +146,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     to: phone,
-                    templateName: 'cod_confirmation',
+                    templateName: 'order_auto_confirmation',
                     languageCode: 'en_US',
                     components: [
                         {

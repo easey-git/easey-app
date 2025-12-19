@@ -1,5 +1,5 @@
 const admin = require("firebase-admin");
-const fetch = require('node-fetch');
+// const fetch = require('node-fetch'); // Removed: node-fetch v3 is ESM-only
 
 // Helper: Send WhatsApp Message
 const sendWhatsAppMessage = async (to, templateName, components) => {
@@ -9,6 +9,7 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
     if (!token || !phoneId || !to) return;
 
     try {
+        // const { default: fetch } = await import('node-fetch'); // Removed: Use native fetch
         const url = `https://graph.facebook.com/v17.0/${phoneId}/messages`;
         const body = {
             messaging_product: "whatsapp",
@@ -101,19 +102,109 @@ module.exports = async (req, res) => {
                     body = message.button.text; // The text on the button
                     const payload = message.button.payload; // The hidden payload
 
-                    // AUTOMATION: Handle COD Confirmation
+                    // AUTOMATION: Handle COD Confirmation (Step 1)
                     if (payload === 'CONFIRM_COD_YES') {
-                        console.log(`Auto-verifying COD order for ${phoneNormalized}`);
-                        // Find pending COD order for this phone
+                        console.log(`Step 1: Customer confirmed interest for ${phoneNormalized}`);
+
+                        // 1. Find the order
                         const ordersRef = db.collection('orders');
                         const snapshot = await ordersRef
                             .where('status', '==', 'COD')
-                            .where('verificationStatus', '!=', 'approved') // Only pending
+                            .where('verificationStatus', '!=', 'approved')
                             .orderBy('createdAt', 'desc')
-                            .limit(5) // Check last 5 to be safe
+                            .limit(5)
                             .get();
 
-                        // Filter client-side for phone match (since we might store phone differently)
+                        const matchingOrder = snapshot.docs.find(doc => {
+                            const p = doc.data().phone || '';
+                            return p.replace(/\D/g, '').slice(-10) === phoneNormalized;
+                        });
+
+                        if (matchingOrder) {
+                            const orderData = matchingOrder.data();
+
+                            // 2. Send Step 2: Address Verification Template
+                            // Template Name from User Screenshot: order_confirm_auto_schedule
+                            const address = `${orderData.address1}, ${orderData.city}, ${orderData.state}`;
+
+                            await sendWhatsAppMessage(senderPhone, 'order_confirm_auto_schedule', [
+                                {
+                                    type: 'body',
+                                    parameters: [
+                                        { type: 'text', text: String(orderData.orderNumber) }, // {{1}} Order ID
+                                        { type: 'text', text: address },                       // {{2}} Address
+                                        { type: 'text', text: String(orderData.zip) },         // {{3}} Pincode
+                                        { type: 'text', text: String(orderData.phone) }        // {{4}} Phone
+                                    ]
+                                }
+                            ]);
+                        }
+                    }
+
+                    // AUTOMATION: Handle Cancel Request (Button: "cancel")
+                    if (payload === 'CONFIRM_COD_NO') {
+                        console.log(`Customer cancelled order for ${phoneNormalized}`);
+                        const ordersRef = db.collection('orders');
+                        const snapshot = await ordersRef
+                            .where('status', '==', 'COD')
+                            .where('verificationStatus', '!=', 'approved')
+                            .orderBy('createdAt', 'desc')
+                            .limit(5)
+                            .get();
+
+                        const matchingOrder = snapshot.docs.find(doc => {
+                            const p = doc.data().phone || '';
+                            return p.replace(/\D/g, '').slice(-10) === phoneNormalized;
+                        });
+
+                        if (matchingOrder) {
+                            await ordersRef.doc(matchingOrder.id).update({
+                                verificationStatus: 'cancelled',
+                                status: 'CANCELLED', // Optional: Update main status too
+                                updatedAt: timestamp
+                            });
+                        }
+                    }
+
+                    // AUTOMATION: Handle Reschedule Request
+                    if (payload === 'CONFIRM_COD_RESCHEDULE') {
+                        console.log(`Customer requested reschedule for ${phoneNormalized}`);
+                        // Update order status or log it
+                        const ordersRef = db.collection('orders');
+                        const snapshot = await ordersRef
+                            .where('status', '==', 'COD')
+                            .where('verificationStatus', '!=', 'approved')
+                            .orderBy('createdAt', 'desc')
+                            .limit(5)
+                            .get();
+
+                        const matchingOrder = snapshot.docs.find(doc => {
+                            const p = doc.data().phone || '';
+                            return p.replace(/\D/g, '').slice(-10) === phoneNormalized;
+                        });
+
+                        if (matchingOrder) {
+                            await ordersRef.doc(matchingOrder.id).update({
+                                verificationStatus: 'reschedule_requested',
+                                updatedAt: timestamp
+                            });
+                            // Optional: Send a manual follow-up message or alert admin
+                        }
+                    }
+
+                    // AUTOMATION: Handle Address Confirmation (Step 2)
+                    if (payload === 'ADDRESS_CORRECT') {
+                        console.log(`Step 2: Address verified for ${phoneNormalized}`);
+
+                        // Find and Approve Order
+                        const ordersRef = db.collection('orders');
+                        const snapshot = await ordersRef
+                            .where('status', '==', 'COD')
+                            .where('verificationStatus', '!=', 'approved')
+                            .orderBy('createdAt', 'desc')
+                            .limit(5)
+                            .get();
+
                         const matchingOrder = snapshot.docs.find(doc => {
                             const p = doc.data().phone || '';
                             return p.replace(/\D/g, '').slice(-10) === phoneNormalized;
@@ -124,7 +215,6 @@ module.exports = async (req, res) => {
                                 verificationStatus: 'approved',
                                 updatedAt: timestamp
                             });
-                            // Optional: Send "Thank you" reply via API (not implemented here yet)
                         }
                     }
                 }
@@ -143,12 +233,10 @@ module.exports = async (req, res) => {
 
                 return res.status(200).send('EVENT_RECEIVED');
             }
-
             // Handle Status Updates (Sent, Delivered, Read) - Optional for now
             if (value?.statuses?.[0]) {
                 return res.status(200).send('STATUS_RECEIVED');
             }
-
         } catch (error) {
             console.error("Error processing WhatsApp webhook:", error);
             return res.status(500).send("Error");
@@ -493,13 +581,17 @@ module.exports = async (req, res) => {
                 if (orderData.status === 'COD' && orderData.phone) {
                     const cleanPhone = orderData.phone.replace(/\D/g, '').slice(-10);
                     if (cleanPhone) {
-                        await sendWhatsAppMessage(`91${cleanPhone}`, 'cod_confirmation', [
+                        // Use first item name or "Order"
+                        const itemName = orderData.items && orderData.items.length > 0 ? orderData.items[0].name : 'Your Order';
+
+                        await sendWhatsAppMessage(`91${cleanPhone}`, 'order_auto_confirmation', [
                             {
                                 type: 'body',
                                 parameters: [
                                     { type: 'text', text: orderData.customerName },
                                     { type: 'text', text: String(orderData.orderNumber) },
-                                    { type: 'text', text: String(orderData.totalPrice) }
+                                    { type: 'text', text: itemName },
+                                    { type: 'text', text: String(orderData.totalPrice) } // {{4}} Total Price
                                 ]
                             }
                         ]);

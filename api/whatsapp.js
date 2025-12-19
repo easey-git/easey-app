@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+// const fetch = require('node-fetch'); // Removed: node-fetch v3 is ESM-only
 const admin = require("firebase-admin");
 
 // Initialize Firebase Admin if it hasn't been initialized yet
@@ -43,6 +43,7 @@ module.exports = async (req, res) => {
     }
 
     try {
+        // const { default: fetch } = await import('node-fetch'); // Removed: Use native fetch
         const url = `https://graph.facebook.com/v17.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
         const payload = {
