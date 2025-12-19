@@ -14,28 +14,35 @@ Notifications.setNotificationHandler({
 });
 
 // Handle FCM messages when app is in foreground
-messaging().onMessage(async remoteMessage => {
-    console.log('FCM Message received in foreground:', remoteMessage);
+if (Platform.OS !== 'web') {
+    messaging().onMessage(async remoteMessage => {
+        console.log('FCM Message received in foreground:', remoteMessage);
 
-    // Display notification using Expo Notifications
-    await Notifications.scheduleNotificationAsync({
-        content: {
-            title: remoteMessage.notification?.title || 'New Notification',
-            body: remoteMessage.notification?.body || '',
-            sound: 'live.mp3',
-            channelId: 'custom-sound-v2',
-            data: remoteMessage.data,
-        },
-        trigger: null, // Show immediately
+        // Display notification using Expo Notifications
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title: remoteMessage.notification?.title || 'New Notification',
+                body: remoteMessage.notification?.body || '',
+                sound: 'live.mp3',
+                channelId: 'custom-sound-v2',
+                data: remoteMessage.data,
+            },
+            trigger: null, // Show immediately
+        });
     });
-});
 
-// Handle background messages
-messaging().setBackgroundMessageHandler(async remoteMessage => {
-    console.log('FCM Message handled in background:', remoteMessage);
-});
+    // Handle background messages
+    messaging().setBackgroundMessageHandler(async remoteMessage => {
+        console.log('FCM Message handled in background:', remoteMessage);
+    });
+}
 
 export async function registerForPushNotificationsAsync(userId) {
+    if (Platform.OS === 'web') {
+        console.log('Push notifications are not fully supported on web yet.');
+        return;
+    }
+
     let token;
 
     if (Platform.OS === 'android') {
@@ -115,6 +122,8 @@ export async function sendLocalNotification(title, body) {
 }
 
 export async function unregisterPushNotificationsAsync() {
+    if (Platform.OS === 'web') return;
+
     try {
         const token = await messaging().getToken();
         if (token) {
