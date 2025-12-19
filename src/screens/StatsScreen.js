@@ -21,6 +21,8 @@ const StatsScreen = ({ navigation }) => {
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
 
+
+
     // Refs for sound logic
     const lastMaxTimestampRef = React.useRef(0);
     const isFirstLoadRef = React.useRef(true);
@@ -229,6 +231,8 @@ const StatsScreen = ({ navigation }) => {
         setRefreshing(true);
         setTimeout(() => setRefreshing(false), 1000);
     }, []);
+
+
 
     if (loading) {
         return (
@@ -588,6 +592,8 @@ const StatsScreen = ({ navigation }) => {
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
+
+
         </View >
     );
 };

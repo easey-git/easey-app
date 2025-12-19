@@ -197,6 +197,13 @@ const HomeScreen = ({ navigation }) => {
             icon: 'database',
             screen: 'DatabaseManager',
         },
+        {
+            id: 5,
+            title: 'WhatsApp',
+            subtitle: 'Automations',
+            icon: 'whatsapp',
+            screen: 'WhatsAppManager',
+        },
     ];
 
     return (

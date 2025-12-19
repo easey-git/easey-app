@@ -10,7 +10,98 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 module.exports = async (req, res) => {
-    // 1. Handle Shopify Order Creation (POST)
+    // ---------------------------------------------------------
+    // 0. WHATSAPP WEBHOOK VERIFICATION (GET)
+    // ---------------------------------------------------------
+    if (req.method === 'GET' && req.query['hub.mode'] === 'subscribe') {
+        const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'easeycrm_whatsapp_verify';
+        if (req.query['hub.verify_token'] === verifyToken) {
+            console.log("WhatsApp Webhook Verified!");
+            return res.status(200).send(req.query['hub.challenge']);
+        }
+        return res.status(403).send('Forbidden');
+    }
+
+    // ---------------------------------------------------------
+    // 1. WHATSAPP INCOMING MESSAGES (POST)
+    // ---------------------------------------------------------
+    if (req.method === 'POST' && req.body.object === 'whatsapp_business_account') {
+        try {
+            const entry = req.body.entry?.[0];
+            const changes = entry?.changes?.[0];
+            const value = changes?.value;
+
+            if (value?.messages?.[0]) {
+                const message = value.messages[0];
+                const senderPhone = message.from; // e.g., "919876543210"
+                const phoneNormalized = senderPhone.replace(/\D/g, '').slice(-10);
+                const msgId = message.id;
+                const timestamp = admin.firestore.Timestamp.now();
+
+                let body = '';
+                let type = message.type;
+
+                if (type === 'text') {
+                    body = message.text.body;
+                } else if (type === 'button') {
+                    body = message.button.text; // The text on the button
+                    const payload = message.button.payload; // The hidden payload
+
+                    // AUTOMATION: Handle COD Confirmation
+                    if (payload === 'CONFIRM_COD_YES') {
+                        console.log(`Auto-verifying COD order for ${phoneNormalized}`);
+                        // Find pending COD order for this phone
+                        const ordersRef = db.collection('orders');
+                        const snapshot = await ordersRef
+                            .where('status', '==', 'COD')
+                            .where('verificationStatus', '!=', 'approved') // Only pending
+                            .orderBy('createdAt', 'desc')
+                            .limit(5) // Check last 5 to be safe
+                            .get();
+
+                        // Filter client-side for phone match (since we might store phone differently)
+                        const matchingOrder = snapshot.docs.find(doc => {
+                            const p = doc.data().phone || '';
+                            return p.replace(/\D/g, '').slice(-10) === phoneNormalized;
+                        });
+
+                        if (matchingOrder) {
+                            await ordersRef.doc(matchingOrder.id).update({
+                                verificationStatus: 'approved',
+                                updatedAt: timestamp
+                            });
+                            // Optional: Send "Thank you" reply via API (not implemented here yet)
+                        }
+                    }
+                }
+
+                // Save to Firestore for Chat View
+                await db.collection('whatsapp_messages').add({
+                    id: msgId,
+                    phone: senderPhone,
+                    phoneNormalized: phoneNormalized,
+                    direction: 'inbound',
+                    type: type,
+                    body: body,
+                    raw: JSON.stringify(message),
+                    timestamp: timestamp
+                });
+
+                return res.status(200).send('EVENT_RECEIVED');
+            }
+
+            // Handle Status Updates (Sent, Delivered, Read) - Optional for now
+            if (value?.statuses?.[0]) {
+                return res.status(200).send('STATUS_RECEIVED');
+            }
+
+        } catch (error) {
+            console.error("Error processing WhatsApp webhook:", error);
+            return res.status(500).send("Error");
+        }
+    }
+
+    // 1. Handle Shopify/Shiprocket POST
     if (req.method === 'POST') {
         try {
             const data = req.body;

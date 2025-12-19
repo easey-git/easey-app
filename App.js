@@ -10,6 +10,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import StatsScreen from './src/screens/StatsScreen';
 import FirestoreViewerScreen from './src/screens/FirestoreViewerScreen';
 import LoginScreen from './src/screens/LoginScreen';
+import WhatsAppManagerScreen from './src/screens/WhatsAppManagerScreen';
 import { theme } from './src/theme/theme';
 import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -188,6 +189,11 @@ function AppNavigator() {
                 name="Stats"
                 component={StatsScreen}
                 options={{ title: 'Analytics' }}
+              />
+              <Stack.Screen
+                name="WhatsAppManager"
+                component={WhatsAppManagerScreen}
+                options={{ title: 'WhatsApp' }}
               />
               <Stack.Screen
                 name="Settings"
