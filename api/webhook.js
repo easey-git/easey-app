@@ -1,4 +1,58 @@
 const admin = require("firebase-admin");
+const fetch = require('node-fetch');
+
+// Helper: Send WhatsApp Message
+const sendWhatsAppMessage = async (to, templateName, components) => {
+    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+    if (!token || !phoneId || !to) return;
+
+    try {
+        const url = `https://graph.facebook.com/v17.0/${phoneId}/messages`;
+        const body = {
+            messaging_product: "whatsapp",
+            to: to,
+            type: "template",
+            template: {
+                name: templateName,
+                language: { code: "en_US" },
+                components: components
+            }
+        };
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+        if (!response.ok) console.error('WhatsApp Auto-Send Error:', data);
+        else console.log(`WhatsApp template ${templateName} sent to ${to}`);
+
+        // Log to Firestore
+        if (response.ok) {
+            const db = admin.firestore();
+            await db.collection('whatsapp_messages').add({
+                phone: to,
+                phoneNormalized: to.replace(/\D/g, '').slice(-10),
+                direction: 'outbound',
+                type: 'template',
+                body: `Auto-Template: ${templateName}`,
+                templateName: templateName,
+                timestamp: admin.firestore.Timestamp.now(),
+                whatsappId: data.messages?.[0]?.id
+            });
+        }
+
+    } catch (e) {
+        console.error('WhatsApp Send Exception:', e);
+    }
+};
 
 // Initialize Firebase Admin if it hasn't been initialized yet
 if (!admin.apps.length) {
@@ -235,6 +289,28 @@ module.exports = async (req, res) => {
                 console.log(`Shiprocket Event: ${eventType} (${readableStage}) for ${customerName}`);
 
                 // ---------------------------------------------------------
+                // AUTOMATION: Send Abandoned Cart Recovery
+                // ---------------------------------------------------------
+                if (eventType === 'ABANDONED' && phoneNormalized && amount > 0) {
+                    // Check if we haven't sent one recently (optional optimization omitted for brevity)
+                    // Send Recovery Template
+                    // Template: cart_recovery (Variables: Name, Amount, CheckoutURL)
+                    // Note: We need a checkout URL. Using a placeholder or constructing one if possible.
+                    const checkoutUrl = attributes.landing_page_url || `https://yourstore.com/cart`;
+
+                    await sendWhatsAppMessage(`91${phoneNormalized}`, 'cart_recovery', [
+                        {
+                            type: 'body',
+                            parameters: [
+                                { type: 'text', text: customerName || 'Shopper' },
+                                { type: 'text', text: String(amount) },
+                                { type: 'text', text: checkoutUrl } // Ensure template has 3 variables or adjust
+                            ]
+                        }
+                    ]);
+                }
+
+                // ---------------------------------------------------------
                 // SEND PUSH NOTIFICATION (FCM for Production Builds)
                 // ---------------------------------------------------------
                 try {
@@ -410,6 +486,25 @@ module.exports = async (req, res) => {
                 }
 
                 console.log(`Shopify Order ${data.order_number} saved.`);
+
+                // ---------------------------------------------------------
+                // AUTOMATION: Send COD Confirmation
+                // ---------------------------------------------------------
+                if (orderData.status === 'COD' && orderData.phone) {
+                    const cleanPhone = orderData.phone.replace(/\D/g, '').slice(-10);
+                    if (cleanPhone) {
+                        await sendWhatsAppMessage(`91${cleanPhone}`, 'cod_confirmation', [
+                            {
+                                type: 'body',
+                                parameters: [
+                                    { type: 'text', text: orderData.customerName },
+                                    { type: 'text', text: String(orderData.orderNumber) },
+                                    { type: 'text', text: String(orderData.totalPrice) }
+                                ]
+                            }
+                        ]);
+                    }
+                }
 
                 // ---------------------------------------------------------
                 // SEND PUSH NOTIFICATION (FCM for Production Builds)
