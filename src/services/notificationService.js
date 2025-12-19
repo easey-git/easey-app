@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import messaging from '@react-native-firebase/messaging';
+import Constants from 'expo-constants';
 
 // Configure how notifications behave when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -13,8 +13,22 @@ Notifications.setNotificationHandler({
     }),
 });
 
+const getMessaging = () => {
+    if (Platform.OS === 'web' || Constants.appOwnership === 'expo') {
+        return null;
+    }
+    try {
+        return require('@react-native-firebase/messaging').default;
+    } catch (e) {
+        console.warn('Firebase messaging not available', e);
+        return null;
+    }
+};
+
 // Handle FCM messages when app is in foreground
-if (Platform.OS !== 'web') {
+const messaging = getMessaging();
+
+if (messaging) {
     messaging().onMessage(async remoteMessage => {
         console.log('FCM Message received in foreground:', remoteMessage);
 
@@ -38,8 +52,10 @@ if (Platform.OS !== 'web') {
 }
 
 export async function registerForPushNotificationsAsync(userId) {
-    if (Platform.OS === 'web') {
-        console.log('Push notifications are not fully supported on web yet.');
+    const messaging = getMessaging();
+
+    if (!messaging) {
+        console.log('Push notifications are not supported in this environment (Web or Expo Go).');
         return;
     }
 
@@ -122,7 +138,8 @@ export async function sendLocalNotification(title, body) {
 }
 
 export async function unregisterPushNotificationsAsync() {
-    if (Platform.OS === 'web') return;
+    const messaging = getMessaging();
+    if (!messaging) return;
 
     try {
         const token = await messaging().getToken();
