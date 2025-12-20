@@ -412,13 +412,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     const renderAbandoned = () => (
         <ScrollView style={styles.tabContent}>
-            <Surface style={[styles.infoBanner, { backgroundColor: theme.colors.tertiaryContainer }]}>
-                <Icon source="clock-alert-outline" size={20} color={theme.colors.onTertiaryContainer} />
-                <Text style={{ flex: 1, marginLeft: 8, color: theme.colors.onTertiaryContainer }}>
-                    High value carts ({'>'} ₹2000) are prioritized.
-                </Text>
-            </Surface>
-
             {abandonedCarts.map((cart) => (
                 <Surface key={cart.id} style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
