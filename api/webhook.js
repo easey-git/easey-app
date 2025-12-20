@@ -131,7 +131,7 @@ const sendFCMNotifications = async (title, body, dataPayload) => {
             android: {
                 notification: {
                     sound: 'live',
-                    channelId: 'custom-sound-v2',
+                    channelId: 'custom-sound-v3',
                 }
             },
             data: dataPayload

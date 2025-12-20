@@ -38,7 +38,7 @@ if (messaging) {
                 title: remoteMessage.notification?.title || 'New Notification',
                 body: remoteMessage.notification?.body || '',
                 sound: 'live.mp3',
-                channelId: 'custom-sound-v2',
+                channelId: 'custom-sound-v3',
                 data: remoteMessage.data,
             },
             trigger: null, // Show immediately
@@ -62,7 +62,10 @@ export async function registerForPushNotificationsAsync(userId) {
     let token;
 
     if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('custom-sound-v2', {
+        // Cleanup old channel to keep settings clean
+        await Notifications.deleteNotificationChannelAsync('custom-sound-v2');
+
+        await Notifications.setNotificationChannelAsync('custom-sound-v3', {
             name: 'Live Notifications',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
