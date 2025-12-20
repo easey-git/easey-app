@@ -127,14 +127,26 @@ const sendFCMNotifications = async (title, body, dataPayload) => {
 
         const messages = uniqueTokens.map(token => ({
             token: token,
-            notification: { title, body },
+            notification: {
+                title,
+                body
+            },
             android: {
+                priority: 'high',
                 notification: {
-                    sound: 'live',
-                    channelId: 'custom-sound-v3',
+                    sound: 'live',  // No extension for FCM
+                    channelId: 'custom-sound-v5',
+                    priority: 'high',
                 }
             },
-            data: dataPayload
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default'
+                    }
+                }
+            },
+            data: dataPayload || {}
         }));
 
         const batchSize = 500;

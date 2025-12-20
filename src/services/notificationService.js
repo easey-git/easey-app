@@ -30,15 +30,13 @@ const messaging = getMessaging();
 
 if (messaging) {
     messaging().onMessage(async remoteMessage => {
-        console.log('FCM Message received in foreground:', remoteMessage);
-
         // Display notification using Expo Notifications
         await Notifications.scheduleNotificationAsync({
             content: {
                 title: remoteMessage.notification?.title || 'New Notification',
                 body: remoteMessage.notification?.body || '',
                 sound: 'live.mp3',
-                channelId: 'custom-sound-v3',
+                channelId: 'custom-sound-v5',
                 data: remoteMessage.data,
             },
             trigger: null, // Show immediately
@@ -47,7 +45,7 @@ if (messaging) {
 
     // Handle background messages
     messaging().setBackgroundMessageHandler(async remoteMessage => {
-        console.log('FCM Message handled in background:', remoteMessage);
+        // Background message handled by FCM
     });
 }
 
@@ -55,22 +53,21 @@ export async function registerForPushNotificationsAsync(userId) {
     const messaging = getMessaging();
 
     if (!messaging) {
-        console.log('Push notifications are not supported in this environment (Web or Expo Go).');
         return;
     }
 
     let token;
 
     if (Platform.OS === 'android') {
-        // Cleanup old channel to keep settings clean
-        await Notifications.deleteNotificationChannelAsync('custom-sound-v2');
-
-        await Notifications.setNotificationChannelAsync('custom-sound-v3', {
+        // Create notification channel with custom sound
+        await Notifications.setNotificationChannelAsync('custom-sound-v5', {
             name: 'Live Notifications',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
             lightColor: '#FF231F7C',
-            sound: 'live.mp3', // Must match the file in assets/sounds/
+            sound: 'live.mp3',
+            enableVibrate: true,
+            enableLights: true,
         });
 
         await Notifications.setNotificationChannelAsync('default', {
@@ -82,7 +79,6 @@ export async function registerForPushNotificationsAsync(userId) {
     }
 
     // Request permission (works on both Android and iOS)
-    console.log('Requesting notification permission...');
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
@@ -91,18 +87,13 @@ export async function registerForPushNotificationsAsync(userId) {
         finalStatus = status;
     }
 
-    console.log('Notification permission status:', finalStatus);
-
     if (finalStatus !== 'granted') {
-        console.log('Notification permission denied!');
         alert('Failed to get push token for push notification!');
         return;
     }
 
     // Get FCM token (works in production builds)
-    console.log('Getting FCM token...');
     token = await messaging().getToken();
-    console.log('FCM Token:', token ? token.substring(0, 20) + '...' : 'NULL');
 
     // Save token to Firestore
     if (token) {
@@ -119,8 +110,6 @@ export async function registerForPushNotificationsAsync(userId) {
             }
 
             await setDoc(doc(db, 'push_tokens', token), tokenData, { merge: true });
-            console.log('FCM token saved to Firestore successfully');
-
         } catch (error) {
             console.error('Error saving push token:', error);
         }
