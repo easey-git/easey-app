@@ -438,28 +438,31 @@ const StatsScreen = ({ navigation }) => {
                     {recentActivity.map((item) => (
                         <React.Fragment key={item.id}>
                             <List.Item
-                                title={item.customerName || 'Guest User'}
+                                title={item.customerName || item.first_name || item.phone || item.phone_number || 'Visitor'}
                                 titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }}
-                                description={() => (
-                                    <View>
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                            {item.items && item.items.length > 0 ? item.items[0].name : 'Browsing'}
-                                        </Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                            <Chip
-                                                mode="flat"
-                                                compact
-                                                style={{ backgroundColor: item.status === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer, height: 20, borderRadius: 4, paddingHorizontal: 0 }}
-                                                textStyle={{ fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 8, color: item.status === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer, fontWeight: 'bold' }}
-                                            >
-                                                {item.status || 'Active'}
-                                            </Chip>
-                                            <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
-                                                • {item.jsDate ? item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                description={() => {
+                                    const displayItems = item.items || item.line_items || [];
+                                    return (
+                                        <View>
+                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                                {displayItems.length > 0 ? displayItems[0].name || displayItems[0].title : 'Browsing'}
                                             </Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                                <Chip
+                                                    mode="flat"
+                                                    compact
+                                                    style={{ backgroundColor: item.status === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer, height: 20, borderRadius: 4, paddingHorizontal: 0 }}
+                                                    textStyle={{ fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 8, color: item.status === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer, fontWeight: 'bold' }}
+                                                >
+                                                    {item.status || 'Active'}
+                                                </Chip>
+                                                <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
+                                                    • {item.jsDate ? item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                                </Text>
+                                            </View>
                                         </View>
-                                    </View>
-                                )}
+                                    );
+                                }}
                                 left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />}
                                 right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.total_price || item.amount || 0}</Text>}
                                 onPress={() => {
@@ -488,7 +491,7 @@ const StatsScreen = ({ navigation }) => {
                                     {/* Customer Info */}
                                     <View style={{ marginBottom: 16 }}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Customer</Text>
-                                        <Text variant="bodyLarge">{selectedDoc.customerName || 'Guest'}</Text>
+                                        <Text variant="bodyLarge">{selectedDoc.customerName || selectedDoc.first_name || selectedDoc.phone || selectedDoc.phone_number || 'Visitor'}</Text>
                                     </View>
 
                                     {selectedDoc.email && (
@@ -498,10 +501,10 @@ const StatsScreen = ({ navigation }) => {
                                         </View>
                                     )}
 
-                                    {selectedDoc.phone && (
+                                    {(selectedDoc.phone || selectedDoc.phone_number) && (
                                         <View style={{ marginBottom: 16 }}>
                                             <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Phone</Text>
-                                            <Text variant="bodyMedium">{selectedDoc.phone}</Text>
+                                            <Text variant="bodyMedium">{selectedDoc.phone || selectedDoc.phone_number}</Text>
                                         </View>
                                     )}
 
@@ -531,10 +534,10 @@ const StatsScreen = ({ navigation }) => {
                                     </View>
 
                                     {/* Items */}
-                                    {selectedDoc.items && selectedDoc.items.length > 0 && (
+                                    {(selectedDoc.items || selectedDoc.line_items) && (selectedDoc.items || selectedDoc.line_items).length > 0 && (
                                         <View style={{ marginBottom: 16 }}>
                                             <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>Items</Text>
-                                            {selectedDoc.items.map((item, index) => (
+                                            {(selectedDoc.items || selectedDoc.line_items).map((item, index) => (
                                                 <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: index < selectedDoc.items.length - 1 ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}>
                                                     <View style={{ flex: 1 }}>
                                                         <Text variant="bodyMedium">{item.name || 'Unknown Item'}</Text>
