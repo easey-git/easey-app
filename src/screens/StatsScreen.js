@@ -461,7 +461,7 @@ const StatsScreen = ({ navigation }) => {
                                     </View>
                                 )}
                                 left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />}
-                                right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.amount || 0}</Text>}
+                                right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.total_price || item.amount || 0}</Text>}
                                 onPress={() => {
                                     setSelectedDoc(item);
                                     setModalVisible(true);
@@ -527,7 +527,7 @@ const StatsScreen = ({ navigation }) => {
                                     {/* Amount */}
                                     <View style={{ marginBottom: 16 }}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Amount</Text>
-                                        <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || selectedDoc.amount || 0}</Text>
+                                        <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || selectedDoc.total_price || selectedDoc.amount || 0}</Text>
                                     </View>
 
                                     {/* Items */}
