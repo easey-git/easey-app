@@ -375,6 +375,11 @@ module.exports = async (req, res) => {
                         updateData.readTimestamp = admin.firestore.Timestamp.now();
                     }
 
+                    if (newStatus === 'failed' && statusUpdate.errors) {
+                        updateData.failureReason = statusUpdate.errors; // Save error details
+                        console.error(`Message ${whatsappId} failed:`, JSON.stringify(statusUpdate.errors));
+                    }
+
                     await msgDoc.ref.update(updateData);
                     console.log(`Updated message ${whatsappId} to status: ${newStatus}`);
                 } else {
@@ -506,10 +511,10 @@ module.exports = async (req, res) => {
                                 {
                                     type: 'body',
                                     parameters: [
-                                        { type: 'text', text: orderData.customerName },
-                                        { type: 'text', text: String(orderData.orderNumber) },
+                                        { type: 'text', text: orderData.customerName || 'Customer' },
+                                        { type: 'text', text: String(orderData.orderNumber || '') },
                                         { type: 'text', text: itemName },
-                                        { type: 'text', text: String(orderData.totalPrice) }
+                                        { type: 'text', text: String(orderData.totalPrice || '0') }
                                     ]
                                 }
                             ]
