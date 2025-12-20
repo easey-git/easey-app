@@ -362,40 +362,20 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         />
     ), [theme, openChat, setMenuVisible]);
 
+    const renderAbandonedItem = React.useCallback(({ item }) => (
+        <AbandonedCartItem item={item} theme={theme} onOpenChat={openChat} />
+    ), [theme, openChat]);
+
     const renderAbandoned = () => (
-        <ScrollView style={styles.tabContent}>
-            {abandonedCarts.map((cart) => (
-                <Surface key={cart.id} style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <View>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{cart.customerName}</Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                {cart.updatedAt?.toDate ? cart.updatedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                            </Text>
-                        </View>
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>₹{cart.totalPrice}</Text>
-                    </View>
-                    <View style={{ marginVertical: 8 }}>
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
-                            {cart.items ? cart.items.map(i => i.name).join(', ') : 'Items unknown'}
-                        </Text>
-                    </View>
-                    <View style={styles.cardActions}>
-                        <Button
-                            mode="text"
-                            icon="message-text-outline"
-                            compact
-                            onPress={() => openChat(cart)}
-                        >
-                            Chat
-                        </Button>
-                    </View>
-                </Surface>
-            ))}
-            {abandonedCarts.length === 0 && (
+        <FlatList
+            data={abandonedCarts}
+            renderItem={renderAbandonedItem}
+            keyExtractor={item => item.id}
+            contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+            ListEmptyComponent={() => (
                 <Text style={{ textAlign: 'center', marginTop: 20, color: theme.colors.onSurfaceVariant }}>No abandoned carts found.</Text>
             )}
-        </ScrollView>
+        />
     );
 
     return (
@@ -541,6 +521,37 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu }) => {
         </Surface>
     );
 });
+
+const AbandonedCartItem = React.memo(({ item, theme, onOpenChat }) => (
+    <Surface style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{item.customerName}</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                    {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                </Text>
+            </View>
+            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>₹{item.totalPrice}</Text>
+        </View>
+
+        <View style={{ marginVertical: 8 }}>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
+                {item.items ? item.items.map(i => i.name).join(', ') : 'Items unknown'}
+            </Text>
+        </View>
+
+        <View style={styles.cardActions}>
+            <Button
+                mode="text"
+                icon="message-text-outline"
+                compact
+                onPress={() => onOpenChat(item)}
+            >
+                Chat
+            </Button>
+        </View>
+    </Surface>
+));
 
 const styles = StyleSheet.create({
     container: { flex: 1 },

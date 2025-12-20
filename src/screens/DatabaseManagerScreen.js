@@ -13,11 +13,11 @@ const OrderManagementScreen = ({ navigation }) => {
     const [refreshing, setRefreshing] = useState(false);
     const theme = useTheme();
 
-    const showModal = (item) => {
+    const showModal = useCallback((item) => {
         setSelectedItem(item);
         setVisible(true);
-    };
-    const hideModal = () => setVisible(false);
+    }, []);
+    const hideModal = useCallback(() => setVisible(false), []);
 
     const fetchOrders = () => {
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(100));
@@ -66,72 +66,18 @@ const OrderManagementScreen = ({ navigation }) => {
         }
     };
 
-    const handleDelete = async (id) => {
+    const handleDelete = useCallback(async (id) => {
         try {
             await deleteDoc(doc(db, "orders", id));
-            hideModal();
+            setVisible(false); // hideModal cannot be used directly if it's not in dependency, but setVisible is safe
         } catch (error) {
             console.error("Error deleting order:", error);
         }
-    };
+    }, []);
 
-    const formatDate = (timestamp) => {
-        if (!timestamp) return 'N/A';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
-        return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-    };
-
-    const renderOrderCard = ({ item }) => (
-        <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={1}>
-            <TouchableOpacity onPress={() => showModal(item)} activeOpacity={0.8}>
-                <View style={styles.cardHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Avatar.Icon
-                            size={32}
-                            icon="package-variant-closed"
-                            style={{ backgroundColor: theme.colors.secondaryContainer }}
-                            color={theme.colors.onSecondaryContainer}
-                        />
-                        <View style={{ marginLeft: 12 }}>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                Order #{item.orderNumber}
-                            </Text>
-                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                {formatDate(item.createdAt)}
-                            </Text>
-                        </View>
-                    </View>
-                    <View style={[styles.statusBadge, {
-                        backgroundColor: item.status === 'Paid' ? '#e6fffa' : '#ebf8ff'
-                    }]}>
-                        <Text style={{
-                            color: item.status === 'Paid' ? '#2c7a7b' : '#2b6cb0',
-                            fontSize: 10, fontWeight: 'bold'
-                        }}>
-                            {item.status || 'PAID'}
-                        </Text>
-                    </View>
-                </View>
-
-                <Divider style={{ marginVertical: 12 }} />
-
-                <View style={styles.cardBody}>
-                    <View style={{ flex: 1 }}>
-                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{item.customerName || 'Guest Customer'}</Text>
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                            {item.items ? `${item.items.length} Items` : 'No items'} • {item.city || 'No Location'}
-                        </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-                            ₹{item.totalPrice}
-                        </Text>
-                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Total</Text>
-                    </View>
-                </View>
-            </TouchableOpacity>
-        </Surface>
-    );
+    const renderOrderCard = useCallback(({ item }) => (
+        <OrderListItem item={item} onPress={showModal} theme={theme} />
+    ), [showModal, theme]);
 
     const EmptyState = () => (
         <View style={styles.emptyState}>
@@ -163,7 +109,12 @@ const OrderManagementScreen = ({ navigation }) => {
             <View style={{ padding: 16, paddingBottom: 8 }}>
                 <Searchbar
                     placeholder="Search orders, customers..."
-                    onChangeText={setSearchQuery}
+                    onChangeText={(text) => {
+                        setSearchQuery(text);
+                        // Debounce filtering logic
+                        const timeoutId = setTimeout(() => onSearch(text), 300);
+                        return () => clearTimeout(timeoutId);
+                    }}
                     value={searchQuery}
                     style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderColor: theme.colors.outlineVariant }}
                     inputStyle={{ minHeight: 0 }}
@@ -177,6 +128,11 @@ const OrderManagementScreen = ({ navigation }) => {
                 contentContainerStyle={{ padding: 16, paddingTop: 8 }}
                 ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
                 showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                ListEmptyComponent={EmptyState}
             />
 
             {/* Comprehensive Details Modal */}
@@ -256,6 +212,67 @@ const OrderManagementScreen = ({ navigation }) => {
     );
 };
 
+// Extracted, Memoized List Item Component
+const OrderListItem = React.memo(({ item, onPress, theme }) => {
+    const formatDate = (timestamp) => {
+        if (!timestamp) return 'N/A';
+        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
+        return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    return (
+        <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={1}>
+            <TouchableOpacity onPress={() => onPress(item)} activeOpacity={0.8}>
+                <View style={styles.cardHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Avatar.Icon
+                            size={32}
+                            icon="package-variant-closed"
+                            style={{ backgroundColor: theme.colors.secondaryContainer }}
+                            color={theme.colors.onSecondaryContainer}
+                        />
+                        <View style={{ marginLeft: 12 }}>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                Order #{item.orderNumber}
+                            </Text>
+                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                {formatDate(item.createdAt)}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={[styles.statusBadge, {
+                        backgroundColor: item.status === 'Paid' ? '#e6fffa' : '#ebf8ff'
+                    }]}>
+                        <Text style={{
+                            color: item.status === 'Paid' ? '#2c7a7b' : '#2b6cb0',
+                            fontSize: 10, fontWeight: 'bold'
+                        }}>
+                            {item.status || 'PAID'}
+                        </Text>
+                    </View>
+                </View>
+
+                <Divider style={{ marginVertical: 12 }} />
+
+                <View style={styles.cardBody}>
+                    <View style={{ flex: 1 }}>
+                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{item.customerName || 'Guest Customer'}</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                            {item.items ? `${item.items.length} Items` : 'No items'} • {item.city || 'No Location'}
+                        </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                            ₹{item.totalPrice}
+                        </Text>
+                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Total</Text>
+                    </View>
+                </View>
+            </TouchableOpacity>
+        </Surface>
+    );
+});
+
 const styles = StyleSheet.create({
     container: { flex: 1 },
     card: {
@@ -280,7 +297,8 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     modalContent: { borderRadius: 12, padding: 16, maxHeight: '80%', maxWidth: 500, width: '100%', alignSelf: 'center' },
-    detailRow: { flexDirection: 'row', alignItems: 'center' }
+    detailRow: { flexDirection: 'row', alignItems: 'center' },
+    emptyState: { alignItems: 'center', justifyContent: 'center', padding: 32 }
 });
 
 export default OrderManagementScreen;

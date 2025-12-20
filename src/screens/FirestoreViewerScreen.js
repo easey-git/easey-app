@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
 import { collection, getDocs, deleteDoc, updateDoc, doc, limit, query, writeBatch } from 'firebase/firestore';
@@ -248,139 +248,19 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         </TouchableOpacity>
     );
 
-    const renderDocItem = ({ item }) => {
+    const renderDocItem = useCallback(({ item }) => {
         const isSelected = selectedItems.has(item.id);
-        const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
-
-        // Special rendering for Push Tokens
-        if (selectedCollection === 'push_tokens') {
-            return (
-                <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
-                    <TouchableOpacity onPress={() => showDocDetails(item)} onLongPress={() => toggleSelection(item.id)} delayLongPress={200}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
-                            <Checkbox
-                                status={isSelected ? 'checked' : 'unchecked'}
-                                onPress={() => toggleSelection(item.id)}
-                            />
-                            <Avatar.Icon
-                                size={40}
-                                icon={item.platform === 'ios' ? 'apple' : 'android'}
-                                style={{ backgroundColor: theme.colors.secondaryContainer, marginLeft: 4 }}
-                                color={theme.colors.onSecondaryContainer}
-                            />
-                            <View style={{ flex: 1, marginLeft: 12 }}>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                    {item.platform ? item.platform.toUpperCase() : 'UNKNOWN'}
-                                </Text>
-                                <Text variant="bodySmall" numberOfLines={1} style={{ color: theme.colors.onSurfaceVariant, fontFamily: 'monospace' }}>
-                                    {item.token}
-                                </Text>
-                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
-                                    User: {item.userId ? item.userId.substring(0, 8) + '...' : 'N/A'}
-                                </Text>
-                            </View>
-                            <IconButton icon="chevron-right" size={20} />
-                        </View>
-                    </TouchableOpacity>
-                </Surface>
-            );
-        }
-
         return (
-            <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
-                <TouchableOpacity onPress={() => showDocDetails(item)} onLongPress={() => toggleSelection(item.id)} delayLongPress={200}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4 }}>
-                        <View style={{ paddingTop: 4 }}>
-                            <Checkbox
-                                status={isSelected ? 'checked' : 'unchecked'}
-                                onPress={() => toggleSelection(item.id)}
-                            />
-                        </View>
-                        <Avatar.Icon
-                            size={40}
-                            icon="package-variant-closed"
-                            style={{ backgroundColor: theme.colors.secondaryContainer, marginLeft: 4, marginTop: 4 }}
-                            color={theme.colors.onSecondaryContainer}
-                        />
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2, flexWrap: 'wrap' }}>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginRight: 8 }}>
-                                    {item.customerName || 'No Name'}
-                                </Text>
-                                {selectedCollection === 'checkouts' ? (
-                                    <Chip
-                                        mode="flat"
-                                        compact
-                                        style={{
-                                            backgroundColor: (item.latest_stage === 'ORDER_PLACED' || item.latest_stage === 'PAYMENT_INITIATED') ? theme.colors.primaryContainer :
-                                                (item.latest_stage === 'CHECKOUT_ABANDONED' || item.eventType === 'ABANDONED') ? theme.colors.errorContainer :
-                                                    theme.colors.secondaryContainer,
-                                            height: 20,
-                                            borderRadius: 4,
-                                            paddingHorizontal: 0
-                                        }}
-                                        textStyle={{
-                                            fontSize: 10,
-                                            lineHeight: 10,
-                                            marginVertical: 0,
-                                            marginHorizontal: 8,
-                                            color: (item.latest_stage === 'ORDER_PLACED' || item.latest_stage === 'PAYMENT_INITIATED') ? theme.colors.onPrimaryContainer :
-                                                (item.latest_stage === 'CHECKOUT_ABANDONED' || item.eventType === 'ABANDONED') ? theme.colors.onErrorContainer :
-                                                    theme.colors.onSecondaryContainer,
-                                            fontWeight: 'bold'
-                                        }}
-                                    >
-                                        {item.stage || item.latest_stage || 'ACTIVE'}
-                                    </Chip>
-                                ) : (
-                                    <Chip
-                                        mode="flat"
-                                        compact
-                                        style={{
-                                            backgroundColor: isCOD ? theme.colors.errorContainer : theme.colors.primaryContainer,
-                                            height: 20,
-                                            borderRadius: 4,
-                                            paddingHorizontal: 0
-                                        }}
-                                        textStyle={{
-                                            fontSize: 10,
-                                            lineHeight: 10,
-                                            marginVertical: 0,
-                                            marginHorizontal: 8,
-                                            color: isCOD ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
-                                            fontWeight: 'bold'
-                                        }}
-                                    >
-                                        {isCOD ? 'COD' : 'PAID'}
-                                    </Chip>
-                                )}
-                            </View>
-                            <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontFamily: 'monospace', marginBottom: 6 }}>
-                                Order #: {item.orderNumber || item.id}
-                            </Text>
-                            {item.phone && (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                                    <Icon source="phone" size={14} color={theme.colors.onSurfaceVariant} />
-                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6 }}>
-                                        {item.phone}
-                                    </Text>
-                                </View>
-                            )}
-                            {item.email && (
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Icon source="email" size={14} color={theme.colors.onSurfaceVariant} />
-                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6 }}>
-                                        {item.email}
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-                        <IconButton icon="chevron-right" size={20} style={{ marginTop: 0 }} />
-                    </View>
-                </TouchableOpacity>
-            </Surface >
+            <DocItem
+                item={item}
+                isSelected={isSelected}
+                selectedCollection={selectedCollection}
+                theme={theme}
+                onPress={showDocDetails}
+                onToggle={toggleSelection}
+            />
         );
-    };
+    }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection]);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -450,6 +330,9 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
                 refreshing={loading}
                 onRefresh={fetchDocuments}
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
             />
 
             <Portal>
@@ -520,6 +403,140 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         </View>
     );
 };
+
+// Extracted, Memoized Document Item Component
+const DocItem = React.memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle }) => {
+    const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
+
+    // Special rendering for Push Tokens
+    if (selectedCollection === 'push_tokens') {
+        return (
+            <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
+                <TouchableOpacity onPress={() => onPress(item)} onLongPress={() => onToggle(item.id)} delayLongPress={200}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+                        <Checkbox
+                            status={isSelected ? 'checked' : 'unchecked'}
+                            onPress={() => onToggle(item.id)}
+                        />
+                        <Avatar.Icon
+                            size={40}
+                            icon={item.platform === 'ios' ? 'apple' : 'android'}
+                            style={{ backgroundColor: theme.colors.secondaryContainer, marginLeft: 4 }}
+                            color={theme.colors.onSecondaryContainer}
+                        />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                {item.platform ? item.platform.toUpperCase() : 'UNKNOWN'}
+                            </Text>
+                            <Text variant="bodySmall" numberOfLines={1} style={{ color: theme.colors.onSurfaceVariant, fontFamily: 'monospace' }}>
+                                {item.token}
+                            </Text>
+                            <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
+                                User: {item.userId ? item.userId.substring(0, 8) + '...' : 'N/A'}
+                            </Text>
+                        </View>
+                        <IconButton icon="chevron-right" size={20} />
+                    </View>
+                </TouchableOpacity>
+            </Surface>
+        );
+    }
+
+    return (
+        <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
+            <TouchableOpacity onPress={() => onPress(item)} onLongPress={() => onToggle(item.id)} delayLongPress={200}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4 }}>
+                    <View style={{ paddingTop: 4 }}>
+                        <Checkbox
+                            status={isSelected ? 'checked' : 'unchecked'}
+                            onPress={() => onToggle(item.id)}
+                        />
+                    </View>
+                    <Avatar.Icon
+                        size={40}
+                        icon="package-variant-closed"
+                        style={{ backgroundColor: theme.colors.secondaryContainer, marginLeft: 4, marginTop: 4 }}
+                        color={theme.colors.onSecondaryContainer}
+                    />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2, flexWrap: 'wrap' }}>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginRight: 8 }}>
+                                {item.customerName || 'No Name'}
+                            </Text>
+                            {selectedCollection === 'checkouts' ? (
+                                <Chip
+                                    mode="flat"
+                                    compact
+                                    style={{
+                                        backgroundColor: (item.latest_stage === 'ORDER_PLACED' || item.latest_stage === 'PAYMENT_INITIATED') ? theme.colors.primaryContainer :
+                                            (item.latest_stage === 'CHECKOUT_ABANDONED' || item.eventType === 'ABANDONED') ? theme.colors.errorContainer :
+                                                theme.colors.secondaryContainer,
+                                        height: 20,
+                                        borderRadius: 4,
+                                        paddingHorizontal: 0
+                                    }}
+                                    textStyle={{
+                                        fontSize: 10,
+                                        lineHeight: 10,
+                                        marginVertical: 0,
+                                        marginHorizontal: 8,
+                                        color: (item.latest_stage === 'ORDER_PLACED' || item.latest_stage === 'PAYMENT_INITIATED') ? theme.colors.onPrimaryContainer :
+                                            (item.latest_stage === 'CHECKOUT_ABANDONED' || item.eventType === 'ABANDONED') ? theme.colors.onErrorContainer :
+                                                theme.colors.onSecondaryContainer,
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    {item.stage || item.latest_stage || 'ACTIVE'}
+                                </Chip>
+                            ) : (
+                                <Chip
+                                    mode="flat"
+                                    compact
+                                    style={{
+                                        backgroundColor: isCOD ? theme.colors.errorContainer : theme.colors.primaryContainer,
+                                        height: 20,
+                                        borderRadius: 4,
+                                        paddingHorizontal: 0
+                                    }}
+                                    textStyle={{
+                                        fontSize: 10,
+                                        lineHeight: 10,
+                                        marginVertical: 0,
+                                        marginHorizontal: 8,
+                                        color: isCOD ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    {isCOD ? 'COD' : 'PAID'}
+                                </Chip>
+                            )}
+                        </View>
+                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontFamily: 'monospace', marginBottom: 6 }}>
+                            Order #: {item.orderNumber || item.id}
+                        </Text>
+                        {item.phone && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                                <Icon source="phone" size={14} color={theme.colors.onSurfaceVariant} />
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6 }}>
+                                    {item.phone}
+                                </Text>
+                            </View>
+                        )}
+                        {item.email && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Icon source="email" size={14} color={theme.colors.onSurfaceVariant} />
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6 }}>
+                                    {item.email}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                    <IconButton icon="chevron-right" size={20} style={{ marginTop: 0 }} />
+                </View>
+            </TouchableOpacity>
+        </Surface >
+    );
+});
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
