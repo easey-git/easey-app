@@ -24,18 +24,17 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [chatHistory, setChatHistory] = useState([]);
     const [chatLoading, setChatLoading] = useState(false);
 
-    // Dummy Data for Charts (Keep for now until we have real message logs)
-    const messageStats = [
-        { value: 120, label: 'Sent', frontColor: theme.colors.primary },
-        { value: 115, label: 'Delivered', frontColor: theme.colors.secondary },
-        { value: 98, label: 'Read', frontColor: '#4ade80' },
-        { value: 15, label: 'Replied', frontColor: '#f59e0b' },
-    ];
+    const [messageStats, setMessageStats] = useState([
+        { value: 0, label: 'Sent', frontColor: theme.colors.primary },
+        { value: 0, label: 'Delivered', frontColor: theme.colors.secondary },
+        { value: 0, label: 'Read', frontColor: '#4ade80' },
+        { value: 0, label: 'Replied', frontColor: '#f59e0b' },
+    ]);
 
     useEffect(() => {
         setLoading(true);
 
-        // 1. Fetch COD Orders (and recently cancelled ones)
+        // 1. Fetch COD Orders
         const qOrders = query(
             collection(db, "orders"),
             where("status", "in", ["COD", "CANCELLED"]),
@@ -72,22 +71,46 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 }
             });
             setAbandonedCarts(carts);
-            setLoading(false);
         });
 
-        // 3. Fetch Recent Activity
+        // 3. Fetch Recent Activity & Stats (Last 24 Hours)
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const qActivity = query(
             collection(db, "whatsapp_messages"),
-            orderBy("timestamp", "desc"),
-            limit(5)
+            where("timestamp", ">=", twentyFourHoursAgo),
+            orderBy("timestamp", "desc")
         );
 
         const unsubActivity = onSnapshot(qActivity, (snapshot) => {
-            const activity = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setRecentActivity(activity);
+            const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Update Recent Activity List (Top 5)
+            setRecentActivity(messages.slice(0, 5));
+
+            // Calculate Stats
+            let sent = 0;
+            let delivered = 0;
+            let read = 0;
+            let replied = 0;
+
+            messages.forEach(msg => {
+                if (msg.direction === 'outbound') {
+                    sent++;
+                    if (msg.status === 'delivered' || msg.status === 'read') delivered++;
+                    if (msg.status === 'read') read++;
+                } else if (msg.direction === 'inbound') {
+                    replied++;
+                }
+            });
+
+            setMessageStats([
+                { value: sent, label: 'Sent', frontColor: theme.colors.primary },
+                { value: delivered, label: 'Delivered', frontColor: theme.colors.secondary },
+                { value: read, label: 'Read', frontColor: '#4ade80' },
+                { value: replied, label: 'Replied', frontColor: '#f59e0b' },
+            ]);
+
+            setLoading(false);
         });
 
         return () => {
@@ -217,8 +240,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     yAxisThickness={0}
                     xAxisThickness={1}
                     xAxisColor={theme.colors.outlineVariant}
-                    yAxisTextStyle={{ color: theme.colors.onSurfaceVariant }}
-                    labelTextStyle={{ color: theme.colors.onSurfaceVariant }}
+                    yAxisColor={theme.colors.outlineVariant}
+                    yAxisTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                    xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                    labelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                    rulesColor={theme.colors.outlineVariant}
                     hideRules
                 />
             </Surface>

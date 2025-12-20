@@ -355,7 +355,34 @@ module.exports = async (req, res) => {
                 return res.status(200).send('EVENT_RECEIVED');
             }
 
-            if (value?.statuses?.[0]) return res.status(200).send('STATUS_RECEIVED');
+            // 3. Handle Status Updates (Sent, Delivered, Read)
+            if (value?.statuses?.[0]) {
+                const statusUpdate = value.statuses[0];
+                const whatsappId = statusUpdate.id;
+                const newStatus = statusUpdate.status; // sent, delivered, read, failed
+
+                // Find the message with this WhatsApp ID
+                const msgQuery = await db.collection('whatsapp_messages')
+                    .where('whatsappId', '==', whatsappId)
+                    .limit(1)
+                    .get();
+
+                if (!msgQuery.empty) {
+                    const msgDoc = msgQuery.docs[0];
+                    const updateData = { status: newStatus };
+
+                    if (newStatus === 'read') {
+                        updateData.readTimestamp = admin.firestore.Timestamp.now();
+                    }
+
+                    await msgDoc.ref.update(updateData);
+                    console.log(`Updated message ${whatsappId} to status: ${newStatus}`);
+                } else {
+                    console.log(`Message not found for status update: ${whatsappId}`);
+                }
+
+                return res.status(200).send('STATUS_RECEIVED');
+            }
 
         } catch (error) {
             console.error("WhatsApp Webhook Error:", error);

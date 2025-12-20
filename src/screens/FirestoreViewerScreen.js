@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
-import { collection, getDocs, deleteDoc, updateDoc, doc, limit, query, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, getDoc, deleteDoc, updateDoc, doc, limit, query, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
@@ -19,7 +19,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [confirmVisible, setConfirmVisible] = useState(false);
     const [confirmTitle, setConfirmTitle] = useState('');
     const [confirmMessage, setConfirmMessage] = useState('');
-    const [onConfirm, setOnConfirm] = useState(() => () => { });
+    const [pendingAction, setPendingAction] = useState(null); // { type: 'bulk' | 'single', id?: string }
 
     // Snackbar State
     const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -42,10 +42,12 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const fetchDocuments = async () => {
         setLoading(true);
         try {
-            const q = query(collection(db, selectedCollection), limit(50));
-            const snapshot = await getDocs(q);
+            const q = query(collection(db, selectedCollection), limit(100));
+            // Force fetch from server to avoid stale cache issues
+            const snapshot = await getDocsFromServer(q);
             const docs = snapshot.docs.map(doc => ({
                 id: doc.id,
+                ref: doc.ref, // Store the reference directly
                 ...doc.data()
             }));
             setDocuments(docs);
@@ -67,52 +69,66 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     };
 
     const handleBulkDelete = () => {
+        if (selectedItems.size === 0) return;
         setConfirmTitle("Bulk Delete");
         setConfirmMessage(`Delete ${selectedItems.size} documents?`);
-        setOnConfirm(() => async () => {
-            setLoading(true);
-
-            try {
-                const batch = writeBatch(db);
-                selectedItems.forEach(id => {
-
-                    const ref = doc(db, selectedCollection, id);
-                    batch.delete(ref);
-                });
-                await batch.commit();
-
-                setSelectedItems(new Set());
-                fetchDocuments();
-                showSnackbar("Documents deleted successfully");
-            } catch (error) {
-                console.error("Error bulk deleting:", error);
-                showSnackbar(`Failed to delete: ${error.message}`, true);
-            }
-            setLoading(false);
-            setConfirmVisible(false);
-        });
+        setPendingAction({ type: 'bulk' });
         setConfirmVisible(true);
     };
 
     const handleDelete = (id) => {
         setConfirmTitle("Delete Document");
         setConfirmMessage("Are you sure you want to delete this document?");
-        setOnConfirm(() => async () => {
+        setPendingAction({ type: 'single', id });
+        setConfirmVisible(true);
+    };
 
-            try {
-                const docRef = doc(db, selectedCollection, id);
-                await deleteDoc(docRef);
+    const executeConfirm = async () => {
+        setLoading(true);
+        try {
+            if (pendingAction?.type === 'bulk') {
+                const batch = writeBatch(db);
+                const itemsToDelete = Array.from(selectedItems);
 
+                itemsToDelete.forEach(id => {
+                    // Find the document object to get the ref
+                    const docObj = documents.find(d => d.id === id);
+                    if (docObj && docObj.ref) {
+                        batch.delete(docObj.ref);
+                    } else {
+                        // Fallback (shouldn't happen if list is fresh)
+                        const cleanId = id.trim();
+                        const ref = doc(db, selectedCollection, cleanId);
+                        batch.delete(ref);
+                    }
+                });
+
+                await batch.commit();
+
+                setSelectedItems(new Set());
+                fetchDocuments();
+                showSnackbar(`Successfully deleted ${itemsToDelete.length} documents`);
+            } else if (pendingAction?.type === 'single') {
+                // Find the document object to get the ref
+                const docObj = documents.find(d => d.id === pendingAction.id);
+                if (docObj && docObj.ref) {
+                    await deleteDoc(docObj.ref);
+                } else {
+                    const docRef = doc(db, selectedCollection, pendingAction.id);
+                    await deleteDoc(docRef);
+                }
                 setVisible(false);
                 fetchDocuments();
                 showSnackbar("Document deleted successfully");
-            } catch (error) {
-                console.error("Error deleting document:", error);
-                showSnackbar(`Failed to delete: ${error.message}`, true);
             }
+        } catch (error) {
+            console.error("Error executing action:", error);
+            showSnackbar(`Failed: ${error.message}`, true);
+        } finally {
+            setLoading(false);
             setConfirmVisible(false);
-        });
-        setConfirmVisible(true);
+            setPendingAction(null);
+        }
     };
 
     const handleSave = async () => {
@@ -129,9 +145,9 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     };
 
-    const showDocDetails = (doc) => {
-        setSelectedDoc(doc);
-        setEditedDoc(JSON.parse(JSON.stringify(doc))); // Deep copy for editing
+    const showDocDetails = (docData) => {
+        setSelectedDoc(docData);
+        setEditedDoc(JSON.parse(JSON.stringify(docData))); // Deep copy for editing
         setIsEditing(false); // Default to view mode
         setVisible(true);
     };
@@ -386,7 +402,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     </Dialog.Content>
                     <Dialog.Actions>
                         <Button onPress={() => setConfirmVisible(false)}>Cancel</Button>
-                        <Button onPress={onConfirm} textColor={theme.colors.error}>Confirm</Button>
+                        <Button onPress={executeConfirm} textColor={theme.colors.error}>Confirm</Button>
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
