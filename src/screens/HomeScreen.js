@@ -204,6 +204,13 @@ const HomeScreen = ({ navigation }) => {
             icon: 'whatsapp',
             screen: 'WhatsAppManager',
         },
+        {
+            id: 6,
+            title: 'Campaigns',
+            subtitle: 'Ad Manager',
+            icon: 'bullhorn',
+            screen: 'Campaigns',
+        },
     ];
 
     return (

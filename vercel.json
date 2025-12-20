@@ -12,6 +12,10 @@
         {
             "src": "api/whatsapp.js",
             "use": "@vercel/node"
+        },
+        {
+            "src": "api/campaigns.js",
+            "use": "@vercel/node"
         }
     ],
     "routes": [
@@ -26,6 +30,10 @@
         {
             "src": "/api/whatsapp",
             "dest": "/api/whatsapp.js"
+        },
+        {
+            "src": "/api/campaigns",
+            "dest": "/api/campaigns.js"
         }
     ]
 }

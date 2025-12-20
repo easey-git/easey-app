@@ -11,6 +11,7 @@ import StatsScreen from './src/screens/StatsScreen';
 import FirestoreViewerScreen from './src/screens/FirestoreViewerScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import WhatsAppManagerScreen from './src/screens/WhatsAppManagerScreen';
+import CampaignsScreen from './src/screens/CampaignsScreen';
 import { theme } from './src/theme/theme';
 import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -200,6 +201,11 @@ function AppNavigator() {
                 component={SettingsScreen}
                 options={{ title: 'Settings' }}
               />
+              <Stack.Screen
+                name="Campaigns"
+                component={CampaignsScreen}
+                options={{ title: 'Campaigns' }}
+              />
             </>
           )}
         </Stack.Navigator>
@@ -217,10 +223,12 @@ function Main() {
 
   useEffect(() => {
     if (user) {
+      // Only attempt push notifications if on a physical device to avoid Expo Go warnings
+      // logic is handled inside registerForPushNotificationsAsync but we can add a guard here too
       if (notificationsEnabled) {
-        registerForPushNotificationsAsync(user.uid);
+        registerForPushNotificationsAsync(user.uid).catch(err => console.log("Push registration failed (expected in Expo Go):", err.message));
       } else {
-        unregisterPushNotificationsAsync();
+        unregisterPushNotificationsAsync().catch(() => { });
       }
     }
   }, [user, notificationsEnabled]);
