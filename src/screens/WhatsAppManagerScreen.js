@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions, Linking } from 'react-native';
+import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList } from 'react-native';
 import { Text, Surface, Appbar, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip } from 'react-native-paper';
 import { BarChart } from 'react-native-gifted-charts';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit } from 'firebase/firestore';
@@ -102,7 +102,17 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         if (!selectedCustomer || !selectedCustomer.phone) return;
 
         setChatLoading(true);
-        const phoneDigits = selectedCustomer.phone.replace(/\D/g, '').slice(-10);
+
+        // Use normalized phone if available, otherwise calculate it matching backend logic
+        let phoneDigits = selectedCustomer.phoneNormalized;
+
+        if (!phoneDigits && selectedCustomer.phone) {
+            let p = selectedCustomer.phone.replace(/\D/g, '');
+            if (p.length === 10) {
+                p = '91' + p;
+            }
+            phoneDigits = p;
+        }
 
         const qChat = query(
             collection(db, "whatsapp_messages"),
@@ -138,14 +148,12 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
         setSendingId(order.id);
         try {
-            let phone = order.phone.replace(/\D/g, '');
-            if (phone.length === 10) phone = '91' + phone;
-
+            // Backend handles normalization (e.g. adding 91 prefix)
             const response = await fetch('/api/whatsapp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    to: phone,
+                    to: order.phone,
                     templateName: 'order_auto_confirmation',
                     languageCode: 'en_US',
                     components: [
@@ -277,16 +285,23 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             displayedOrders = displayedOrders.filter(o => o.verificationStatus === filterStatus);
         }
 
-        const getStatusColor = (status) => {
-            switch (status) {
-                case 'approved': return '#4ade80'; // Green
-                case 'cancelled': return theme.colors.error; // Red
-                case 'address_change_requested': return '#f59e0b'; // Orange
-                case 'verified_pending_address': return '#3b82f6'; // Blue
-                case 'reschedule_requested': return '#8b5cf6'; // Purple
-                default: return theme.colors.outline;
-            }
-        };
+        return (
+            <FlatList
+                data={displayedOrders}
+                renderItem={renderItem}
+                keyExtractor={item => item.id}
+                contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+                ListHeaderComponent={renderHeader}
+                ListEmptyComponent={() => (
+                    <Text style={{ textAlign: 'center', marginTop: 20, color: theme.colors.onSurfaceVariant }}>No orders found.</Text>
+                )}
+            />
+        );
+    };
+
+    const renderHeader = React.useCallback(() => {
+        const pendingOrders = codOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
+        const updateOrders = codOrders.filter(o => o.verificationStatus && o.verificationStatus !== 'pending');
 
         const filterOptions = [
             { label: 'All', value: 'all' },
@@ -296,13 +311,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             { label: 'Verified (Pending Addr)', value: 'verified_pending_address' },
         ];
 
-        const getStatusLabel = (status) => {
-            if (!status) return 'Unverified';
-            return status.replace(/_/g, ' ').toUpperCase();
-        };
-
         return (
-            <ScrollView style={styles.tabContent}>
+            <View>
                 <View style={{ marginBottom: 16 }}>
                     <SegmentedButtons
                         value={codTab}
@@ -323,7 +333,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 onPress={() => setFilterStatus(option.value)}
                                 showSelectedOverlay
                                 mode="outlined"
-                                style={{ backgroundColor: filterStatus === option.value ? theme.colors.secondaryContainer : 'transparent' }}
+                                style={{ backgroundColor: filterStatus === option.value ? theme.colors.secondaryContainer : 'transparent', marginRight: 8 }}
                             >
                                 {option.label}
                             </Chip>
@@ -339,76 +349,18 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             : "Orders with customer activity or manual updates."}
                     </Text>
                 </Surface>
-
-                {displayedOrders.map((order) => (
-                    <Surface key={order.id} style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <View style={{ flex: 1 }}>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order #{order.orderNumber}</Text>
-                                <Text variant="bodyMedium">{order.customerName}</Text>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>₹{order.totalPrice} • {order.city}</Text>
-                                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                                    {order.updatedAt?.toDate ? order.updatedAt.toDate().toLocaleString() : ''}
-                                </Text>
-                            </View>
-                            <Badge style={{ backgroundColor: getStatusColor(order.verificationStatus), alignSelf: 'flex-start', marginLeft: 8 }}>
-                                {getStatusLabel(order.verificationStatus)}
-                            </Badge>
-                        </View>
-
-                        <View style={styles.cardActions}>
-                            <Button
-                                mode="text"
-                                icon="message-text-outline"
-                                compact
-                                onPress={() => openChat(order)}
-                            >
-                                Chat
-                            </Button>
-
-                            {/* Mark As Menu */}
-                            <View>
-                                <Button
-                                    mode="text"
-                                    icon="pencil"
-                                    compact
-                                    onPress={() => setMenuVisible(order.id)}
-                                >
-                                    Mark As
-                                </Button>
-
-                                <Portal>
-                                    <Dialog visible={menuVisible === order.id} onDismiss={() => setMenuVisible(null)}>
-                                        <Dialog.Title>Update Status for #{order.orderNumber}</Dialog.Title>
-                                        <Dialog.Content>
-                                            <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => handleManualStatusUpdate(order.id, 'approved')}>
-                                                Mark as Approved
-                                            </Button>
-                                            <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => handleManualStatusUpdate(order.id, 'cancelled')} textColor={theme.colors.error}>
-                                                Mark as Cancelled
-                                            </Button>
-                                            <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => handleManualStatusUpdate(order.id, 'address_change_requested')}>
-                                                Address Change Requested
-                                            </Button>
-                                            <Button mode="outlined" onPress={() => handleManualStatusUpdate(order.id, 'pending')}>
-                                                Reset to Pending
-                                            </Button>
-                                        </Dialog.Content>
-                                        <Dialog.Actions>
-                                            <Button onPress={() => setMenuVisible(null)}>Cancel</Button>
-                                        </Dialog.Actions>
-                                    </Dialog>
-                                </Portal>
-                            </View>
-                        </View>
-                    </Surface>
-                ))}
-                {displayedOrders.length === 0 && (
-                    <Text style={{ textAlign: 'center', marginTop: 20, color: theme.colors.onSurfaceVariant }}>No orders found.</Text>
-                )}
-            </ScrollView>
+            </View>
         );
-    };
+    }, [codTab, codOrders, filterStatus, theme]);
+
+    const renderItem = React.useCallback(({ item }) => (
+        <CODOrderItem
+            order={item}
+            theme={theme}
+            onOpenChat={openChat}
+            onOpenMenu={setMenuVisible}
+        />
+    ), [theme, openChat, setMenuVisible]);
 
     const renderAbandoned = () => (
         <ScrollView style={styles.tabContent}>
@@ -472,6 +424,30 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
             {/* Chat Dialog */}
             <Portal>
+                <Dialog visible={!!menuVisible} onDismiss={() => setMenuVisible(null)}>
+                    <Dialog.Title>Update Status</Dialog.Title>
+                    <Dialog.Content>
+                        <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'approved')}>
+                            Mark as Approved
+                        </Button>
+                        <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'cancelled')} textColor={theme.colors.error}>
+                            Mark as Cancelled
+                        </Button>
+                        <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'address_change_requested')}>
+                            Address Change Requested
+                        </Button>
+                        <Button mode="outlined" onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'pending')}>
+                            Reset to Pending
+                        </Button>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setMenuVisible(null)}>Cancel</Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
+
+            {/* Chat Dialog */}
+            <Portal>
                 <Dialog visible={chatDialogVisible} onDismiss={() => setChatDialogVisible(false)} style={{ maxHeight: '80%' }}>
                     <Dialog.Title>
                         {selectedCustomer?.customerName || 'Customer'}
@@ -509,6 +485,62 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         </View>
     );
 };
+
+const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu }) => {
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'approved': return '#4ade80'; // Green
+            case 'cancelled': return theme.colors.error; // Red
+            case 'address_change_requested': return '#f59e0b'; // Orange
+            case 'verified_pending_address': return '#3b82f6'; // Blue
+            case 'reschedule_requested': return '#8b5cf6'; // Purple
+            default: return theme.colors.outline;
+        }
+    };
+
+    const getStatusLabel = (status) => {
+        if (!status) return 'Unverified';
+        return status.replace(/_/g, ' ').toUpperCase();
+    };
+
+    return (
+        <Surface style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1 }}>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order #{order.orderNumber}</Text>
+                    <Text variant="bodyMedium">{order.customerName}</Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>₹{order.totalPrice} • {order.city}</Text>
+                    <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                        {order.updatedAt?.toDate ? order.updatedAt.toDate().toLocaleString() : ''}
+                    </Text>
+                </View>
+                <Badge style={{ backgroundColor: getStatusColor(order.verificationStatus), alignSelf: 'flex-start', marginLeft: 8 }}>
+                    {getStatusLabel(order.verificationStatus)}
+                </Badge>
+            </View>
+
+            <View style={styles.cardActions}>
+                <Button
+                    mode="text"
+                    icon="message-text-outline"
+                    compact
+                    onPress={() => onOpenChat(order)}
+                >
+                    Chat
+                </Button>
+
+                <Button
+                    mode="text"
+                    icon="pencil"
+                    compact
+                    onPress={() => onOpenMenu(order.id)}
+                >
+                    Mark As
+                </Button>
+            </View>
+        </Surface>
+    );
+});
 
 const styles = StyleSheet.create({
     container: { flex: 1 },

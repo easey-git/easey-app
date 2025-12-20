@@ -13,8 +13,46 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 // ---------------------------------------------------------
+// CONSTANTS & CONFIG
+// ---------------------------------------------------------
+const CONSTANTS = {
+    TEMPLATES: {
+        COD_CONFIRMATION: 'cod_auto_confirmation',
+        ORDER_CONFIRM_SCHEDULE: 'order_confirm_auto_schedule',
+        COD_CONFIRMED: 'cod_confirmed',
+        UPDATE_ADDRESS: 'update_address',
+        COD_CANCEL: 'cod_cancel',
+        CART_RECOVERY: 'cart_recovery'
+    },
+    PAYLOADS: {
+        CONFIRM_YES: ['CONFIRM_COD_YES', 'Confirm Order'],
+        CONFIRM_NO: ['CONFIRM_COD_NO', 'Cancel', 'cancel'],
+        ADDRESS_CORRECT: ['ADDRESS_CORRECT', 'Confirm Address', 'Yes, Correct', 'Correct'],
+        ADDRESS_EDIT: ['ADDRESS_EDIT', 'Make Changes', 'Edit Address']
+    },
+    DEFAULT_COUNTRY_CODE: '91'
+};
+
+// ---------------------------------------------------------
 // HELPERS
 // ---------------------------------------------------------
+
+/**
+ * Normalizes phone number to E.164 format (digits only) without leading +.
+ * Defaults to India (91) if no country code is detected on 10-digit numbers.
+ */
+const normalizePhone = (phone) => {
+    if (!phone) return null;
+    let p = phone.toString().replace(/\D/g, '');
+
+    // If 10 digits, assume default country code
+    if (p.length === 10) {
+        p = `${CONSTANTS.DEFAULT_COUNTRY_CODE}${p}`;
+    }
+    // If 12 digits and starts with 91, it's already good (India specific check, can be generalized)
+
+    return p;
+};
 
 /**
  * Sends a WhatsApp Template Message.
@@ -23,7 +61,10 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
-    if (!token || !phoneId || !to) return;
+    if (!token || !phoneId || !to) {
+        console.error('WhatsApp Config Error: Missing token, phoneId, or recipient.');
+        return;
+    }
 
     try {
         const url = `https://graph.facebook.com/v17.0/${phoneId}/messages`;
@@ -49,7 +90,7 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
 
         const data = await response.json();
         if (!response.ok) {
-            console.error(`WhatsApp Error (${templateName}):`, data);
+            console.error(`WhatsApp Error (${templateName}):`, JSON.stringify(data));
             return;
         }
 
@@ -58,7 +99,7 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
         // Log to Firestore (Fire & Forget)
         db.collection('whatsapp_messages').add({
             phone: to,
-            phoneNormalized: to.replace(/\D/g, '').slice(-10),
+            phoneNormalized: normalizePhone(to), // Store normalized for querying
             direction: 'outbound',
             type: 'template',
             body: `Auto-Template: ${templateName}`,
@@ -81,7 +122,10 @@ const sendFCMNotifications = async (title, body, dataPayload) => {
         if (tokensSnapshot.empty) return;
 
         const pushTokens = tokensSnapshot.docs.map(doc => doc.data().token);
-        const messages = pushTokens.map(token => ({
+        // Deduplicate tokens
+        const uniqueTokens = [...new Set(pushTokens)];
+
+        const messages = uniqueTokens.map(token => ({
             token: token,
             notification: { title, body },
             android: {
@@ -101,18 +145,10 @@ const sendFCMNotifications = async (title, body, dataPayload) => {
         }
 
         await Promise.all(batches);
-        console.log(`Sent FCM notifications to ${pushTokens.length} devices.`);
+        console.log(`Sent FCM notifications to ${uniqueTokens.length} devices.`);
     } catch (error) {
         console.error('Error sending FCM:', error);
     }
-};
-
-/**
- * Normalizes phone number to last 10 digits.
- */
-const normalizePhone = (phone) => {
-    if (!phone) return null;
-    return phone.replace(/\D/g, '').slice(-10);
 };
 
 // ---------------------------------------------------------
@@ -122,7 +158,12 @@ const normalizePhone = (phone) => {
 module.exports = async (req, res) => {
     // 1. WhatsApp Webhook Verification
     if (req.method === 'GET' && req.query['hub.mode'] === 'subscribe') {
-        const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'easeycrm_whatsapp_verify';
+        const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+        if (!verifyToken) {
+            console.error('WHATSAPP_WEBHOOK_VERIFY_TOKEN is not set in environment variables.');
+            return res.status(500).send('Server Configuration Error');
+        }
+
         if (req.query['hub.verify_token'] === verifyToken) {
             return res.status(200).send(req.query['hub.challenge']);
         }
@@ -138,7 +179,7 @@ module.exports = async (req, res) => {
 
             if (value?.messages?.[0]) {
                 const message = value.messages[0];
-                const senderPhone = message.from;
+                const senderPhone = message.from; // This is usually normalized by WhatsApp (e.g., 919876543210)
                 const phoneNormalized = normalizePhone(senderPhone);
                 const msgId = message.id;
                 const type = message.type;
@@ -161,7 +202,7 @@ module.exports = async (req, res) => {
                     direction: 'inbound',
                     type,
                     body,
-                    payload, // Log payload for debugging
+                    payload,
                     raw: JSON.stringify(message),
                     timestamp: admin.firestore.Timestamp.now()
                 });
@@ -169,25 +210,31 @@ module.exports = async (req, res) => {
                 // ---------------------------------------------------------
                 // AUTOMATION LOGIC
                 // ---------------------------------------------------------
-                if (type === 'button') {
+                if (type === 'button' || type === 'text') {
                     const ordersRef = db.collection('orders');
 
-                    // Helper to find latest COD order
+                    // Helper to find latest COD order using INDEXED QUERY
+                    // Requires Composite Index: orders [phoneNormalized: ASC, createdAt: DESC]
                     const findLatestOrder = async () => {
                         const snapshot = await ordersRef
+                            .where('phoneNormalized', '==', phoneNormalized)
+                            .where('status', '==', 'COD')
                             .orderBy('createdAt', 'desc')
-                            .limit(20) // Limit search space for performance
+                            .limit(1)
                             .get();
 
-                        return snapshot.docs.find(doc => {
-                            const data = doc.data();
-                            const p = normalizePhone(data.phone);
-                            return p === phoneNormalized && data.status === 'COD';
-                        });
+                        if (snapshot.empty) return null;
+                        return snapshot.docs[0];
                     };
 
+                    // Check Payloads
+                    const isConfirmYes = CONSTANTS.PAYLOADS.CONFIRM_YES.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_YES.includes(body);
+                    const isAddressCorrect = CONSTANTS.PAYLOADS.ADDRESS_CORRECT.includes(payload) || CONSTANTS.PAYLOADS.ADDRESS_CORRECT.includes(body);
+                    const isAddressEdit = CONSTANTS.PAYLOADS.ADDRESS_EDIT.includes(payload) || CONSTANTS.PAYLOADS.ADDRESS_EDIT.includes(body);
+                    const isCancel = CONSTANTS.PAYLOADS.CONFIRM_NO.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_NO.includes(body.toLowerCase());
+
                     // CASE 1: Confirm Order (Step 1)
-                    if (payload === 'CONFIRM_COD_YES' || payload === 'Confirm Order' || body === 'Confirm Order') {
+                    if (isConfirmYes) {
                         let messagePayload = null;
 
                         await db.runTransaction(async (t) => {
@@ -210,11 +257,11 @@ module.exports = async (req, res) => {
                                 updatedAt: admin.firestore.Timestamp.now()
                             });
 
-                            // Prepare Message (Don't send yet)
+                            // Prepare Message
                             const address = `${data.address1}, ${data.city}, ${data.state || ''}`;
                             messagePayload = {
                                 to: senderPhone,
-                                template: 'order_confirm_auto_schedule',
+                                template: CONSTANTS.TEMPLATES.ORDER_CONFIRM_SCHEDULE,
                                 components: [
                                     {
                                         type: 'body',
@@ -229,14 +276,13 @@ module.exports = async (req, res) => {
                             };
                         });
 
-                        // Send Message OUTSIDE transaction
                         if (messagePayload) {
                             await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
                         }
                     }
 
                     // CASE 2: Address Correct (Step 2)
-                    else if (payload === 'ADDRESS_CORRECT' || payload === 'Confirm Address' || body === 'Confirm Address' || body === 'Yes, Correct' || body === 'Correct') {
+                    else if (isAddressCorrect) {
                         let messagePayload = null;
 
                         await db.runTransaction(async (t) => {
@@ -256,7 +302,7 @@ module.exports = async (req, res) => {
 
                             messagePayload = {
                                 to: senderPhone,
-                                template: 'cod_confirmed',
+                                template: CONSTANTS.TEMPLATES.COD_CONFIRMED,
                                 components: [
                                     {
                                         type: 'body',
@@ -272,21 +318,21 @@ module.exports = async (req, res) => {
                     }
 
                     // CASE 3: Make Changes (Step 2)
-                    else if (payload === 'ADDRESS_EDIT' || payload === 'Make Changes' || body === 'Make Changes' || body === 'Edit Address') {
+                    else if (isAddressEdit) {
                         const orderDoc = await findLatestOrder();
                         if (orderDoc) {
                             await ordersRef.doc(orderDoc.id).update({
                                 verificationStatus: 'address_change_requested',
                                 updatedAt: admin.firestore.Timestamp.now()
                             });
-                            await sendWhatsAppMessage(senderPhone, 'update_address', [
+                            await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.UPDATE_ADDRESS, [
                                 { type: 'body', parameters: [{ type: 'text', text: orderDoc.data().customerName || 'Customer' }] }
                             ]);
                         }
                     }
 
                     // CASE 4: Cancel Order
-                    else if (payload === 'CONFIRM_COD_NO' || payload === 'Cancel' || body === 'Cancel' || payload === 'cancel' || body === 'cancel') {
+                    else if (isCancel) {
                         const orderDoc = await findLatestOrder();
                         if (orderDoc) {
                             await ordersRef.doc(orderDoc.id).update({
@@ -294,7 +340,7 @@ module.exports = async (req, res) => {
                                 verificationStatus: 'cancelled',
                                 updatedAt: admin.firestore.Timestamp.now()
                             });
-                            await sendWhatsAppMessage(senderPhone, 'cod_cancel', [
+                            await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.COD_CANCEL, [
                                 {
                                     type: 'body', parameters: [
                                         { type: 'text', text: orderDoc.data().customerName || 'Customer' },
@@ -336,13 +382,13 @@ module.exports = async (req, res) => {
                     eventType,
                     phoneNormalized,
                     updatedAt: admin.firestore.Timestamp.now(),
-                    rawJson: JSON.stringify(data) // Keep raw data for debugging if needed
+                    rawJson: JSON.stringify(data)
                 }, { merge: true });
 
                 // Abandoned Cart Recovery
                 if (eventType === 'ABANDONED' && phoneNormalized && data.total_price > 0) {
                     const checkoutUrl = data.cart_attributes?.landing_page_url || `https://yourstore.com/cart`;
-                    await sendWhatsAppMessage(`91${phoneNormalized}`, 'cart_recovery', [
+                    await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, [
                         {
                             type: 'body',
                             parameters: [
@@ -369,7 +415,8 @@ module.exports = async (req, res) => {
             if (data.order_number) {
                 const orderId = String(data.id);
                 const orderRef = db.collection("orders").doc(orderId);
-                const phoneNormalized = normalizePhone(data.phone || data.customer?.phone || data.shipping_address?.phone);
+                const rawPhone = data.phone || data.customer?.phone || data.shipping_address?.phone;
+                const phoneNormalized = normalizePhone(rawPhone);
 
                 // 1. Save Order (Idempotent Set)
                 const orderData = {
@@ -379,7 +426,8 @@ module.exports = async (req, res) => {
                     currency: data.currency || 'INR',
                     customerName: data.customer ? `${data.customer.first_name} ${data.customer.last_name}` : "Guest",
                     email: data.email || null,
-                    phone: data.phone || data.customer?.phone || null,
+                    phone: rawPhone || null,
+                    phoneNormalized: phoneNormalized, // CRITICAL: Save normalized phone for querying
                     status: (data.gateway?.toLowerCase().includes('cod') || data.payment_gateway_names?.some(n => n.toLowerCase().includes('cod'))) ? "COD" : "Paid",
                     items: data.line_items?.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })) || [],
                     address1: data.shipping_address?.address1 || "",
@@ -425,8 +473,8 @@ module.exports = async (req, res) => {
 
                         const itemName = orderData.items[0]?.name || 'Your Order';
                         messagePayload = {
-                            to: `91${phoneNormalized}`,
-                            template: 'cod_auto_confirmation',
+                            to: phoneNormalized,
+                            template: CONSTANTS.TEMPLATES.COD_CONFIRMATION,
                             components: [
                                 {
                                     type: 'body',

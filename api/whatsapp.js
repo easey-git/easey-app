@@ -1,4 +1,3 @@
-// const fetch = require('node-fetch'); // Removed: node-fetch v3 is ESM-only
 const admin = require("firebase-admin");
 
 // Initialize Firebase Admin if it hasn't been initialized yet
@@ -9,6 +8,26 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+
+// ---------------------------------------------------------
+// HELPERS
+// ---------------------------------------------------------
+
+/**
+ * Normalizes phone number to E.164 format (digits only) without leading +.
+ * Defaults to India (91) if no country code is detected on 10-digit numbers.
+ */
+const normalizePhone = (phone) => {
+    if (!phone) return null;
+    let p = phone.toString().replace(/\D/g, '');
+
+    // If 10 digits, assume default country code (91)
+    if (p.length === 10) {
+        p = `91${p}`;
+    }
+
+    return p;
+};
 
 module.exports = async (req, res) => {
     // Enable CORS
@@ -42,13 +61,18 @@ module.exports = async (req, res) => {
         return res.status(500).json({ error: 'Server configuration error: Missing WhatsApp credentials' });
     }
 
+    // Normalize Phone Number
+    const normalizedTo = normalizePhone(to);
+    if (!normalizedTo) {
+        return res.status(400).json({ error: 'Invalid phone number format' });
+    }
+
     try {
-        // const { default: fetch } = await import('node-fetch'); // Removed: Use native fetch
         const url = `https://graph.facebook.com/v17.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
         const payload = {
             messaging_product: "whatsapp",
-            to: to,
+            to: normalizedTo,
             type: "template",
             template: {
                 name: templateName,
@@ -80,10 +104,9 @@ module.exports = async (req, res) => {
 
         // Log Outbound Message to Firestore
         try {
-            const phoneNormalized = to.replace(/\D/g, '').slice(-10);
             await db.collection('whatsapp_messages').add({
-                phone: to,
-                phoneNormalized: phoneNormalized,
+                phone: normalizedTo,
+                phoneNormalized: normalizedTo, // Already normalized
                 direction: 'outbound',
                 type: 'template',
                 body: `Template: ${templateName}`,

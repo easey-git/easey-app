@@ -136,3 +136,13 @@ ui-debug.log
 *.bak
 *.backup
 .vercel
+
+# Secrets (CRITICAL)
+service-account.json
+google-services.json
+*.json
+!package.json
+!package-lock.json
+!vercel.json
+!app.json
+!firebase.json
