@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, Linking } from 'react-native';
-import { Text, Surface, Appbar, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon } from 'react-native-paper';
+import { Text, Surface, Appbar, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip } from 'react-native-paper';
 import { BarChart } from 'react-native-gifted-charts';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -247,6 +247,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     );
 
     const [menuVisible, setMenuVisible] = useState(null); // Store order ID for open menu
+    const [filterStatus, setFilterStatus] = useState('all');
 
     const handleManualStatusUpdate = async (orderId, newStatus) => {
         try {
@@ -270,7 +271,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             o.verificationStatus !== 'pending'
         );
 
-        const displayedOrders = codTab === 'pending' ? pendingOrders : updateOrders;
+        let displayedOrders = codTab === 'pending' ? pendingOrders : updateOrders;
+
+        if (codTab === 'updates' && filterStatus !== 'all') {
+            displayedOrders = displayedOrders.filter(o => o.verificationStatus === filterStatus);
+        }
 
         const getStatusColor = (status) => {
             switch (status) {
@@ -282,6 +287,14 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 default: return theme.colors.outline;
             }
         };
+
+        const filterOptions = [
+            { label: 'All', value: 'all' },
+            { label: 'Approved', value: 'approved' },
+            { label: 'Cancelled', value: 'cancelled' },
+            { label: 'Address Change', value: 'address_change_requested' },
+            { label: 'Verified (Pending Addr)', value: 'verified_pending_address' },
+        ];
 
         const getStatusLabel = (status) => {
             if (!status) return 'Unverified';
@@ -300,6 +313,23 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         ]}
                     />
                 </View>
+
+                {codTab === 'updates' && (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, flexDirection: 'row' }} contentContainerStyle={{ gap: 8 }}>
+                        {filterOptions.map((option) => (
+                            <Chip
+                                key={option.value}
+                                selected={filterStatus === option.value}
+                                onPress={() => setFilterStatus(option.value)}
+                                showSelectedOverlay
+                                mode="outlined"
+                                style={{ backgroundColor: filterStatus === option.value ? theme.colors.secondaryContainer : 'transparent' }}
+                            >
+                                {option.label}
+                            </Chip>
+                        ))}
+                    </ScrollView>
+                )}
 
                 <Surface style={[styles.infoBanner, { backgroundColor: theme.colors.primaryContainer }]}>
                     <Icon source="information" size={20} color={theme.colors.onPrimaryContainer} />
