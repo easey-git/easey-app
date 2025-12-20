@@ -21,10 +21,6 @@
       "icon": "./logo/easey.jpg",
       "package": "com.easey.crm",
       "googleServicesFile": "./google-services.json",
-      "adaptiveIcon": {
-        "foregroundImage": "./logo/easey.jpg",
-        "backgroundColor": "#ffffff"
-      },
       "permissions": [
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED"
@@ -45,14 +41,7 @@
       "policy": "appVersion"
     },
     "plugins": [
-      [
-        "expo-notifications",
-        {
-          "sounds": [
-            "./assets/sounds/live.mp3"
-          ]
-        }
-      ],
+      "expo-notifications",
       "expo-secure-store",
       "@react-native-firebase/app",
       "@react-native-firebase/messaging"

@@ -133,11 +133,6 @@ const sendFCMNotifications = async (title, body, dataPayload) => {
             },
             android: {
                 priority: 'high',
-                notification: {
-                    sound: 'live',  // No extension for FCM
-                    channelId: 'custom-sound-v5',
-                    priority: 'high',
-                }
             },
             apns: {
                 payload: {

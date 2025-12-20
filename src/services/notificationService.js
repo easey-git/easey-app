@@ -4,7 +4,7 @@ import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import Constants from 'expo-constants';
 
-// Configure how notifications behave when the app is in the foreground
+// Configure notification behavior
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowAlert: true,
@@ -25,27 +25,17 @@ const getMessaging = () => {
     }
 };
 
-// Handle FCM messages when app is in foreground
 const messaging = getMessaging();
 
+// Handle foreground FCM messages
 if (messaging) {
     messaging().onMessage(async remoteMessage => {
-        // Display notification using Expo Notifications
-        await Notifications.scheduleNotificationAsync({
-            content: {
-                title: remoteMessage.notification?.title || 'New Notification',
-                body: remoteMessage.notification?.body || '',
-                sound: 'live',
-                channelId: 'custom-sound-v5',
-                data: remoteMessage.data,
-            },
-            trigger: null, // Show immediately
-        });
+        // FCM handles the notification display automatically
+        // We don't need to manually schedule it
     });
 
-    // Handle background messages
     messaging().setBackgroundMessageHandler(async remoteMessage => {
-        // Background message handled by FCM
+        // Background messages are handled by FCM automatically
     });
 }
 
@@ -59,26 +49,17 @@ export async function registerForPushNotificationsAsync(userId) {
     let token;
 
     if (Platform.OS === 'android') {
-        // Create notification channel with custom sound
-        await Notifications.setNotificationChannelAsync('custom-sound-v5', {
-            name: 'Live Notifications',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF231F7C',
-            sound: 'live', // Raw resource name without extension
-            enableVibrate: true,
-            enableLights: true,
-        });
-
+        // Create a single notification channel
         await Notifications.setNotificationChannelAsync('default', {
-            name: 'default',
+            name: 'Default',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
             lightColor: '#FF231F7C',
+            sound: 'default',
         });
     }
 
-    // Request permission (works on both Android and iOS)
+    // Request permissions
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
@@ -92,13 +73,12 @@ export async function registerForPushNotificationsAsync(userId) {
         return;
     }
 
-    // Get FCM token (works in production builds)
+    // Get FCM token
     token = await messaging().getToken();
 
     // Save token to Firestore
     if (token) {
         try {
-            // Use token as doc ID to prevent duplicates
             const tokenData = {
                 token: token,
                 updatedAt: serverTimestamp(),
@@ -123,9 +103,9 @@ export async function sendLocalNotification(title, body) {
         content: {
             title,
             body,
-            sound: 'default', // Uses the default OS notification sound
+            sound: 'default',
         },
-        trigger: null, // Send immediately
+        trigger: null,
     });
 }
 
