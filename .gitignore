@@ -139,8 +139,8 @@ ui-debug.log
 
 # Secrets (CRITICAL)
 service-account.json
-google-services.json
 *.json
+!google-services.json
 !package.json
 !package-lock.json
 !vercel.json
