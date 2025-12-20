@@ -5,7 +5,7 @@ import { collection, getDocs, deleteDoc, updateDoc, doc, limit, query, writeBatc
 import { db } from '../config/firebase';
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
-    const [collections, setCollections] = useState(['orders', 'checkouts', 'push_tokens']);
+    const [collections, setCollections] = useState(['orders', 'checkouts', 'push_tokens', 'whatsapp_messages']);
     const [selectedCollection, setSelectedCollection] = useState(route.params?.collection || 'orders');
     const [documents, setDocuments] = useState([]);
     const [selectedDoc, setSelectedDoc] = useState(null);
@@ -266,7 +266,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
                 <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
-                <Appbar.Content title="Database" titleStyle={{ fontWeight: 'bold', fontSize: 20 }} />
+                <Appbar.Content title="Firebase" titleStyle={{ fontWeight: 'bold', fontSize: 20 }} />
 
                 {/* Select All Checkbox */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
@@ -433,6 +433,46 @@ const DocItem = React.memo(({ item, isSelected, selectedCollection, theme, onPre
                             </Text>
                             <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
                                 User: {item.userId ? item.userId.substring(0, 8) + '...' : 'N/A'}
+                            </Text>
+                        </View>
+                        <IconButton icon="chevron-right" size={20} />
+                    </View>
+                </TouchableOpacity>
+            </Surface>
+        );
+    }
+
+    // Special rendering for WhatsApp Messages
+    if (selectedCollection === 'whatsapp_messages') {
+        const isInbound = item.direction === 'inbound';
+        return (
+            <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
+                <TouchableOpacity onPress={() => onPress(item)} onLongPress={() => onToggle(item.id)} delayLongPress={200}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+                        <Checkbox
+                            status={isSelected ? 'checked' : 'unchecked'}
+                            onPress={() => onToggle(item.id)}
+                        />
+                        <Avatar.Icon
+                            size={40}
+                            icon={isInbound ? "arrow-bottom-left" : "arrow-top-right"}
+                            style={{ backgroundColor: isInbound ? theme.colors.secondaryContainer : theme.colors.tertiaryContainer, marginLeft: 4 }}
+                            color={isInbound ? theme.colors.onSecondaryContainer : theme.colors.onTertiaryContainer}
+                        />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                    {isInbound ? 'Received' : 'Sent'}
+                                </Text>
+                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
+                                    {item.timestamp?.toDate ? item.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                </Text>
+                            </View>
+                            <Text variant="bodySmall" numberOfLines={1} style={{ color: theme.colors.onSurfaceVariant }}>
+                                {item.body || item.templateName || 'No Content'}
+                            </Text>
+                            <Text variant="labelSmall" style={{ color: theme.colors.outline, fontFamily: 'monospace' }}>
+                                {item.phoneNormalized || item.phone}
                             </Text>
                         </View>
                         <IconButton icon="chevron-right" size={20} />

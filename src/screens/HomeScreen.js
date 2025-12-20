@@ -192,7 +192,7 @@ const HomeScreen = ({ navigation }) => {
         },
         {
             id: 4,
-            title: 'Database',
+            title: 'Firebase',
             subtitle: 'Raw Data',
             icon: 'database',
             screen: 'DatabaseManager',
