@@ -266,10 +266,10 @@ module.exports = async (req, res) => {
                                     {
                                         type: 'body',
                                         parameters: [
-                                            { type: 'text', text: String(data.orderNumber) },
-                                            { type: 'text', text: address },
-                                            { type: 'text', text: String(data.zip) },
-                                            { type: 'text', text: String(data.phone) }
+                                            { type: 'text', text: String(data.orderNumber || '') },
+                                            { type: 'text', text: address || 'Your Address' },
+                                            { type: 'text', text: String(data.zip || '') },
+                                            { type: 'text', text: String(data.phone || '') }
                                         ]
                                     }
                                 ]
@@ -306,7 +306,7 @@ module.exports = async (req, res) => {
                                 components: [
                                     {
                                         type: 'body',
-                                        parameters: [{ type: 'text', text: String(data.orderNumber) }]
+                                        parameters: [{ type: 'text', text: String(data.orderNumber || '') }]
                                     }
                                 ]
                             };
@@ -344,7 +344,7 @@ module.exports = async (req, res) => {
                                 {
                                     type: 'body', parameters: [
                                         { type: 'text', text: orderDoc.data().customerName || 'Customer' },
-                                        { type: 'text', text: String(orderDoc.data().orderNumber) }
+                                        { type: 'text', text: String(orderDoc.data().orderNumber || '') }
                                     ]
                                 }
                             ]);
@@ -425,7 +425,7 @@ module.exports = async (req, res) => {
                             type: 'body',
                             parameters: [
                                 { type: 'text', text: data.first_name || 'Shopper' },
-                                { type: 'text', text: String(data.total_price) },
+                                { type: 'text', text: String(data.total_price || '0') },
                                 { type: 'text', text: checkoutUrl }
                             ]
                         }
