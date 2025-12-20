@@ -20,7 +20,15 @@
     "android": {
       "icon": "./logo/easey.jpg",
       "package": "com.easey.crm",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./logo/easey.jpg",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

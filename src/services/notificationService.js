@@ -35,7 +35,7 @@ if (messaging) {
             content: {
                 title: remoteMessage.notification?.title || 'New Notification',
                 body: remoteMessage.notification?.body || '',
-                sound: 'live.mp3',
+                sound: 'live',
                 channelId: 'custom-sound-v5',
                 data: remoteMessage.data,
             },
@@ -65,7 +65,7 @@ export async function registerForPushNotificationsAsync(userId) {
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
             lightColor: '#FF231F7C',
-            sound: 'live.mp3',
+            sound: 'live', // Raw resource name without extension
             enableVibrate: true,
             enableLights: true,
         });
