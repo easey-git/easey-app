@@ -1,52 +1,66 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
-import { Text, useTheme, Surface, Appbar, SegmentedButtons, Icon, ProgressBar, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, RefreshControl, Modal, TouchableOpacity } from 'react-native';
+import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Menu, Button, Divider, IconButton } from 'react-native-paper';
 
 /**
- * CampaignsScreen
+ * CampaignsScreen - Real-time Today's Campaign Performance
  * 
- * Displays active marketing campaigns from the Vercel API.
- * Shows summary metrics (Spend, ROAS, Purchases, CPM) and a detailed list of campaigns.
+ * Features:
+ * - Real-time today's data
+ * - Status filtering (All, Active, Paused, Learning)
+ * - Sorting by ROAS, Spend, Purchases
+ * - Detailed campaign view
+ * - Auto-refresh every 5 minutes
  */
 
-// TODO: Replace with your actual Vercel deployment URL
 const API_URL = 'https://easey-app.vercel.app/api/campaigns';
 
 const CampaignsScreen = ({ navigation }) => {
     const theme = useTheme();
     const [refreshing, setRefreshing] = useState(false);
-    const [timeRange, setTimeRange] = useState('today');
     const [loading, setLoading] = useState(true);
     const [campaigns, setCampaigns] = useState([]);
+    const [filteredCampaigns, setFilteredCampaigns] = useState([]);
     const [summary, setSummary] = useState({
         spend: 0,
         roas: 0,
         purchases: 0,
         cpm: 0
     });
+    const [error, setError] = useState(null);
+
+    // Filtering and Sorting
+    const [statusFilter, setStatusFilter] = useState('ALL');
+    const [sortBy, setSortBy] = useState('roas');
+    const [sortMenuVisible, setSortMenuVisible] = useState(false);
+
+    // Detail Modal
+    const [selectedCampaign, setSelectedCampaign] = useState(null);
+    const [detailModalVisible, setDetailModalVisible] = useState(false);
 
     const fetchCampaigns = useCallback(async () => {
         try {
-            const response = await fetch(API_URL);
+            setError(null);
 
-            // Check content type
-            const contentType = response.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                throw new Error("API returned non-JSON response (likely 404 or 500 HTML page)");
+            const timestamp = Date.now();
+            const response = await fetch(`${API_URL}?_=${timestamp}`, {
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
             }
 
             const data = await response.json();
 
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to fetch campaigns');
-            }
-
             setCampaigns(data.campaigns || []);
             setSummary(data.summary || { spend: 0, roas: 0, purchases: 0, cpm: 0 });
         } catch (error) {
-            console.log('Fetch error:', error.message);
-            // In production, we might want to show a retry button or error message
-            // For now, we just stop loading
+            console.error('[CampaignsScreen] Error:', error.message);
+            setError(error.message);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -57,6 +71,38 @@ const CampaignsScreen = ({ navigation }) => {
         fetchCampaigns();
     }, [fetchCampaigns]);
 
+    // Auto-refresh every 5 minutes
+    useEffect(() => {
+        const interval = setInterval(fetchCampaigns, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, [fetchCampaigns]);
+
+    // Apply filters and sorting
+    useEffect(() => {
+        let filtered = [...campaigns];
+
+        // Filter by status
+        if (statusFilter !== 'ALL') {
+            filtered = filtered.filter(c => c.status === statusFilter);
+        }
+
+        // Sort
+        filtered.sort((a, b) => {
+            switch (sortBy) {
+                case 'roas':
+                    return parseFloat(b.roas) - parseFloat(a.roas);
+                case 'spend':
+                    return b.spend - a.spend;
+                case 'purchases':
+                    return b.purchases - a.purchases;
+                default:
+                    return 0;
+            }
+        });
+
+        setFilteredCampaigns(filtered);
+    }, [campaigns, statusFilter, sortBy]);
+
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         fetchCampaigns();
@@ -64,10 +110,10 @@ const CampaignsScreen = ({ navigation }) => {
 
     const getStatusColor = (status) => {
         switch (status) {
-            case 'ACTIVE': return '#4ade80'; // Green
-            case 'LEARNING': return '#fbbf24'; // Yellow
-            case 'PAUSED': return theme.colors.outline; // Grey
-            case 'REJECTED': return theme.colors.error; // Red
+            case 'ACTIVE': return '#4ade80';
+            case 'LEARNING': return '#fbbf24';
+            case 'PAUSED': return theme.colors.outline;
+            case 'REJECTED': return theme.colors.error;
             default: return theme.colors.primary;
         }
     };
@@ -79,6 +125,20 @@ const CampaignsScreen = ({ navigation }) => {
             case 'google': return 'google';
             default: return 'bullhorn';
         }
+    };
+
+    const getSortLabel = () => {
+        switch (sortBy) {
+            case 'roas': return 'ROAS';
+            case 'spend': return 'Spend';
+            case 'purchases': return 'Purchases';
+            default: return 'Sort';
+        }
+    };
+
+    const openCampaignDetails = (campaign) => {
+        setSelectedCampaign(campaign);
+        setDetailModalVisible(true);
     };
 
     if (loading && !refreshing) {
@@ -93,7 +153,7 @@ const CampaignsScreen = ({ navigation }) => {
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <Appbar.Header style={{ backgroundColor: theme.colors.background }}>
                 <Appbar.BackAction onPress={() => navigation.goBack()} />
-                <Appbar.Content title="Marketing Campaigns" />
+                <Appbar.Content title="Campaigns - Today" />
                 <Appbar.Action icon="refresh" onPress={onRefresh} />
             </Appbar.Header>
 
@@ -101,19 +161,17 @@ const CampaignsScreen = ({ navigation }) => {
                 contentContainerStyle={styles.content}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
             >
-                {/* Date Filter */}
-                <View style={{ marginBottom: 24 }}>
-                    <SegmentedButtons
-                        value={timeRange}
-                        onValueChange={setTimeRange}
-                        buttons={[
-                            { value: 'today', label: 'Today' },
-                            { value: 'yesterday', label: 'Yesterday' },
-                            { value: 'week', label: '7 Days' },
-                        ]}
-                        style={{ backgroundColor: theme.colors.elevation.level1, borderRadius: 20 }}
-                    />
-                </View>
+                {/* Error Message */}
+                {error && (
+                    <Surface style={[styles.errorCard, { backgroundColor: theme.colors.errorContainer }]} elevation={0}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <Icon source="alert-circle" size={20} color={theme.colors.error} />
+                            <Text variant="labelLarge" style={{ marginLeft: 8, color: theme.colors.error, fontWeight: 'bold' }}>Error</Text>
+                        </View>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onErrorContainer, marginBottom: 12 }}>{error}</Text>
+                        <Button mode="contained" onPress={fetchCampaigns} compact>Retry</Button>
+                    </Surface>
+                )}
 
                 {/* Summary Cards */}
                 <View style={styles.statsGrid}>
@@ -123,7 +181,7 @@ const CampaignsScreen = ({ navigation }) => {
                             <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>Ad Spend</Text>
                         </View>
                         <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant }}>
-                            ₹{summary.spend.toLocaleString('en-IN')}
+                            ₹{summary.spend.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                         </Text>
                     </Surface>
 
@@ -160,68 +218,236 @@ const CampaignsScreen = ({ navigation }) => {
                     </Surface>
                 </View>
 
-                <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8, color: theme.colors.onBackground }}>Active Campaigns</Text>
+                {/* Filter and Sort Controls */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 16 }}>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>
+                        Campaigns ({filteredCampaigns.length})
+                    </Text>
+                    <Menu
+                        visible={sortMenuVisible}
+                        onDismiss={() => setSortMenuVisible(false)}
+                        anchor={
+                            <Button
+                                mode="outlined"
+                                icon="sort"
+                                onPress={() => setSortMenuVisible(true)}
+                                compact
+                            >
+                                {getSortLabel()}
+                            </Button>
+                        }
+                    >
+                        <Menu.Item onPress={() => { setSortBy('roas'); setSortMenuVisible(false); }} title="Sort by ROAS" leadingIcon="chart-line" />
+                        <Menu.Item onPress={() => { setSortBy('spend'); setSortMenuVisible(false); }} title="Sort by Spend" leadingIcon="cash" />
+                        <Menu.Item onPress={() => { setSortBy('purchases'); setSortMenuVisible(false); }} title="Sort by Purchases" leadingIcon="cart" />
+                    </Menu>
+                </View>
+
+                {/* Status Filter Chips */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Chip
+                            selected={statusFilter === 'ALL'}
+                            onPress={() => setStatusFilter('ALL')}
+                            style={{ backgroundColor: statusFilter === 'ALL' ? theme.colors.primaryContainer : theme.colors.surfaceVariant }}
+                        >
+                            All
+                        </Chip>
+                        <Chip
+                            selected={statusFilter === 'ACTIVE'}
+                            onPress={() => setStatusFilter('ACTIVE')}
+                            style={{ backgroundColor: statusFilter === 'ACTIVE' ? theme.colors.primaryContainer : theme.colors.surfaceVariant }}
+                        >
+                            Active
+                        </Chip>
+                        <Chip
+                            selected={statusFilter === 'LEARNING'}
+                            onPress={() => setStatusFilter('LEARNING')}
+                            style={{ backgroundColor: statusFilter === 'LEARNING' ? theme.colors.primaryContainer : theme.colors.surfaceVariant }}
+                        >
+                            Learning
+                        </Chip>
+                        <Chip
+                            selected={statusFilter === 'PAUSED'}
+                            onPress={() => setStatusFilter('PAUSED')}
+                            style={{ backgroundColor: statusFilter === 'PAUSED' ? theme.colors.primaryContainer : theme.colors.surfaceVariant }}
+                        >
+                            Paused
+                        </Chip>
+                    </View>
+                </ScrollView>
 
                 {/* Campaign List */}
                 <View style={{ gap: 16 }}>
-                    {campaigns.length === 0 ? (
-                        <Text style={{ textAlign: 'center', color: theme.colors.onSurfaceVariant, marginTop: 20 }}>No active campaigns found.</Text>
+                    {filteredCampaigns.length === 0 ? (
+                        <Surface style={[styles.emptyState, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                            <Icon source="information-outline" size={48} color={theme.colors.onSurfaceVariant} />
+                            <Text variant="titleMedium" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant, fontWeight: 'bold' }}>
+                                No campaigns found
+                            </Text>
+                            <Text variant="bodySmall" style={{ marginTop: 8, color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
+                                {statusFilter !== 'ALL' ? `No ${statusFilter.toLowerCase()} campaigns today` : 'No campaigns running today'}
+                            </Text>
+                        </Surface>
                     ) : (
-                        campaigns.map((campaign) => (
-                            <Surface
-                                key={campaign.id}
-                                style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant, borderWidth: 1 }]}
-                                elevation={0}
-                            >
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                                    <View style={{ flex: 1, marginRight: 8 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                                            <Icon source={getPlatformIcon(campaign.platform)} size={16} color={theme.colors.onSurface} />
-                                            <Text
-                                                variant="titleSmall"
-                                                style={{ fontWeight: 'bold', marginLeft: 8, color: theme.colors.onSurface, flex: 1 }}
-                                                numberOfLines={1}
-                                                ellipsizeMode="tail"
-                                            >
-                                                {campaign.name}
+                        filteredCampaigns.map((campaign) => (
+                            <TouchableOpacity key={campaign.id} onPress={() => openCampaignDetails(campaign)} activeOpacity={0.7}>
+                                <Surface
+                                    style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant, borderWidth: 1 }]}
+                                    elevation={0}
+                                >
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                        <View style={{ flex: 1, marginRight: 8 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                                <Icon source={getPlatformIcon(campaign.platform)} size={16} color={theme.colors.onSurface} />
+                                                <Text
+                                                    variant="titleSmall"
+                                                    style={{ fontWeight: 'bold', marginLeft: 8, color: theme.colors.onSurface, flex: 1 }}
+                                                    numberOfLines={1}
+                                                    ellipsizeMode="tail"
+                                                >
+                                                    {campaign.name}
+                                                </Text>
+                                            </View>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: getStatusColor(campaign.status), marginRight: 6 }} />
+                                                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{campaign.status}</Text>
+                                            </View>
+                                        </View>
+                                        <Surface style={{ backgroundColor: theme.colors.secondaryContainer, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }} elevation={0}>
+                                            <Text variant="labelMedium" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer }}>
+                                                {campaign.roas}x
                                             </Text>
-                                        </View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: getStatusColor(campaign.status), marginRight: 6 }} />
-                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{campaign.status}</Text>
-                                        </View>
+                                        </Surface>
                                     </View>
-                                    <Surface style={{ backgroundColor: theme.colors.secondaryContainer, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }} elevation={0}>
-                                        <Text variant="labelMedium" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer }}>
-                                            {campaign.roas}x
-                                        </Text>
-                                    </Surface>
-                                </View>
 
-                                <View style={styles.metricsRow}>
-                                    <View>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Spend</Text>
-                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{campaign.spend}</Text>
+                                    <View style={styles.metricsRow}>
+                                        <View>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Spend</Text>
+                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{campaign.spend}</Text>
+                                        </View>
+                                        <View>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>CPC</Text>
+                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{campaign.cpc}</Text>
+                                        </View>
+                                        <View>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>CTR</Text>
+                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{campaign.ctr}%</Text>
+                                        </View>
+                                        <View>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Sales</Text>
+                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{campaign.purchases}</Text>
+                                        </View>
                                     </View>
-                                    <View>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>CPC</Text>
-                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{campaign.cpc}</Text>
-                                    </View>
-                                    <View>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>CTR</Text>
-                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{campaign.ctr}%</Text>
-                                    </View>
-                                    <View>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Sales</Text>
-                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{campaign.purchases}</Text>
-                                    </View>
-                                </View>
-                            </Surface>
+                                </Surface>
+                            </TouchableOpacity>
                         ))
                     )}
                 </View>
 
             </ScrollView>
+
+            {/* Campaign Detail Modal */}
+            <Modal
+                visible={detailModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setDetailModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <Surface style={[styles.modalContent, { backgroundColor: theme.colors.surface }]} elevation={5}>
+                        <View style={styles.modalHeader}>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flex: 1 }}>
+                                Campaign Details
+                            </Text>
+                            <IconButton icon="close" onPress={() => setDetailModalVisible(false)} />
+                        </View>
+
+                        {selectedCampaign && (
+                            <ScrollView style={{ flex: 1 }}>
+                                {/* Campaign Name */}
+                                <View style={{ marginBottom: 16 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                        <Icon source={getPlatformIcon(selectedCampaign.platform)} size={24} color={theme.colors.primary} />
+                                        <Text variant="titleMedium" style={{ marginLeft: 8, fontWeight: 'bold', color: theme.colors.onSurface, flex: 1 }}>
+                                            {selectedCampaign.name}
+                                        </Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: getStatusColor(selectedCampaign.status), marginRight: 8 }} />
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{selectedCampaign.status}</Text>
+                                    </View>
+                                </View>
+
+                                <Divider style={{ marginBottom: 16 }} />
+
+                                {/* Key Metrics */}
+                                <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 12, color: theme.colors.onSurface }}>Key Metrics</Text>
+                                <View style={styles.detailGrid}>
+                                    <Surface style={[styles.detailCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                                        <Icon source="cash" size={24} color={theme.colors.primary} />
+                                        <Text variant="labelSmall" style={{ marginTop: 8, color: theme.colors.onSurfaceVariant }}>Total Spend</Text>
+                                        <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{selectedCampaign.spend}</Text>
+                                    </Surface>
+                                    <Surface style={[styles.detailCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                                        <Icon source="chart-line" size={24} color="#4ade80" />
+                                        <Text variant="labelSmall" style={{ marginTop: 8, color: theme.colors.onSurfaceVariant }}>ROAS</Text>
+                                        <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{selectedCampaign.roas}x</Text>
+                                    </Surface>
+                                </View>
+
+                                <View style={styles.detailGrid}>
+                                    <Surface style={[styles.detailCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                                        <Icon source="cart" size={24} color={theme.colors.secondary} />
+                                        <Text variant="labelSmall" style={{ marginTop: 8, color: theme.colors.onSurfaceVariant }}>Purchases</Text>
+                                        <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{selectedCampaign.purchases}</Text>
+                                    </Surface>
+                                    <Surface style={[styles.detailCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                                        <Icon source="currency-inr" size={24} color={theme.colors.tertiary} />
+                                        <Text variant="labelSmall" style={{ marginTop: 8, color: theme.colors.onSurfaceVariant }}>Revenue</Text>
+                                        <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{Math.round(selectedCampaign.revenue)}</Text>
+                                    </Surface>
+                                </View>
+
+                                <Divider style={{ marginVertical: 16 }} />
+
+                                {/* Performance Metrics */}
+                                <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 12, color: theme.colors.onSurface }}>Performance Metrics</Text>
+                                <View style={styles.metricsList}>
+                                    <View style={styles.metricRow}>
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Cost Per Click (CPC)</Text>
+                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{selectedCampaign.cpc}</Text>
+                                    </View>
+                                    <View style={styles.metricRow}>
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Click-Through Rate (CTR)</Text>
+                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{selectedCampaign.ctr}%</Text>
+                                    </View>
+                                    <View style={styles.metricRow}>
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Cost Per Mille (CPM)</Text>
+                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{selectedCampaign.cpm}</Text>
+                                    </View>
+                                    <View style={styles.metricRow}>
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Impressions</Text>
+                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{selectedCampaign.impressions.toLocaleString()}</Text>
+                                    </View>
+                                    <View style={styles.metricRow}>
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Reach</Text>
+                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{selectedCampaign.reach.toLocaleString()}</Text>
+                                    </View>
+                                    <View style={styles.metricRow}>
+                                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Clicks</Text>
+                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{selectedCampaign.clicks.toLocaleString()}</Text>
+                                    </View>
+                                </View>
+                            </ScrollView>
+                        )}
+
+                        <Button mode="contained" onPress={() => setDetailModalVisible(false)} style={{ marginTop: 16 }}>
+                            Close
+                        </Button>
+                    </Surface>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -255,7 +481,54 @@ const styles = StyleSheet.create({
         paddingTop: 12,
         borderTopWidth: 1,
         borderTopColor: 'rgba(0,0,0,0.05)',
-    }
+    },
+    errorCard: {
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 16,
+    },
+    emptyState: {
+        padding: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        maxHeight: '90%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    detailGrid: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 12,
+    },
+    detailCard: {
+        flex: 1,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    metricsList: {
+        gap: 12,
+    },
+    metricRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 8,
+    },
 });
 
 export default CampaignsScreen;
