@@ -273,7 +273,7 @@ const WalletScreen = ({ navigation }) => {
                                     { value: 'month', label: '30 Days' },
                                     { value: 'all', label: 'All Time' },
                                 ]}
-                                style={{ backgroundColor: theme.colors.elevation.level1 }}
+                                style={{ marginBottom: 0 }}
                             />
                         </View>
 
