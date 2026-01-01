@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Image, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Image, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon } from 'react-native-paper';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useSound } from '../context/SoundContext';
+import { ResponsiveContainer } from '../components/ResponsiveContainer';
 
 const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { width } = useWindowDimensions();
+    const isDesktop = width >= 768;
     const { playSound } = useSound();
     const prevOrdersRef = React.useRef(0);
     const [timeRange, setTimeRange] = useState('today');
@@ -23,6 +26,10 @@ const HomeScreen = ({ navigation }) => {
         shiprocket: false,
         shopify: false
     });
+
+    // Dynamic Card Widths
+    const cardWidth = isDesktop ? '23.5%' : '48%';
+    const menuCardWidth = isDesktop ? '23.5%' : '48%';
 
     // Check webhook health
     useEffect(() => {
@@ -215,130 +222,133 @@ const HomeScreen = ({ navigation }) => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0, height: 70, paddingHorizontal: 0 }}>
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', marginLeft: -20 }}>
-                    <Image
-                        source={theme.dark ? require('../../logo/easey-white.png') : require('../../logo/easey-dark.png')}
-                        style={{ width: 180, height: 60, resizeMode: 'contain' }}
-                    />
-                </View>
+            <ResponsiveContainer>
+                <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0, height: 70, paddingHorizontal: 0 }}>
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', marginLeft: isDesktop ? 0 : -20 }}>
+                        <Image
+                            source={theme.dark ? require('../../logo/easey-white.png') : require('../../logo/easey-dark.png')}
+                            style={{ width: 180, height: 60, resizeMode: 'contain' }}
+                        />
+                    </View>
 
-            </Appbar.Header>
+                </Appbar.Header>
 
-            <ScrollView
-                contentContainerStyle={styles.content}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
-            >
-                {/* Date Filter - Minimalist */}
-                <View style={{ marginBottom: 24 }}>
-                    <SegmentedButtons
-                        value={timeRange}
-                        onValueChange={setTimeRange}
-                        buttons={[
-                            { value: 'today', label: 'Today' },
-                            { value: 'week', label: '7 Days' },
-                            { value: 'month', label: '30 Days' },
-                        ]}
-                        style={{ backgroundColor: theme.colors.elevation.level1, borderRadius: 20 }}
-                    />
-                </View>
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Date Filter - Minimalist */}
+                    <View style={{ marginBottom: 24, width: isDesktop ? '50%' : '100%', alignSelf: isDesktop ? 'flex-start' : 'auto' }}>
+                        <SegmentedButtons
+                            value={timeRange}
+                            onValueChange={setTimeRange}
+                            buttons={[
+                                { value: 'today', label: 'Today' },
+                                { value: 'week', label: '7 Days' },
+                                { value: 'month', label: '30 Days' },
+                            ]}
+                            style={{ backgroundColor: theme.colors.elevation.level1, borderRadius: 20 }}
+                        />
+                    </View>
 
-                {/* Stats Grid - Clean */}
-                <View style={styles.statsGrid}>
-                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Total Sales</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                            ₹{stats.sales.toLocaleString('en-IN')}
-                        </Text>
-                    </Surface>
+                    {/* Stats Grid - Clean */}
+                    <View style={styles.statsGrid}>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Total Sales</Text>
+                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                                ₹{stats.sales.toLocaleString('en-IN')}
+                            </Text>
+                        </Surface>
 
-                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Orders</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                            {stats.orders}
-                        </Text>
-                    </Surface>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Orders</Text>
+                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                                {stats.orders}
+                            </Text>
+                        </Surface>
 
-                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>AOV</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                            ₹{stats.aov.toLocaleString('en-IN')}
-                        </Text>
-                    </Surface>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>AOV</Text>
+                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                                ₹{stats.aov.toLocaleString('en-IN')}
+                            </Text>
+                        </Surface>
 
-                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Active Carts</Text>
-                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                            {stats.activeCarts}
-                        </Text>
-                    </Surface>
-                </View>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Active Carts</Text>
+                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                                {stats.activeCarts}
+                            </Text>
+                        </Surface>
+                    </View>
 
-                <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8, color: theme.colors.onBackground }}>Quick Actions</Text>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8, color: theme.colors.onBackground }}>Quick Actions</Text>
 
-                <View style={styles.menuGrid}>
-                    {menuItems.map((item) => (
-                        <TouchableOpacity
-                            key={item.id}
-                            onPress={() => navigation.navigate(item.screen)}
-                            activeOpacity={0.7}
-                            style={styles.menuCard}
-                        >
-                            <Surface
-                                style={{ backgroundColor: theme.colors.surfaceVariant, borderRadius: 16, overflow: 'hidden' }}
-                                elevation={0}
+                    <View style={styles.menuGrid}>
+                        {menuItems.map((item) => (
+                            <TouchableOpacity
+                                key={item.id}
+                                onPress={() => navigation.navigate(item.screen)}
+                                activeOpacity={0.7}
+                                style={[styles.menuCard, { width: menuCardWidth }]}
                             >
-                                <View style={{ alignItems: 'center', padding: 20 }}>
-                                    <Avatar.Icon
-                                        size={48}
-                                        icon={item.icon}
-                                        style={{ backgroundColor: 'transparent', marginBottom: 12 }}
-                                        color={theme.colors.onSurfaceVariant}
-                                    />
-                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>{item.title}</Text>
-                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, opacity: 0.7 }}>{item.subtitle}</Text>
-                                </View>
-                            </Surface>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
-                {/* Connection Status Indicators */}
-                <View style={{ marginTop: 32, gap: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
-                        <Icon
-                            source={connectionStatus.firestore ? "check-circle" : "alert-circle"}
-                            size={16}
-                            color={connectionStatus.firestore ? "#4ade80" : theme.colors.error}
-                        />
-                        <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
-                            Firestore {connectionStatus.firestore ? "Connected" : "Disconnected"}
-                        </Text>
+                                <Surface
+                                    style={{ backgroundColor: theme.colors.surfaceVariant, borderRadius: 16, overflow: 'hidden' }}
+                                    elevation={0}
+                                >
+                                    <View style={{ alignItems: 'center', padding: 20 }}>
+                                        <Avatar.Icon
+                                            size={48}
+                                            icon={item.icon}
+                                            style={{ backgroundColor: 'transparent', marginBottom: 12 }}
+                                            color={theme.colors.onSurfaceVariant}
+                                        />
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>{item.title}</Text>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, opacity: 0.7 }}>{item.subtitle}</Text>
+                                    </View>
+                                </Surface>
+                            </TouchableOpacity>
+                        ))}
                     </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
-                        <Icon
-                            source={connectionStatus.shiprocket ? "check-circle" : "alert-circle"}
-                            size={16}
-                            color={connectionStatus.shiprocket ? "#4ade80" : "#fbbf24"}
-                        />
-                        <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
-                            Shiprocket {connectionStatus.shiprocket ? "Active" : "No Data (24h)"}
-                        </Text>
-                    </View>
+                    {/* Connection Status Indicators */}
+                    <View style={{ marginTop: 32, gap: 8, flexDirection: isDesktop ? 'row' : 'column', justifyContent: isDesktop ? 'space-between' : 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
+                            <Icon
+                                source={connectionStatus.firestore ? "check-circle" : "alert-circle"}
+                                size={16}
+                                color={connectionStatus.firestore ? "#4ade80" : theme.colors.error}
+                            />
+                            <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
+                                Firestore {connectionStatus.firestore ? "Connected" : "Disconnected"}
+                            </Text>
+                        </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
-                        <Icon
-                            source={connectionStatus.shopify ? "check-circle" : "alert-circle"}
-                            size={16}
-                            color={connectionStatus.shopify ? "#4ade80" : "#fbbf24"}
-                        />
-                        <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
-                            Shopify {connectionStatus.shopify ? "Active" : "No Data (24h)"}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
+                            <Icon
+                                source={connectionStatus.shiprocket ? "check-circle" : "alert-circle"}
+                                size={16}
+                                color={connectionStatus.shiprocket ? "#4ade80" : "#fbbf24"}
+                            />
+                            <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
+                                Shiprocket {connectionStatus.shiprocket ? "Active" : "No Data (24h)"}
+                            </Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
+                            <Icon
+                                source={connectionStatus.shopify ? "check-circle" : "alert-circle"}
+                                size={16}
+                                color={connectionStatus.shopify ? "#4ade80" : "#fbbf24"}
+                            />
+                            <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
+                                Shopify {connectionStatus.shopify ? "Active" : "No Data (24h)"}
+                            </Text>
+                        </View>
                     </View>
-                </View>
-            </ScrollView>
+                </ScrollView>
+            </ResponsiveContainer>
         </View >
     );
 };
@@ -358,7 +368,7 @@ const styles = StyleSheet.create({
         marginBottom: 32,
     },
     statCard: {
-        width: '48%',
+        // Width is now dynamic
         padding: 20,
         borderRadius: 16,
     },
@@ -368,7 +378,7 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     menuCard: {
-        width: '48%',
+        // Width is now dynamic
         borderRadius: 16,
         overflow: 'hidden',
     }
