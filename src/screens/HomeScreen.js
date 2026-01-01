@@ -199,6 +199,13 @@ const HomeScreen = ({ navigation }) => {
             screen: 'Settings',
         },
         {
+            id: 8,
+            title: 'Wallet',
+            subtitle: 'Expenses & Income',
+            icon: 'wallet-outline',
+            screen: 'Wallet',
+        },
+        {
             id: 4,
             title: 'Firebase',
             subtitle: 'Raw Data',

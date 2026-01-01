@@ -5,7 +5,7 @@ import { collection, getDocs, getDocsFromServer, getDoc, deleteDoc, updateDoc, d
 import { db } from '../config/firebase';
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
-    const [collections, setCollections] = useState(['orders', 'checkouts', 'push_tokens', 'whatsapp_messages']);
+    const [collections, setCollections] = useState(['orders', 'checkouts', 'push_tokens', 'whatsapp_messages', 'wallet_transactions', 'dashboard']);
     const [selectedCollection, setSelectedCollection] = useState(route.params?.collection || 'orders');
     const [documents, setDocuments] = useState([]);
     const [selectedDoc, setSelectedDoc] = useState(null);
@@ -273,7 +273,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 color: selectedCollection === item ? theme.colors.onPrimaryContainer : theme.colors.onSurface,
                 fontWeight: 'bold'
             }}>
-                {item.toUpperCase()}
+                {item === 'dashboard' ? 'NOTES' : item.toUpperCase()}
             </Text>
         </TouchableOpacity>
     );
@@ -356,7 +356,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                 color: selectedCollection === item ? theme.colors.onPrimaryContainer : theme.colors.onSurface,
                                 fontWeight: 'bold'
                             }}>
-                                {item.toUpperCase()}
+                                {item === 'dashboard' ? 'NOTES' : item.toUpperCase()}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -519,6 +519,80 @@ const DocItem = React.memo(({ item, isSelected, selectedCollection, theme, onPre
                             </Text>
                             <Text variant="labelSmall" style={{ color: theme.colors.outline, fontFamily: 'monospace' }}>
                                 {item.phoneNormalized || item.phone}
+                            </Text>
+                        </View>
+                        <IconButton icon="chevron-right" size={20} />
+                    </View>
+                </TouchableOpacity>
+            </Surface>
+        );
+    }
+
+    // Special rendering for Wallet Transactions
+    if (selectedCollection === 'wallet_transactions') {
+        const isIncome = item.type === 'income';
+        return (
+            <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
+                <TouchableOpacity onPress={() => onPress(item)} onLongPress={() => onToggle(item.id)} delayLongPress={200}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+                        <Checkbox
+                            status={isSelected ? 'checked' : 'unchecked'}
+                            onPress={() => onToggle(item.id)}
+                        />
+                        <Avatar.Icon
+                            size={40}
+                            icon={isIncome ? 'arrow-down-left' : 'arrow-up-right'}
+                            style={{ backgroundColor: isIncome ? theme.colors.secondaryContainer : theme.colors.errorContainer, marginLeft: 4 }}
+                            color={isIncome ? theme.colors.onSecondaryContainer : theme.colors.onErrorContainer}
+                        />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                    {isIncome ? 'Income' : 'Expense'}
+                                </Text>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: isIncome ? theme.colors.primary : theme.colors.error }}>
+                                    {isIncome ? '+' : '-'}₹{Math.abs(item.amount || 0).toLocaleString('en-IN')}
+                                </Text>
+                            </View>
+                            <Text variant="bodySmall" numberOfLines={1} style={{ color: theme.colors.onSurfaceVariant }}>
+                                {item.description || 'No Description'}
+                            </Text>
+                            <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
+                                {item.date?.toDate ? item.date.toDate().toLocaleString() : 'Just now'}
+                            </Text>
+                        </View>
+                        <IconButton icon="chevron-right" size={20} />
+                    </View>
+                </TouchableOpacity>
+            </Surface>
+        );
+    }
+
+    // Special rendering for Notes / Dashboard
+    if (selectedCollection === 'dashboard') {
+        return (
+            <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
+                <TouchableOpacity onPress={() => onPress(item)} onLongPress={() => onToggle(item.id)} delayLongPress={200}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+                        <Checkbox
+                            status={isSelected ? 'checked' : 'unchecked'}
+                            onPress={() => onToggle(item.id)}
+                        />
+                        <Avatar.Icon
+                            size={40}
+                            icon="notebook"
+                            style={{ backgroundColor: theme.colors.tertiaryContainer, marginLeft: 4 }}
+                            color={theme.colors.onTertiaryContainer}
+                        />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, textTransform: 'capitalize' }}>
+                                {item.id}
+                            </Text>
+                            <Text variant="bodySmall" numberOfLines={2} style={{ color: theme.colors.onSurfaceVariant }}>
+                                {item.content || item.note || 'No Content'}
+                            </Text>
+                            <Text variant="labelSmall" style={{ color: theme.colors.outline, marginTop: 4 }}>
+                                Last Updated: {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleString() : 'Unknown'}
                             </Text>
                         </View>
                         <IconButton icon="chevron-right" size={20} />

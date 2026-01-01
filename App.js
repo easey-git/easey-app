@@ -13,6 +13,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import WhatsAppManagerScreen from './src/screens/WhatsAppManagerScreen';
 import CampaignsScreen from './src/screens/CampaignsScreen';
 import NotesScreen from './src/screens/NotesScreen';
+import WalletScreen from './src/screens/WalletScreen';
 import { theme } from './src/theme/theme';
 import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -212,11 +213,16 @@ function AppNavigator() {
                 component={NotesScreen}
                 options={{ title: 'Notes' }}
               />
+              <Stack.Screen
+                name="Wallet"
+                component={WalletScreen}
+                options={{ title: 'Wallet' }}
+              />
             </>
           )}
         </Stack.Navigator>
       </NavigationContainer>
-    </View>
+    </View >
   );
 }
 
