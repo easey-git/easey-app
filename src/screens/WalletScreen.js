@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
-import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar } from 'react-native-paper';
+import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar } from 'react-native-paper';
 import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
@@ -75,6 +75,7 @@ const WalletScreen = ({ navigation }) => {
     // Filters
     const [timeRange, setTimeRange] = useState('month'); // 'week' | 'month' | 'all'
     const [filterType, setFilterType] = useState('all'); // 'all' | 'income' | 'expense'
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Form State
     const [amount, setAmount] = useState('');
@@ -181,6 +182,8 @@ const WalletScreen = ({ navigation }) => {
             const list = [];
             snapshot.forEach((doc) => {
                 const data = doc.data();
+                // Client-side type filtering if needed, but we do it in render usually or separate query
+                // For agility, let's filter in memory
                 list.push({ id: doc.id, ...data });
             });
             setTransactions(list);
@@ -272,11 +275,37 @@ const WalletScreen = ({ navigation }) => {
             );
         }
     }, [handleDelete]);
-
     const filteredTransactions = useMemo(() => {
-        if (filterType === 'all') return transactions;
-        return transactions.filter(t => t.type === filterType);
-    }, [transactions, filterType]);
+        return transactions.filter(t => {
+            const matchesType = filterType === 'all' || t.type === filterType;
+            const query = searchQuery.toLowerCase();
+
+            // Format date for search matching (e.g. "1/1/2026", "Jan 1, 2026")
+            const dateObj = t.date?.toDate ? t.date.toDate() : new Date();
+            const dateString = dateObj.toLocaleDateString().toLowerCase();
+            const dateStringFull = dateObj.toLocaleDateString(undefined, { dateStyle: 'long' }).toLowerCase();
+
+            // Intelligence: Relative Dates (Today, Yesterday)
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const isToday = dateObj.toDateString() === today.toDateString();
+            const isYesterday = dateObj.toDateString() === yesterday.toDateString();
+
+            const matchesSearch = !query ||
+                (t.description && t.description.toLowerCase().includes(query)) ||
+                (t.category && t.category.toLowerCase().includes(query)) ||
+                (t.amount && t.amount.toString().includes(query)) ||
+                (t.type && t.type.toLowerCase().includes(query)) || // Match "Income"/"Expense"
+                (dateString.includes(query)) ||
+                (dateStringFull.includes(query)) ||
+                (dateObj.toDateString().toLowerCase().includes(query)) || // Robust Match (e.g. "Thu", "Jan", "2026")
+                (query === 'today' && isToday) ||
+                (query === 'yesterday' && isYesterday);
+
+            return matchesType && matchesSearch;
+        });
+    }, [transactions, filterType, searchQuery]);
 
     const renderTransaction = ({ item }) => (
         <TouchableOpacity onLongPress={() => confirmDelete(item.id)} delayLongPress={500}>
@@ -458,6 +487,17 @@ const WalletScreen = ({ navigation }) => {
                                 <Chip selected={filterType === 'income'} onPress={() => setFilterType('income')} showSelectedOverlay compact>Inc</Chip>
                             </View>
                         </View>
+
+                        <Searchbar
+                            placeholder="Search transactions"
+                            onChangeText={setSearchQuery}
+                            value={searchQuery}
+                            style={{ marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 16, height: 46 }}
+                            inputStyle={{ minHeight: 0, alignSelf: 'center' }}
+                            iconColor={theme.colors.onSurfaceVariant}
+                            placeholderTextColor={theme.colors.onSurfaceVariant}
+                            elevation={0}
+                        />
 
                         {filteredTransactions.length === 0 ? (
                             <View style={{ alignItems: 'center', padding: 40, opacity: 0.5 }}>
