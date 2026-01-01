@@ -4,7 +4,7 @@ import { Text, useTheme, Appbar, List, Switch, Divider, Surface, Avatar, Button,
 import * as LocalAuthentication from 'expo-local-authentication';
 import { usePreferences } from '../context/PreferencesContext';
 import { useAuth } from '../context/AuthContext';
-import { useSound } from '../context/SoundContext';
+
 
 const SettingsScreen = ({ navigation }) => {
     const theme = useTheme();
@@ -27,7 +27,7 @@ const SettingsScreen = ({ navigation }) => {
         biometricsEnabled,
         toggleBiometrics
     } = usePreferences();
-    const { soundEnabled, setSoundEnabled } = useSound();
+
 
     const handleLogout = async () => {
         await logout();
@@ -75,16 +75,7 @@ const SettingsScreen = ({ navigation }) => {
                     />
                 </List.Section>
 
-                <Divider />
 
-                <List.Section title="Sounds">
-                    <List.Item
-                        title="Enable Sounds"
-                        left={props => <List.Icon {...props} icon="volume-high" />}
-                        right={() => <Switch value={soundEnabled} onValueChange={setSoundEnabled} />}
-                        style={styles.listItem}
-                    />
-                </List.Section>
 
                 <Divider />
 
