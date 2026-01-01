@@ -14,6 +14,20 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [loading, setLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [selectedItems, setSelectedItems] = useState(new Set());
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchVisible, setSearchVisible] = useState(false);
+
+    const filteredDocuments = documents.filter(doc => {
+        if (!searchQuery) return true;
+        const query = searchQuery.toLowerCase();
+        return (
+            (doc.customerName && doc.customerName.toLowerCase().includes(query)) ||
+            (doc.orderNumber && String(doc.orderNumber).toLowerCase().includes(query)) ||
+            (doc.phone && String(doc.phone).includes(query)) ||
+            (doc.email && doc.email.toLowerCase().includes(query)) ||
+            (doc.id && doc.id.toLowerCase().includes(query))
+        );
+    });
 
     // Confirmation Dialog State
     const [confirmVisible, setConfirmVisible] = useState(false);
@@ -303,9 +317,25 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 {selectedItems.size > 0 ? (
                     <Button textColor={theme.colors.error} onPress={handleBulkDelete}>Delete ({selectedItems.size})</Button>
                 ) : (
-                    <Appbar.Action icon="refresh" onPress={fetchDocuments} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <IconButton icon="magnify" onPress={() => setSearchVisible(!searchVisible)} />
+                        <Appbar.Action icon="refresh" onPress={fetchDocuments} />
+                    </View>
                 )}
             </Appbar.Header>
+
+            {searchVisible && (
+                <View style={{ padding: 16, paddingBottom: 0 }}>
+                    <TextInput
+                        mode="outlined"
+                        placeholder="Search by Name, Order #, Phone, Email..."
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        right={<TextInput.Icon icon="close" onPress={() => { setSearchQuery(''); setSearchVisible(false); }} />}
+                        style={{ backgroundColor: theme.colors.surface }}
+                    />
+                </View>
+            )}
 
             <View style={{ paddingVertical: 12 }}>
                 <FlatList
@@ -339,7 +369,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             <Divider />
 
             <FlatList
-                data={documents}
+                data={filteredDocuments}
                 renderItem={renderDocItem}
                 keyExtractor={item => item.id}
                 contentContainerStyle={{ padding: 16 }}
