@@ -229,7 +229,7 @@ const HomeScreen = ({ navigation }) => {
         {
             id: 7,
             title: 'Notes',
-            subtitle: 'Canned Responses',
+            subtitle: 'Write Stuff',
             icon: 'notebook',
             screen: 'Notes',
         },
@@ -298,7 +298,7 @@ const HomeScreen = ({ navigation }) => {
                         </Surface>
                     </View>
 
-                    {/* Quick Notes Section */}
+                    {/* NoteBook Section */}
                     <NotesCard />
 
                     <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8, color: theme.colors.onBackground }}>Quick Actions</Text>

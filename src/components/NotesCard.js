@@ -63,7 +63,7 @@ export const NotesCard = () => {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <IconButton icon="notebook" size={20} style={{ margin: 0, marginRight: 8 }} />
                     <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant }}>
-                        Scratchpad
+                        NoteBook
                     </Text>
                 </View>
                 <Text variant="labelSmall" style={{ color: status === 'Saved' ? theme.colors.primary : theme.colors.outline }}>
