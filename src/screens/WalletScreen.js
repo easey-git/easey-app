@@ -321,8 +321,8 @@ const WalletScreen = ({ navigation }) => {
                 </View>
                 <View style={{ flex: 1, marginLeft: 16 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                        <Text variant="bodyLarge" style={{ fontWeight: '600', color: theme.colors.onSurface, marginRight: 8 }}>{item.category}</Text>
-                        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>•  {item.description}</Text>
+                        <Text variant="bodyLarge" style={{ fontWeight: '600', color: theme.colors.onSurface, marginRight: 8 }}>{item.description}</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>•  {item.category}</Text>
                     </View>
                     <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
                         {item.date?.toDate ? item.date.toDate().toLocaleDateString() + ' • ' + item.date.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
