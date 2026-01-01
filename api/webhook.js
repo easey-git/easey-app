@@ -94,7 +94,7 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
             return;
         }
 
-        console.log(`WhatsApp template '${templateName}' sent to ${to}`);
+        console.info(`WhatsApp template '${templateName}' sent to ${to}`);
 
         // Log to Firestore (Fire & Forget)
         db.collection('whatsapp_messages').add({
@@ -152,7 +152,7 @@ const sendFCMNotifications = async (title, body, dataPayload) => {
         }
 
         await Promise.all(batches);
-        console.log(`Sent FCM notifications to ${uniqueTokens.length} devices.`);
+        console.info(`Sent FCM notifications to ${uniqueTokens.length} devices.`);
     } catch (error) {
         console.error('Error sending FCM:', error);
     }
@@ -254,7 +254,7 @@ module.exports = async (req, res) => {
 
                             // Idempotency Check
                             if (data.verificationStatus === 'verified_pending_address' || data.verificationStatus === 'approved') {
-                                console.log(`Order ${orderDoc.id} already processed. Skipping.`);
+                                console.info(`Order ${orderDoc.id} already processed. Skipping.`);
                                 return;
                             }
 
@@ -388,9 +388,9 @@ module.exports = async (req, res) => {
                     }
 
                     await msgDoc.ref.update(updateData);
-                    console.log(`Updated message ${whatsappId} to status: ${newStatus}`);
+                    console.info(`Updated message ${whatsappId} to status: ${newStatus}`);
                 } else {
-                    console.log(`Message not found for status update: ${whatsappId}`);
+                    console.warn(`Message not found for status update: ${whatsappId}`);
                 }
 
                 return res.status(200).send('STATUS_RECEIVED');
@@ -504,7 +504,7 @@ module.exports = async (req, res) => {
                     await db.runTransaction(async (t) => {
                         const freshDoc = await t.get(orderRef);
                         if (freshDoc.exists && freshDoc.data().whatsappSent) {
-                            console.log(`Duplicate Order Webhook for ${orderData.orderNumber}. Skipping WhatsApp.`);
+                            console.warn(`Duplicate Order Webhook for ${orderData.orderNumber}. Skipping WhatsApp.`);
                             return;
                         }
 

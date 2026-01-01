@@ -91,7 +91,7 @@ function AppNavigator() {
         setIsLocked(false);
       }
     } catch (e) {
-
+      console.error("Biometric authentication error:", e);
     } finally {
       setIsAuthenticating(false);
     }
@@ -238,7 +238,7 @@ function Main() {
       // Only attempt push notifications if on a physical device to avoid Expo Go warnings
       // logic is handled inside registerForPushNotificationsAsync but we can add a guard here too
       if (notificationsEnabled) {
-        registerForPushNotificationsAsync(user.uid).catch(err => console.log("Push registration failed (expected in Expo Go):", err.message));
+        registerForPushNotificationsAsync(user.uid).catch(err => console.error("Push registration failed:", err.message));
       } else {
         unregisterPushNotificationsAsync().catch(() => { });
       }
