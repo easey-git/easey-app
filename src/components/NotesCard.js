@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     },
     header: {
         flexDirection: 'row',
-        justifybnb: 'space-between',
+
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 8,

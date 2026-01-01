@@ -1,15 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Alert, Platform } from 'react-native';
-import { Text, useTheme, Appbar, FAB, Surface, Dialog, Portal, TextInput, IconButton, Snackbar, Menu, Button, Divider } from 'react-native-paper';
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, StyleSheet, FlatList, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { Text, useTheme, Appbar, FAB, Surface, Dialog, Portal, TextInput, IconButton, Snackbar, Button } from 'react-native-paper';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import * as Clipboard from 'expo-clipboard';
 
 const NotesScreen = ({ navigation }) => {
     const theme = useTheme();
     const [notes, setNotes] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [visible, setVisible] = useState(false); // Dialog visibility
+
+    // Dialog States
+    const [visible, setVisible] = useState(false);
+    const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+    const [noteToDelete, setNoteToDelete] = useState(null);
+
     const [currentNote, setCurrentNote] = useState({ title: '', body: '' });
     const [isEditing, setIsEditing] = useState(false);
     const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -17,13 +23,22 @@ const NotesScreen = ({ navigation }) => {
 
     // Fetch Notes
     useEffect(() => {
-        const q = query(collection(db, 'notes'), orderBy('updatedAt', 'desc'));
+        const q = query(collection(db, 'notes'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const notesList = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
-            }));
+            })).sort((a, b) => {
+                const tA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : (a.updatedAt?.seconds ? a.updatedAt.seconds * 1000 : Date.now());
+                const tB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : (b.updatedAt?.seconds ? b.updatedAt.seconds * 1000 : Date.now());
+                return tB - tA;
+            });
             setNotes(notesList);
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching notes:", error);
+            showSnackbar("Failed to load notes");
+            setLoading(false);
         });
         return () => unsubscribe();
     }, []);
@@ -58,26 +73,22 @@ const NotesScreen = ({ navigation }) => {
         }
     };
 
-    const handleDelete = async (id) => {
-        Alert.alert(
-            "Delete Note",
-            "Are you sure you want to delete this note?",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            await deleteDoc(doc(db, 'notes', id));
-                            showSnackbar('Note deleted');
-                        } catch (error) {
-                            showSnackbar('Error deleting note');
-                        }
-                    }
-                }
-            ]
-        );
+    const confirmDelete = (id) => {
+        setNoteToDelete(id);
+        setDeleteDialogVisible(true);
+    };
+
+    const handleDelete = async () => {
+        if (!noteToDelete) return;
+        try {
+            await deleteDoc(doc(db, 'notes', noteToDelete));
+            showSnackbar('Note deleted');
+        } catch (error) {
+            showSnackbar('Error deleting note');
+        } finally {
+            setDeleteDialogVisible(false);
+            setNoteToDelete(null);
+        }
     };
 
     const copyToClipboard = async (text) => {
@@ -102,13 +113,13 @@ const NotesScreen = ({ navigation }) => {
         setSnackbarVisible(true);
     };
 
-    const filteredNotes = notes.filter(note => {
+    const filteredNotes = useMemo(() => {
         const query = searchQuery.toLowerCase();
-        return (
+        return notes.filter(note =>
             (note.title && note.title.toLowerCase().includes(query)) ||
             (note.body && note.body.toLowerCase().includes(query))
         );
-    });
+    }, [notes, searchQuery]);
 
     const renderItem = ({ item }) => (
         <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={1}>
@@ -133,10 +144,18 @@ const NotesScreen = ({ navigation }) => {
             </TouchableOpacity>
             <View style={styles.cardActions}>
                 <IconButton icon="pencil" size={20} onPress={() => openEdit(item)} />
-                <IconButton icon="delete" size={20} iconColor={theme.colors.error} onPress={() => handleDelete(item.id)} />
+                <IconButton icon="delete" size={20} iconColor={theme.colors.error} onPress={() => confirmDelete(item.id)} />
             </View>
         </Surface>
     );
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+            </View>
+        );
+    }
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -157,14 +176,21 @@ const NotesScreen = ({ navigation }) => {
                 />
             </View>
 
-            <FlatList
-                data={filteredNotes}
-                renderItem={renderItem}
-                keyExtractor={item => item.id}
-                contentContainerStyle={{ padding: 16, paddingTop: 0 }}
-                numColumns={1} // Can be responsive later
-                ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-            />
+            {filteredNotes.length === 0 ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', opacity: 0.5 }}>
+                    <IconButton icon="notebook-off" size={64} iconColor={theme.colors.onSurfaceVariant} />
+                    <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>No notes found</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={filteredNotes}
+                    renderItem={renderItem}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={{ padding: 16, paddingTop: 0 }}
+                    numColumns={1}
+                    ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+                />
+            )}
 
             <FAB
                 icon="plus"
@@ -174,6 +200,7 @@ const NotesScreen = ({ navigation }) => {
             />
 
             <Portal>
+                {/* Edit/Create Dialog */}
                 <Dialog visible={visible} onDismiss={() => setVisible(false)} style={{ maxHeight: '80%' }}>
                     <Dialog.Title>{isEditing ? 'Edit Note' : 'New Note'}</Dialog.Title>
                     <Dialog.Content>
@@ -196,6 +223,18 @@ const NotesScreen = ({ navigation }) => {
                     <Dialog.Actions>
                         <Button onPress={() => setVisible(false)}>Cancel</Button>
                         <Button onPress={handleSave} mode="contained" style={{ marginLeft: 8 }}>Save</Button>
+                    </Dialog.Actions>
+                </Dialog>
+
+                {/* Delete Confirmation Dialog */}
+                <Dialog visible={deleteDialogVisible} onDismiss={() => setDeleteDialogVisible(false)}>
+                    <Dialog.Title>Delete Note</Dialog.Title>
+                    <Dialog.Content>
+                        <Text variant="bodyMedium">Are you sure you want to delete this note? This action cannot be undone.</Text>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setDeleteDialogVisible(false)}>Cancel</Button>
+                        <Button onPress={handleDelete} textColor={theme.colors.error}>Delete</Button>
                     </Dialog.Actions>
                 </Dialog>
             </Portal>

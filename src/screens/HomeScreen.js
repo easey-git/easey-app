@@ -291,6 +291,9 @@ const HomeScreen = ({ navigation }) => {
                         </Surface>
                     </View>
 
+                    {/* Quick Notes Section */}
+                    <NotesCard />
+
                     <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8, color: theme.colors.onBackground }}>Quick Actions</Text>
 
                     <View style={styles.menuGrid}>
