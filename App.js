@@ -12,6 +12,7 @@ import FirestoreViewerScreen from './src/screens/FirestoreViewerScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import WhatsAppManagerScreen from './src/screens/WhatsAppManagerScreen';
 import CampaignsScreen from './src/screens/CampaignsScreen';
+import NotesScreen from './src/screens/NotesScreen';
 import { theme } from './src/theme/theme';
 import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -205,6 +206,11 @@ function AppNavigator() {
                 name="Campaigns"
                 component={CampaignsScreen}
                 options={{ title: 'Campaigns' }}
+              />
+              <Stack.Screen
+                name="Notes"
+                component={NotesScreen}
+                options={{ title: 'Notes' }}
               />
             </>
           )}

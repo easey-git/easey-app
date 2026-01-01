@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, RefreshControl, Image, TouchableOpacity, 
 import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon } from 'react-native-paper';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { NotesCard } from '../components/NotesCard';
 import { useSound } from '../context/SoundContext';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
 
@@ -217,6 +218,13 @@ const HomeScreen = ({ navigation }) => {
             subtitle: 'Ad Manager',
             icon: 'bullhorn',
             screen: 'Campaigns',
+        },
+        {
+            id: 7,
+            title: 'Notes',
+            subtitle: 'Canned Responses',
+            icon: 'notebook',
+            screen: 'Notes',
         },
     ];
 
