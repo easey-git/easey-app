@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
 import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar } from 'react-native-paper';
 import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, where } from 'firebase/firestore';
@@ -19,8 +19,54 @@ const CATEGORY_COLORS = {
     'Investment': '#FFD700', // Gold
 };
 
+const CHART_CONFIG = {
+    color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+};
+
+const StatChart = ({ title, data, theme }) => {
+    const chartSize = Platform.OS === 'web' ? 220 : 150;
+
+    return (
+        <Surface style={[styles.chartCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
+            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 16 }}>{title}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', gap: Platform.OS === 'web' ? 64 : 24 }}>
+                <View style={{ width: chartSize, alignItems: 'center' }}>
+                    <PieChart
+                        data={data}
+                        width={chartSize}
+                        height={chartSize}
+                        chartConfig={CHART_CONFIG}
+                        accessor={"amount"}
+                        backgroundColor={"transparent"}
+                        paddingLeft={"0"}
+                        center={[chartSize / 4, 0]}
+                        absolute
+                        hasLegend={false}
+                    />
+                </View>
+                <View style={{ minWidth: 120 }}>
+                    {data.map((item, index) => (
+                        <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.color, marginRight: 12 }} />
+                            <View>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
+                                    ₹{Math.abs(item.amount).toLocaleString('en-IN')}
+                                </Text>
+                                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                                    {item.name}
+                                </Text>
+                            </View>
+                        </View>
+                    ))}
+                </View>
+            </View>
+        </Surface>
+    );
+};
+
 const WalletScreen = ({ navigation }) => {
     const theme = useTheme();
+
     const [transactions, setTransactions] = useState([]);
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -41,36 +87,36 @@ const WalletScreen = ({ navigation }) => {
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarColor, setSnackbarColor] = useState('#333');
 
-    const showSnackbar = (message, isError = false) => {
+    const showSnackbar = useCallback((message, isError = false) => {
         setSnackbarMessage(message);
         setSnackbarColor(isError ? theme.colors.error : theme.colors.inverseSurface);
         setSnackbarVisible(true);
-    };
+    }, [theme]);
 
     // Derived Stats
     const stats = useMemo(() => {
         let income = 0;
         let expense = 0;
-        const categoryTotals = {};
+        const expenseTotals = {};
+        const incomeTotals = {};
 
         transactions.forEach(t => {
             const amt = parseFloat(t.amount);
+            const cat = t.category || 'Misc'; // Fallback for old data
+
             if (t.type === 'income') {
                 income += amt;
+                incomeTotals[cat] = (incomeTotals[cat] || 0) + amt;
             } else {
                 expense += amt;
-                // Accumulate for Pie Chart
-                if (categoryTotals[t.category]) {
-                    categoryTotals[t.category] += amt;
-                } else {
-                    categoryTotals[t.category] = amt;
-                }
+                expenseTotals[cat] = (expenseTotals[cat] || 0) + amt;
             }
         });
 
-        const chartData = Object.keys(categoryTotals).map(cat => ({
+        // Helper to format chart data
+        const formatChartData = (totals) => Object.keys(totals).map(cat => ({
             name: cat,
-            amount: categoryTotals[cat],
+            amount: totals[cat],
             color: CATEGORY_COLORS[cat] || '#808080',
             legendFontColor: theme.colors.onSurfaceVariant,
             legendFontSize: 12
@@ -80,9 +126,27 @@ const WalletScreen = ({ navigation }) => {
             balance: income - expense,
             income,
             expense,
-            chartData
+            expenseChart: formatChartData(expenseTotals),
+            incomeChart: formatChartData(incomeTotals),
+            cashFlowChart: [
+                {
+                    name: 'Income',
+                    amount: income,
+                    color: theme.colors.primary, // Using theme primary (Blue-ish)
+                    legendFontColor: theme.colors.onSurfaceVariant,
+                    legendFontSize: 12
+                },
+                {
+                    name: 'Expense',
+                    amount: expense,
+                    color: theme.colors.error, // Using theme error (Red-ish)
+                    legendFontColor: theme.colors.onSurfaceVariant,
+                    legendFontSize: 12
+                }
+            ].sort((a, b) => b.amount - a.amount)
         };
     }, [transactions, theme]);
+
 
     useEffect(() => {
         setDataLoading(true);
@@ -128,7 +192,7 @@ const WalletScreen = ({ navigation }) => {
         });
 
         return () => unsubscribe();
-    }, [timeRange]);
+    }, [timeRange, showSnackbar]);
 
     // Update default category when type changes
     useEffect(() => {
@@ -139,7 +203,7 @@ const WalletScreen = ({ navigation }) => {
         }
     }, [type]);
 
-    const handleSave = async () => {
+    const handleSave = useCallback(async () => {
         if (!amount || !description) {
             showSnackbar("Please enter both amount and description", true);
             return;
@@ -176,9 +240,19 @@ const WalletScreen = ({ navigation }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [amount, description, category, type, showSnackbar]);
 
-    const confirmDelete = (id) => {
+    const handleDelete = useCallback(async (id) => {
+        try {
+            await deleteDoc(doc(db, "wallet_transactions", id));
+            showSnackbar("Transaction deleted");
+        } catch (error) {
+            console.error("Error deleting transaction: ", error);
+            showSnackbar("Failed to delete transaction", true);
+        }
+    }, [showSnackbar]);
+
+    const confirmDelete = useCallback((id) => {
         if (Platform.OS === 'web') {
             if (window.confirm("Are you sure you want to delete this transaction?")) {
                 handleDelete(id);
@@ -197,17 +271,7 @@ const WalletScreen = ({ navigation }) => {
                 ]
             );
         }
-    };
-
-    const handleDelete = async (id) => {
-        try {
-            await deleteDoc(doc(db, "wallet_transactions", id));
-            showSnackbar("Transaction deleted");
-        } catch (error) {
-            console.error("Error deleting transaction: ", error);
-            showSnackbar("Failed to delete transaction", true);
-        }
-    };
+    }, [handleDelete]);
 
     const filteredTransactions = useMemo(() => {
         if (filterType === 'all') return transactions;
@@ -239,13 +303,76 @@ const WalletScreen = ({ navigation }) => {
                     variant="titleMedium"
                     style={{
                         fontWeight: 'bold',
-                        color: item.type === 'income' ? theme.colors.primary : theme.colors.error
+                        color: item.type === 'income' ? theme.colors.primary : theme.colors.error,
+                        flex: 0.4,
+                        textAlign: 'right'
                     }}
+                    adjustsFontSizeToFit
+                    numberOfLines={1}
                 >
                     {item.type === 'income' ? '+' : '-'}₹{Math.abs(item.amount).toLocaleString('en-IN')}
                 </Text>
             </View>
         </TouchableOpacity>
+    );
+
+    const renderModalContent = () => (
+        <>
+            <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginBottom: 24, textAlign: 'center', color: theme.colors.onSurface }}>
+                New Transaction
+            </Text>
+
+            <SegmentedButtons
+                value={type}
+                onValueChange={setType}
+                buttons={[
+                    { value: 'expense', label: 'Expense', icon: 'arrow-up-right', checkedColor: theme.colors.error, style: { borderColor: theme.colors.outline } },
+                    { value: 'income', label: 'Income', icon: 'arrow-down-left', checkedColor: theme.colors.primary, style: { borderColor: theme.colors.outline } },
+                ]}
+                style={{ marginBottom: 24 }}
+            />
+
+            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8, marginLeft: 4 }}>Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
+                <View style={{ flexDirection: 'row', gap: 8, paddingRight: 16 }}>
+                    {(type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((cat) => (
+                        <Chip
+                            key={cat}
+                            selected={category === cat}
+                            onPress={() => setCategory(cat)}
+                            showSelectedOverlay
+                            style={{ backgroundColor: category === cat ? (type === 'income' ? theme.colors.primaryContainer : theme.colors.errorContainer) : theme.colors.surfaceVariant }}
+                            textStyle={{ color: theme.colors.onSurface }}
+                        >
+                            {cat}
+                        </Chip>
+                    ))}
+                </View>
+            </ScrollView>
+
+            <TextInput
+                label="Amount"
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="decimal-pad"
+                mode="outlined"
+                style={{ marginBottom: 16, backgroundColor: 'transparent' }}
+                left={<TextInput.Affix text="₹" />}
+            />
+
+            <TextInput
+                label="Description"
+                value={description}
+                onChangeText={setDescription}
+                mode="outlined"
+                style={{ marginBottom: 32, backgroundColor: 'transparent' }}
+                placeholder="e.g. Server Costs"
+            />
+
+            <Button mode="contained" onPress={handleSave} loading={loading} contentStyle={{ height: 48 }}>
+                Save Transaction
+            </Button>
+        </>
     );
 
     return (
@@ -280,7 +407,7 @@ const WalletScreen = ({ navigation }) => {
                         {/* Balance Overview */}
                         <Surface style={[styles.balanceCard, { backgroundColor: theme.colors.surface }]} elevation={2}>
                             <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Balance</Text>
-                            <Text variant="displayMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4, marginBottom: 24 }}>
+                            <Text variant="displayMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4, marginBottom: 24 }} adjustsFontSizeToFit numberOfLines={1}>
                                 ₹{stats.balance.toLocaleString('en-IN')}
                             </Text>
 
@@ -289,9 +416,9 @@ const WalletScreen = ({ navigation }) => {
                                     <View style={[styles.statIcon, { backgroundColor: theme.colors.primaryContainer }]}>
                                         <Icon source="arrow-down-left" color={theme.colors.primary} size={20} />
                                     </View>
-                                    <View>
+                                    <View style={{ flex: 1 }}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Income</Text>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
                                             ₹{stats.income.toLocaleString('en-IN')}
                                         </Text>
                                     </View>
@@ -300,9 +427,9 @@ const WalletScreen = ({ navigation }) => {
                                     <View style={[styles.statIcon, { backgroundColor: theme.colors.errorContainer }]}>
                                         <Icon source="arrow-up-right" color={theme.colors.error} size={20} />
                                     </View>
-                                    <View>
+                                    <View style={{ flex: 1 }}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Expense</Text>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
                                             ₹{stats.expense.toLocaleString('en-IN')}
                                         </Text>
                                     </View>
@@ -310,26 +437,17 @@ const WalletScreen = ({ navigation }) => {
                             </View>
                         </Surface>
 
-                        {/* Visual Analytics - Pie Chart (Only if expenses exist) */}
-                        {stats.chartData.length > 0 && (
-                            <Surface style={[styles.chartCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 16 }}>Expense Breakdown</Text>
-                                <View style={{ alignItems: 'center' }}>
-                                    <PieChart
-                                        data={stats.chartData}
-                                        width={Dimensions.get('window').width - 64}
-                                        height={200}
-                                        chartConfig={{
-                                            color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                                        }}
-                                        accessor={"amount"}
-                                        backgroundColor={"transparent"}
-                                        paddingLeft={"15"}
-                                        center={[10, 0]}
-                                        absolute
-                                    />
-                                </View>
-                            </Surface>
+                        {/* Visual Analytics - Pie Chart (Switches based on filter) */}
+                        {((filterType === 'all') && (stats.income > 0 || stats.expense > 0)) && (
+                            <StatChart title="Cash Flow" data={stats.cashFlowChart} theme={theme} />
+                        )}
+
+                        {((filterType === 'expense') && stats.expenseChart.length > 0) && (
+                            <StatChart title="Expense Breakdown" data={stats.expenseChart} theme={theme} />
+                        )}
+
+                        {((filterType === 'income') && stats.incomeChart.length > 0) && (
+                            <StatChart title="Income Breakdown" data={stats.incomeChart} theme={theme} />
                         )}
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 }}>
@@ -367,64 +485,15 @@ const WalletScreen = ({ navigation }) => {
                     onDismiss={() => setVisible(false)}
                     contentContainerStyle={[styles.modalContent, { backgroundColor: theme.colors.elevation.level3 }]}
                 >
-                    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
-                        <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginBottom: 24, textAlign: 'center', color: theme.colors.onSurface }}>
-                            New Transaction
-                        </Text>
-
-                        <SegmentedButtons
-                            value={type}
-                            onValueChange={setType}
-                            buttons={[
-                                { value: 'expense', label: 'Expense', icon: 'arrow-up-right', checkedColor: theme.colors.error, style: { borderColor: theme.colors.outline } },
-                                { value: 'income', label: 'Income', icon: 'arrow-down-left', checkedColor: theme.colors.primary, style: { borderColor: theme.colors.outline } },
-                            ]}
-                            style={{ marginBottom: 24 }}
-                        />
-
-                        {/* Category Selection */}
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8, marginLeft: 4 }}>Category</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
-                            <View style={{ flexDirection: 'row', gap: 8, paddingRight: 16 }}>
-                                {(type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((cat) => (
-                                    <Chip
-                                        key={cat}
-                                        selected={category === cat}
-                                        onPress={() => setCategory(cat)}
-                                        showSelectedOverlay
-                                        style={{ backgroundColor: category === cat ? (type === 'income' ? theme.colors.primaryContainer : theme.colors.errorContainer) : theme.colors.surfaceVariant }}
-                                        textStyle={{ color: theme.colors.onSurface }}
-                                    >
-                                        {cat}
-                                    </Chip>
-                                ))}
-                            </View>
-                        </ScrollView>
-
-                        <TextInput
-                            label="Amount"
-                            value={amount}
-                            onChangeText={setAmount}
-                            keyboardType="decimal-pad"
-                            mode="outlined"
-                            style={{ marginBottom: 16, backgroundColor: 'transparent' }}
-                            left={<TextInput.Affix text="₹" />}
-                            autoFocus
-                        />
-
-                        <TextInput
-                            label="Description"
-                            value={description}
-                            onChangeText={setDescription}
-                            mode="outlined"
-                            style={{ marginBottom: 32, backgroundColor: 'transparent' }}
-                            placeholder="e.g. Server Costs"
-                        />
-
-                        <Button mode="contained" onPress={handleSave} loading={loading} contentStyle={{ height: 48 }}>
-                            Save Transaction
-                        </Button>
-                    </KeyboardAvoidingView>
+                    <View>
+                        {Platform.OS !== 'web' ? (
+                            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+                                {renderModalContent()}
+                            </KeyboardAvoidingView>
+                        ) : (
+                            renderModalContent()
+                        )}
+                    </View>
                 </Modal>
             </Portal>
 
