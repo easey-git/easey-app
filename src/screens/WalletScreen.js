@@ -133,6 +133,9 @@ const WalletScreen = ({ navigation }) => {
 
     useEffect(() => {
         const fetchGlobalStats = async () => {
+            // SHOW LOADING STATE: Reset to 0 while we fetch new filter data
+            setGlobalStats({ balance: 0, income: 0, expense: 0 });
+
             try {
                 // Calculate start date based on filter
                 let startDate = new Date();
@@ -143,6 +146,8 @@ const WalletScreen = ({ navigation }) => {
                     hasDateFilter = true;
                 } else if (timeRange === 'month') {
                     startDate.setMonth(startDate.getMonth() - 1);
+                    // Ensure we reset time to start of day for accurate <= comparisons? 
+                    // Actually standard setDate/Month preserves time, which is fine for "Rolling 30 days".
                     hasDateFilter = true;
                 }
 
@@ -159,8 +164,7 @@ const WalletScreen = ({ navigation }) => {
                 const incomeQuery = query(coll, ...incomeConstraints);
                 const expenseQuery = query(coll, ...expenseConstraints);
 
-                // Fetch Aggregations Parallel
-                // Note: Firestore 'sum' aggregation is server-side and efficient for large datasets
+                // Fetch Aggregations
                 const [incomeSnap, expenseSnap] = await Promise.all([
                     getAggregateFromServer(incomeQuery, { total: sum('amount') }),
                     getAggregateFromServer(expenseQuery, { total: sum('amount') })
@@ -177,7 +181,9 @@ const WalletScreen = ({ navigation }) => {
 
             } catch (error) {
                 console.error("Stats Aggregation Failed:", error);
-                // Fallback to client-side math if aggregation fails or is unavailable
+                if (error.message.includes("index")) {
+                    Alert.alert("Missing Index", "To filter by date, you need to create a Firestore Index. Check your console logs or ask your developer for the link.");
+                }
             }
         };
 
