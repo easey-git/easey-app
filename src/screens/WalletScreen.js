@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Dimensions, FlatList } from 'react-native';
 import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar } from 'react-native-paper';
 import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, where, getAggregateFromServer, sum } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -130,11 +130,11 @@ const WalletScreen = ({ navigation }) => {
 
     // Real Global Stats (Server-Side Aggregation)
     const [globalStats, setGlobalStats] = useState({ balance: 0, income: 0, expense: 0 });
+    const [statsLoading, setStatsLoading] = useState(true);
 
     useEffect(() => {
         const fetchGlobalStats = async () => {
-            // SHOW LOADING STATE: Reset to 0 while we fetch new filter data
-            setGlobalStats({ balance: 0, income: 0, expense: 0 });
+            setStatsLoading(true);
 
             try {
                 // Calculate start date based on filter
@@ -184,6 +184,8 @@ const WalletScreen = ({ navigation }) => {
                 if (error.message.includes("index")) {
                     Alert.alert("Missing Index", "To filter by date, you need to create a Firestore Index. Check your console logs or ask your developer for the link.");
                 }
+            } finally {
+                setStatsLoading(false);
             }
         };
 
@@ -447,6 +449,183 @@ const WalletScreen = ({ navigation }) => {
         </>
     );
 
+    const renderTransactionItem = useCallback(({ item }) => (
+        <TouchableOpacity onLongPress={() => confirmDelete(item.id)} delayLongPress={500}>
+            <View style={styles.transactionRow}>
+                <View style={styles.iconContainer}>
+                    <Surface style={[styles.iconSurface, { backgroundColor: item.type === 'income' ? theme.colors.primaryContainer : theme.colors.errorContainer }]} elevation={0}>
+                        <Icon
+                            source={item.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}
+                            color={item.type === 'income' ? theme.colors.primary : theme.colors.error}
+                            size={20}
+                        />
+                    </Surface>
+                </View>
+                <View style={{ flex: 1, marginLeft: 16, marginRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                        <Text variant="bodyLarge" style={{ fontWeight: '600', color: theme.colors.onSurface, flex: 1 }} numberOfLines={1}>
+                            {item.description}
+                        </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text variant="bodySmall" style={{ color: theme.colors.outline, marginRight: 6 }}>{item.category}</Text>
+                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                            • {item.date?.toDate ? item.date.toDate().toLocaleDateString() + ' • ' + item.date.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                        </Text>
+                    </View>
+                </View>
+                <Text
+                    variant="titleMedium"
+                    style={{
+                        fontWeight: 'bold',
+                        color: item.type === 'income' ? theme.colors.primary : theme.colors.error,
+                        textAlign: 'right',
+                        minWidth: 80
+                    }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                >
+                    {item.type === 'income' ? '+' : '-'}₹{Math.abs(item.amount).toLocaleString('en-IN')}
+                </Text>
+            </View>
+        </TouchableOpacity>
+    ), [theme, confirmDelete]);
+
+    const ListHeader = useMemo(() => (
+        <View style={{ paddingBottom: 16 }}>
+            {/* Time Filter */}
+            <View style={{ marginBottom: 16 }}>
+                <SegmentedButtons
+                    value={timeRange}
+                    onValueChange={setTimeRange}
+                    buttons={[
+                        { value: 'week', label: '7 Days' },
+                        { value: 'month', label: '30 Days' },
+                        { value: 'all', label: 'All Time' },
+                    ]}
+                    style={{ marginBottom: 0 }}
+                />
+            </View>
+
+            {/* Balance Overview */}
+            <Surface style={[styles.balanceCard, { backgroundColor: theme.colors.surface }]} elevation={2}>
+                <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>NET</Text>
+                {statsLoading ? (
+                    <View style={{ height: 50, justifyContent: 'center', alignItems: 'flex-start' }}>
+                        <ActivityIndicator size="small" />
+                    </View>
+                ) : (
+                    <Text
+                        variant="displayMedium"
+                        style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4, marginBottom: 24 }}
+                        adjustsFontSizeToFit
+                        numberOfLines={1}
+                        minimumFontScale={0.5}
+                    >
+                        ₹{globalStats.balance.toLocaleString('en-IN')}
+                    </Text>
+                )}
+
+                <View style={styles.statsRow}>
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                        <View style={[styles.statIcon, { backgroundColor: theme.colors.primaryContainer }]}>
+                            <Icon source="arrow-down-left" color={theme.colors.primary} size={20} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Income</Text>
+                            {statsLoading ? (
+                                <ActivityIndicator size="small" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
+                            ) : (
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
+                                    ₹{globalStats.income.toLocaleString('en-IN')}
+                                </Text>
+                            )}
+                        </View>
+                    </View>
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                        <View style={[styles.statIcon, { backgroundColor: theme.colors.errorContainer }]}>
+                            <Icon source="arrow-up-right" color={theme.colors.error} size={20} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Expense</Text>
+                            {statsLoading ? (
+                                <ActivityIndicator size="small" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
+                            ) : (
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
+                                    ₹{globalStats.expense.toLocaleString('en-IN')}
+                                </Text>
+                            )}
+                        </View>
+                    </View>
+                </View>
+            </Surface>
+
+            {/* Visual Analytics - Pie Chart (Visible Data) */}
+            {
+                ((filterType === 'all') && (globalStats.income > 0 || globalStats.expense > 0)) && (
+                    <StatChart title="Cash Flow (Visible)" data={[
+                        {
+                            name: 'Income',
+                            amount: chartStats.incomeChart.reduce((a, b) => a + b.amount, 0), // Use total of visible income
+                            color: theme.colors.primary,
+                            legendFontColor: theme.colors.onSurfaceVariant,
+                            legendFontSize: 12
+                        },
+                        {
+                            name: 'Expense',
+                            amount: chartStats.expenseChart.reduce((a, b) => a + b.amount, 0), // Use total of visible expense
+                            color: theme.colors.error,
+                            legendFontColor: theme.colors.onSurfaceVariant,
+                            legendFontSize: 12
+                        }
+                    ].sort((a, b) => b.amount - a.amount)} theme={theme} />
+                )
+            }
+
+            {
+                ((filterType === 'expense') && chartStats.expenseChart.length > 0) && (
+                    <StatChart title="Expense Breakdown (Visible)" data={chartStats.expenseChart} theme={theme} />
+                )
+            }
+
+            {
+                ((filterType === 'income') && chartStats.incomeChart.length > 0) && (
+                    <StatChart title="Income Breakdown (Visible)" data={chartStats.incomeChart} theme={theme} />
+                )
+            }
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 }}>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>Transactions</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <Chip selected={filterType === 'all'} onPress={() => setFilterType('all')} showSelectedOverlay compact>All</Chip>
+                    <Chip selected={filterType === 'expense'} onPress={() => setFilterType('expense')} showSelectedOverlay compact>Exp</Chip>
+                    <Chip selected={filterType === 'income'} onPress={() => setFilterType('income')} showSelectedOverlay compact>Inc</Chip>
+                </View>
+            </View>
+
+            <Searchbar
+                placeholder="Search transactions"
+                onChangeText={setSearchQuery}
+                value={searchQuery}
+                style={{ marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 16, height: 46 }}
+                inputStyle={{ minHeight: 0, alignSelf: 'center' }}
+                iconColor={theme.colors.onSurfaceVariant}
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+                elevation={0}
+            />
+
+            {
+                filteredTransactions.length === 0 && (
+                    <View style={{ alignItems: 'center', padding: 40, opacity: 0.5 }}>
+                        <Icon source="wallet-outline" size={64} color={theme.colors.onSurfaceVariant} />
+                        <Text variant="bodyLarge" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>No transactions found</Text>
+                    </View>
+                )
+            }
+        </View >
+    ), [timeRange, globalStats, theme, filterType, chartStats, searchQuery, filteredTransactions.length]);
+
     return (
         <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
             <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0 }}>
@@ -461,118 +640,18 @@ const WalletScreen = ({ navigation }) => {
                 </View>
             ) : (
                 <ResponsiveContainer>
-                    <ScrollView contentContainerStyle={styles.content}>
-                        {/* Time Filter */}
-                        <View style={{ marginBottom: 16 }}>
-                            <SegmentedButtons
-                                value={timeRange}
-                                onValueChange={setTimeRange}
-                                buttons={[
-                                    { value: 'week', label: '7 Days' },
-                                    { value: 'month', label: '30 Days' },
-                                    { value: 'all', label: 'All Time' },
-                                ]}
-                                style={{ marginBottom: 0 }}
-                            />
-                        </View>
-
-                        {/* Balance Overview */}
-                        <Surface style={[styles.balanceCard, { backgroundColor: theme.colors.surface }]} elevation={2}>
-                            <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Net</Text>
-                            <Text variant="displayMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4, marginBottom: 24 }} adjustsFontSizeToFit numberOfLines={1}>
-                                ₹{globalStats.balance.toLocaleString('en-IN')}
-                            </Text>
-
-                            <View style={styles.statsRow}>
-                                <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                                    <View style={[styles.statIcon, { backgroundColor: theme.colors.primaryContainer }]}>
-                                        <Icon source="arrow-down-left" color={theme.colors.primary} size={20} />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Income</Text>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
-                                            ₹{globalStats.income.toLocaleString('en-IN')}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                                    <View style={[styles.statIcon, { backgroundColor: theme.colors.errorContainer }]}>
-                                        <Icon source="arrow-up-right" color={theme.colors.error} size={20} />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Expense</Text>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
-                                            ₹{globalStats.expense.toLocaleString('en-IN')}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </Surface>
-
-                        {/* Visual Analytics - Pie Chart (Visible Data) */}
-                        {((filterType === 'all') && (globalStats.income > 0 || globalStats.expense > 0)) && (
-                            <StatChart title="Cash Flow (Visible)" data={[
-                                {
-                                    name: 'Income',
-                                    amount: chartStats.incomeChart.reduce((a, b) => a + b.amount, 0), // Use total of visible income
-                                    color: theme.colors.primary,
-                                    legendFontColor: theme.colors.onSurfaceVariant,
-                                    legendFontSize: 12
-                                },
-                                {
-                                    name: 'Expense',
-                                    amount: chartStats.expenseChart.reduce((a, b) => a + b.amount, 0), // Use total of visible expense
-                                    color: theme.colors.error,
-                                    legendFontColor: theme.colors.onSurfaceVariant,
-                                    legendFontSize: 12
-                                }
-                            ].sort((a, b) => b.amount - a.amount)} theme={theme} />
-                        )}
-
-                        {((filterType === 'expense') && chartStats.expenseChart.length > 0) && (
-                            <StatChart title="Expense Breakdown (Visible)" data={chartStats.expenseChart} theme={theme} />
-                        )}
-
-                        {((filterType === 'income') && chartStats.incomeChart.length > 0) && (
-                            <StatChart title="Income Breakdown (Visible)" data={chartStats.incomeChart} theme={theme} />
-                        )}
-
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 }}>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>Transactions</Text>
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                <Chip selected={filterType === 'all'} onPress={() => setFilterType('all')} showSelectedOverlay compact>All</Chip>
-                                <Chip selected={filterType === 'expense'} onPress={() => setFilterType('expense')} showSelectedOverlay compact>Exp</Chip>
-                                <Chip selected={filterType === 'income'} onPress={() => setFilterType('income')} showSelectedOverlay compact>Inc</Chip>
-                            </View>
-                        </View>
-
-                        <Searchbar
-                            placeholder="Search transactions"
-                            onChangeText={setSearchQuery}
-                            value={searchQuery}
-                            style={{ marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 16, height: 46 }}
-                            inputStyle={{ minHeight: 0, alignSelf: 'center' }}
-                            iconColor={theme.colors.onSurfaceVariant}
-                            placeholderTextColor={theme.colors.onSurfaceVariant}
-                            elevation={0}
-                        />
-
-                        {filteredTransactions.length === 0 ? (
-                            <View style={{ alignItems: 'center', padding: 40, opacity: 0.5 }}>
-                                <Icon source="wallet-outline" size={64} color={theme.colors.onSurfaceVariant} />
-                                <Text variant="bodyLarge" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>No transactions found</Text>
-                            </View>
-                        ) : (
-                            <Surface style={[styles.listCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
-                                {filteredTransactions.map((item, index) => (
-                                    <View key={item.id}>
-                                        {renderTransaction({ item })}
-                                        {index < filteredTransactions.length - 1 && <Divider style={{ marginLeft: 64 }} />}
-                                    </View>
-                                ))}
-                            </Surface>
-                        )}
-                    </ScrollView>
+                    <FlatList
+                        data={filteredTransactions}
+                        renderItem={renderTransactionItem}
+                        keyExtractor={item => item.id}
+                        contentContainerStyle={styles.content}
+                        ListHeaderComponent={ListHeader}
+                        showsVerticalScrollIndicator={false}
+                        initialNumToRender={20}
+                        maxToRenderPerBatch={20}
+                        windowSize={10}
+                        removeClippedSubviews={Platform.OS === 'android'}
+                    />
                 </ResponsiveContainer>
             )}
 

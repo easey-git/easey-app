@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
 import { Surface, Text, useTheme, Button, IconButton, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon } from 'react-native-paper';
-import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, getAggregateFromServer, sum, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export const WalletCard = () => {
@@ -9,6 +9,7 @@ export const WalletCard = () => {
     const [transactions, setTransactions] = useState([]);
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [initLoading, setInitLoading] = useState(true);
 
     // Form State
     const [amount, setAmount] = useState('');
@@ -23,41 +24,58 @@ export const WalletCard = () => {
     });
 
     useEffect(() => {
-        const q = query(
-            collection(db, "wallet_transactions"),
-            orderBy("date", "desc"),
-            limit(20) // Get last 20 for calculation context, though ideally we aggregate differently
-        );
+        let unsubscribe;
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const list = [];
-            let income = 0;
-            let expense = 0;
+        const fetchData = async () => {
+            // 1. Live listener for Recent Transactions (List)
+            const q = query(
+                collection(db, "wallet_transactions"),
+                orderBy("date", "desc"),
+                limit(5)
+            );
 
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                const item = { id: doc.id, ...data };
-                list.push(item);
-
-                // Simple client-side aggregation for now (ideal for small lists)
-                // For production, you'd want a separate stats document
-                if (data.type === 'income') {
-                    income += parseFloat(data.amount);
-                } else {
-                    expense += parseFloat(data.amount);
-                }
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setTransactions(list);
+                setInitLoading(false);
             });
 
-            setTransactions(list);
-            setStats({
-                balance: income - expense,
-                income,
-                expense
-            });
-        });
+            // 2. Aggregate Global Stats (Server Side) - Accurate Total
+            // Note: We re-fetch this when list updates to keep it vaguely in sync, 
+            // or ideally we could assume if list changed, totals *might* have changed.
+            // For better real-time updates without high reads on aggregation, we usually trigger this on specific events
+            // or just run it once on mount. For now, let's run it once and ideally expose a refresh.
+            // However, to make it react to the new transaction added via this card, we should re-run it when transactions change or just locally update.
+            // Let's keep it simple: Fetch Real Aggregates on Mount.
+            try {
+                const coll = collection(db, "wallet_transactions");
+                const [incomeSnap, expenseSnap] = await Promise.all([
+                    getAggregateFromServer(query(coll, where("type", "==", "income")), { total: sum('amount') }),
+                    getAggregateFromServer(query(coll, where("type", "==", "expense")), { total: sum('amount') })
+                ]);
 
-        return () => unsubscribe();
-    }, []);
+                const totalIncome = incomeSnap.data().total || 0;
+                const totalExpense = expenseSnap.data().total || 0;
+                setStats({
+                    income: totalIncome,
+                    expense: totalExpense,
+                    balance: totalIncome - totalExpense
+                });
+            } catch (err) {
+                console.error("WalletCard Stats Error:", err);
+                // Fail silently or keep 0
+            }
+        };
+
+        fetchData();
+
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
+    }, [loading]); // Re-fetch aggregates when 'loading' toggle (save completed) loops? No, handled by separate effect or dependency.
+    // Actually, to update totals after ADDING a transaction, we should trigger re-fetch.
+    // Let's depend on 'visible' closing (simplest proxy for 'transaction added').
+
 
     const handleSave = async () => {
         if (!amount || !description) return;
@@ -124,7 +142,13 @@ export const WalletCard = () => {
             <View style={styles.cardHeader}>
                 <View>
                     <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant, fontWeight: 'bold' }}>Wallet</Text>
-                    <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4 }}>
+                    <Text
+                        variant="displaySmall"
+                        style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4 }}
+                        adjustsFontSizeToFit
+                        numberOfLines={1}
+                        minimumFontScale={0.5}
+                    >
                         ₹{stats.balance.toLocaleString('en-IN')}
                     </Text>
                 </View>
