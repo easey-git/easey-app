@@ -10,6 +10,7 @@ export const WalletCard = () => {
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [initLoading, setInitLoading] = useState(true);
+    const [statsLoading, setStatsLoading] = useState(true);
 
     // Form State
     const [amount, setAmount] = useState('');
@@ -64,6 +65,8 @@ export const WalletCard = () => {
             } catch (err) {
                 console.error("WalletCard Stats Error:", err);
                 // Fail silently or keep 0
+            } finally {
+                setStatsLoading(false);
             }
         };
 
@@ -142,15 +145,21 @@ export const WalletCard = () => {
             <View style={styles.cardHeader}>
                 <View>
                     <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant, fontWeight: 'bold' }}>Wallet</Text>
-                    <Text
-                        variant="displaySmall"
-                        style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4 }}
-                        adjustsFontSizeToFit
-                        numberOfLines={1}
-                        minimumFontScale={0.5}
-                    >
-                        ₹{stats.balance.toLocaleString('en-IN')}
-                    </Text>
+                    {statsLoading ? (
+                        <View style={{ height: 40, justifyContent: 'center', alignItems: 'flex-start' }}>
+                            <ActivityIndicator size="small" />
+                        </View>
+                    ) : (
+                        <Text
+                            variant="displaySmall"
+                            style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4 }}
+                            adjustsFontSizeToFit
+                            numberOfLines={1}
+                            minimumFontScale={0.5}
+                        >
+                            ₹{stats.balance.toLocaleString('en-IN')}
+                        </Text>
+                    )}
                 </View>
                 <IconButton
                     icon="plus"
@@ -168,18 +177,26 @@ export const WalletCard = () => {
                     <Icon source="arrow-down-left" color={theme.colors.primary} size={20} />
                     <View style={{ marginLeft: 8 }}>
                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Income</Text>
-                        <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-                            ₹{stats.income.toLocaleString('en-IN')}
-                        </Text>
+                        {statsLoading ? (
+                            <ActivityIndicator size="small" style={{ alignSelf: 'flex-start' }} />
+                        ) : (
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                ₹{stats.income.toLocaleString('en-IN')}
+                            </Text>
+                        )}
                     </View>
                 </View>
                 <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
                     <Icon source="arrow-up-right" color={theme.colors.error} size={20} />
                     <View style={{ marginLeft: 8 }}>
                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Expense</Text>
-                        <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.error }}>
-                            ₹{stats.expense.toLocaleString('en-IN')}
-                        </Text>
+                        {statsLoading ? (
+                            <ActivityIndicator size="small" style={{ alignSelf: 'flex-start' }} />
+                        ) : (
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.error }}>
+                                ₹{stats.expense.toLocaleString('en-IN')}
+                            </Text>
+                        )}
                     </View>
                 </View>
             </View>
