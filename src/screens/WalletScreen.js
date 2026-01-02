@@ -435,7 +435,7 @@ const WalletScreen = ({ navigation }) => {
 
                         {/* Balance Overview */}
                         <Surface style={[styles.balanceCard, { backgroundColor: theme.colors.surface }]} elevation={2}>
-                            <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Balance</Text>
+                            <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Net</Text>
                             <Text variant="displayMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4, marginBottom: 24 }} adjustsFontSizeToFit numberOfLines={1}>
                                 ₹{stats.balance.toLocaleString('en-IN')}
                             </Text>

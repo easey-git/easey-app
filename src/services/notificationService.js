@@ -4,7 +4,11 @@ import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import Constants from 'expo-constants';
 
-// Configure notification behavior
+// --- Constants ---
+export const ANDROID_CHANNEL_ID = 'easey_default_v1'; // Must match app.json metaData
+const ANDROID_CHANNEL_NAME = 'Default Notification';
+
+// --- Configuration ---
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowAlert: true,
@@ -27,54 +31,90 @@ const getMessaging = () => {
 
 const messaging = getMessaging();
 
-// Handle foreground FCM messages
+// --- Initialization ---
 if (messaging) {
+    // Handle Foreground Messages
+    // Firebase does NOT show notifications in foreground by default.
+    // We must manually trigger a local notification to ensure sound/alert works.
     messaging().onMessage(async remoteMessage => {
-        // FCM handles the notification display automatically
-        // We don't need to manually schedule it
+        console.log('FCM Message Received (Foreground):', remoteMessage);
+
+        const { notification, data } = remoteMessage;
+
+        if (notification) {
+            await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: notification.title,
+                    body: notification.body,
+                    sound: 'default',
+                    data: data,
+                },
+                trigger: null, // Immediate
+            });
+        }
     });
 
+    // Background handler is required by RNFirebase
     messaging().setBackgroundMessageHandler(async remoteMessage => {
-        // Background messages are handled by FCM automatically
+        console.log('FCM Message Received (Background):', remoteMessage);
+        // Handled specifically by Native System using app.json channel config
     });
 }
+
+// --- Public API ---
 
 export async function registerForPushNotificationsAsync(userId) {
     const messaging = getMessaging();
 
     if (!messaging) {
-        return;
+        console.log("Messaging not initialized (Web or Expo Go)");
+        return null;
     }
-
-    let token;
 
     if (Platform.OS === 'android') {
-        // Create a single notification channel
-        await Notifications.setNotificationChannelAsync('default', {
-            name: 'Default',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF231F7C',
-            sound: 'default',
-        });
+        // Create the notification channel.
+        // This is IDEMPOTENT. If usage changes (sound/importance), you MUST change the CHANNEL_ID.
+        try {
+            await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+                name: ANDROID_CHANNEL_NAME,
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#FF231F7C',
+                sound: 'default', // Explicitly request default sound
+            });
+        } catch (error) {
+            console.error("Failed to create notification channel:", error);
+        }
     }
 
-    // Request permissions
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    // Request Permissions
+    let finalStatus;
+    try {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        finalStatus = existingStatus;
 
-    if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
+        if (existingStatus !== 'granted') {
+            const { status } = await Notifications.requestPermissionsAsync();
+            finalStatus = status;
+        }
+    } catch (error) {
+        console.error("Error requesting notification permissions:", error);
+        return null;
     }
 
     if (finalStatus !== 'granted') {
-        alert('Failed to get push token for push notification!');
-        return;
+        console.log('Failed to get push token for push notification!');
+        return null;
     }
 
     // Get FCM token
-    token = await messaging().getToken();
+    let token;
+    try {
+        token = await messaging().getToken();
+    } catch (error) {
+        console.error("Error fetching FCM token:", error);
+        return null;
+    }
 
     // Save token to Firestore
     if (token) {
@@ -82,7 +122,8 @@ export async function registerForPushNotificationsAsync(userId) {
             const tokenData = {
                 token: token,
                 updatedAt: serverTimestamp(),
-                platform: Platform.OS
+                platform: Platform.OS,
+                channelId: ANDROID_CHANNEL_ID // Debug capability
             };
 
             if (userId) {
@@ -91,19 +132,20 @@ export async function registerForPushNotificationsAsync(userId) {
 
             await setDoc(doc(db, 'push_tokens', token), tokenData, { merge: true });
         } catch (error) {
-            console.error('Error saving push token:', error);
+            console.error('Error saving push token to Firestore:', error);
         }
     }
 
     return token;
 }
 
-export async function sendLocalNotification(title, body) {
+export async function sendLocalNotification(title, body, data = {}) {
     await Notifications.scheduleNotificationAsync({
         content: {
             title,
             body,
             sound: 'default',
+            data,
         },
         trigger: null,
     });

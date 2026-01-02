@@ -24,7 +24,10 @@
       "permissions": [
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED"
-      ]
+      ],
+      "metaData": {
+        "com.google.firebase.messaging.default_notification_channel_id": "easey_default_v1"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
