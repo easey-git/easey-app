@@ -26,12 +26,22 @@ const DB_SCHEMA = `
 You have read-access to a Firestore database for an e-commerce store.
 Collections:
 1. "orders"
-   - documentId: Auto-generated
-   - Fields: orderNumber (string), customerName (string), totalPrice (number), status (string: 'COD', 'Paid', 'CANCELLED'), verified (boolean), createdAt (timestamp), phone (string).
+   - documentId: Auto-generated string.
+   - Fields: 
+     - orderNumber (number): The official order number (e.g. 1001, 1630). NOT a string.
+     - customerName (string): Full name. Case-sensitive.
+     - totalPrice (string/number): Total value.
+     - status (string): 'COD', 'Paid', 'CANCELLED'.
+     - phoneNormalized (string): Phone number in E.164 format (e.g. 919876543210).
 2. "checkouts" (Abandoned Carts)
    - Fields: total_price (number), first_name (string), eventType (string: 'ABANDONED', 'ACTIVE_CART'), updatedAt (timestamp).
 3. "whatsapp_messages"
    - Fields: phone (string), direction (string: 'inbound', 'outbound'), body (string), status (string: 'sent', 'read', 'failed'), timestamp (timestamp).
+
+SEARCH TIPS:
+- For 'orderNumber', always query as a NUMBER, not a string.
+- For names, if exact match fails, try querying just the first name.
+- Timestamps are ISO strings.
 `;
 
 // ---------------------------------------------------------

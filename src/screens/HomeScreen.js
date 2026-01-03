@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Image, TouchableOpacity, useWindowDimensions } from 'react-native';
-import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon } from 'react-native-paper';
+import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon, FAB } from 'react-native-paper';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { NotesCard } from '../components/NotesCard';
@@ -177,13 +177,6 @@ const HomeScreen = ({ navigation }) => {
     }, [fetchStats]);
 
     const menuItems = [
-        {
-            id: 0,
-            title: 'Easey AI',
-            subtitle: 'Your Assistant',
-            icon: 'robot',
-            screen: 'Assistant',
-        },
         {
             id: 1,
             title: 'Orders',
@@ -374,6 +367,14 @@ const HomeScreen = ({ navigation }) => {
                     </View>
                 </ScrollView>
             </ResponsiveContainer>
+
+            <FAB
+                icon="auto-fix" // Magical spark icon for AI
+                label={isDesktop ? "Ask Easey" : null}
+                style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+                color={theme.colors.onPrimary}
+                onPress={() => navigation.navigate('Assistant')}
+            />
         </View >
     );
 };
@@ -406,6 +407,14 @@ const styles = StyleSheet.create({
         // Width is now dynamic
         borderRadius: 16,
         overflow: 'hidden',
+    },
+    fab: {
+        position: 'absolute',
+        margin: 16,
+        right: 0,
+        bottom: 0,
+        borderRadius: 16,
+        zIndex: 10
     }
 });
 
