@@ -199,7 +199,6 @@ export const WalletCard = () => {
             {/* Recent Transactions List */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Recent Activity</Text>
-                {/* <Button mode="text" compact>View All</Button> */}
             </View>
 
             {transactions.length === 0 ? (

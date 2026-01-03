@@ -104,11 +104,6 @@ const WalletScreen = ({ navigation }) => {
         setSnackbarVisible(true);
     }, [theme]);
 
-    // Derived Stats (Charts - Visible Data Only)
-    // Derived Stats (Charts - Visible Data Only for Items, Server Data for Categories)
-    // We will now merge Client Stats (Items) with a new Server Stats (Categories) state
-    // For now, let's keep ItemStats derived from visible transactions
-
     // Separate Data Stream for Charts (High Volume, Client-Side Aggregation)
     const [chartTransactions, setChartTransactions] = useState([]);
 
@@ -120,10 +115,8 @@ const WalletScreen = ({ navigation }) => {
         const unsubscribe = onSnapshot(doc(db, 'wallet_stats', 'global'), (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
-                console.log("AllTimeStats Snapshot:", JSON.stringify(data));
                 setAllTimeStats(data);
             } else {
-                console.log("AllTimeStats: Doc missing");
                 // If missing, we might want to trigger a recalculate (one off) or just show 0
                 setAllTimeStats({ balance: 0, income: 0, expense: 0, categoryBreakdown: { income: {}, expense: {} } });
             }
@@ -131,21 +124,23 @@ const WalletScreen = ({ navigation }) => {
         return () => unsubscribe();
     }, [timeRange]);
 
+    // 5. Auto-Migration Logic (Side Effect - Safer here than in useMemo)
+    useEffect(() => {
+        if (timeRange === 'all' && allTimeStats) {
+            // If we have categories (old stats) but NO descriptions (new stats), trigger an update.
+            if (allTimeStats.categoryBreakdown && !allTimeStats.descriptionBreakdown) {
+                WalletService.recalculateAllStats();
+            }
+        }
+    }, [timeRange, allTimeStats]);
+
     const itemStats = useMemo(() => {
         const expenseItemTotals = {};
         const incomeItemTotals = {};
 
         // CASE 1: All Time (Server Stats Doc)
-        // CASE 1: All Time (Server Stats Doc)
-        // CASE 1: All Time (Server Stats Doc)
-        // CASE 1: All Time (Server Stats Doc)
         if (timeRange === 'all') {
-            // Auto-Migration Check: If descriptions missing, trigger recalculate
-            if (allTimeStats && allTimeStats.categoryBreakdown && !allTimeStats.descriptionBreakdown) {
-                console.log("Auto-Migrating Stats to include descriptions...");
-                WalletService.recalculateAllStats();
-                // We don't wait. Next snapshot update will bring data.
-            }
+
 
             if (allTimeStats && allTimeStats.descriptionBreakdown) {
                 const descs = allTimeStats.descriptionBreakdown;
@@ -366,13 +361,8 @@ const WalletScreen = ({ navigation }) => {
             });
             setTransactions(list);
 
-            // If "All Time", we rely on Client Side Math for the downloaded batch.
-            // *CRITICAL*: For true "Millions of rows" support, we would need Cloud Functions 
-            // maintaining a "wallet_stats" document. 
-            // Client-side aggregation on "All" query is too expensive (reads = N).
-            // Aggregation Queries (count/sum) are also billed per index read.
-            // For now, increasing limit to 1000 covers 99.9% of use cases.
-            // If the user truly has millions, we would switch to a dedicated API endpoint.
+            // Note: For millions of transactions, we rely on the server-side "wallet_stats" for totals.
+            // The list view is paginated to standard limits (50-1000) for performance.
 
             setDataLoading(false);
         }, (error) => {

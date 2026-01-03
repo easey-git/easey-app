@@ -152,8 +152,6 @@ export const WalletService = {
      */
     recalculateAllStats: async () => {
         try {
-            console.log("Starting Scalable Stats Recalculation...");
-
             let newStats = {
                 balance: 0,
                 income: 0,
@@ -209,8 +207,6 @@ export const WalletService = {
 
                 lastDoc = snapshot.docs[snapshot.docs.length - 1];
                 processedCount += snapshot.size;
-                console.log(`Processed ${processedCount} transactions...`);
-
                 // Safety break to prevent infinite loops in weird edge cases
                 if (snapshot.size < BATCH_SIZE) hasMore = false;
             }
@@ -220,7 +216,6 @@ export const WalletService = {
                 const statsRef = doc(db, STATS_COLLECTION, STATS_DOC_ID);
                 transaction.set(statsRef, newStats);
             });
-            console.log("Stats recalculation complete.");
             return newStats;
         } catch (error) {
             console.error("Recalculate failed:", error);
