@@ -77,8 +77,8 @@ export default function AssistantScreen({ navigation }) {
         try {
             // Context History: Send last 10 messages
             const historyPayload = updatedMessages.slice(-10).map(m => ({
-                role: m.sender === 'user' ? 'user' : 'model',
-                text: m.text
+                role: m.sender === 'user' ? 'user' : 'assistant',
+                content: m.text
             }));
 
             const response = await fetch(API_URL, {
