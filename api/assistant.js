@@ -176,18 +176,27 @@ const fetchCampaigns = async () => {
 };
 
 // ---------------------------------------------------------
+const cors = require('cors')({ origin: true });
+
+// Helper method to wait for a middleware to execute before continuing
+// And to throw an error when an error happens in a middleware
+function runMiddleware(req, res, fn) {
+    return new Promise((resolve, reject) => {
+        fn(req, res, (result) => {
+            if (result instanceof Error) {
+                return reject(result);
+            }
+            return resolve(result);
+        });
+    });
+}
+
+// ---------------------------------------------------------
 // MAIN HANDLER
 // ---------------------------------------------------------
 module.exports = async (req, res) => {
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-
-    if (req.method === 'OPTIONS') {
-        res.status(200).json({});
-        return;
-    }
+    // Run the middleware
+    await runMiddleware(req, res, cors);
 
     try {
         const { prompt, history = [] } = req.body;
