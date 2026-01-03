@@ -248,7 +248,11 @@ module.exports = async (req, res) => {
         // Handle function calls
         if (response.functionCalls && response.functionCalls.length > 0) {
             const functionCall = response.functionCalls[0];
-            const functionResult = await queryFirestore(functionCall.arguments);
+            console.log('Function call received:', JSON.stringify(functionCall));
+
+            // Extract arguments - they might be in args or arguments
+            const args = functionCall.args || functionCall.arguments || {};
+            const functionResult = await queryFirestore(args);
 
             // Add function call and result to contents
             contents.push({
@@ -256,7 +260,7 @@ module.exports = async (req, res) => {
                 parts: [{
                     functionCall: {
                         name: functionCall.name,
-                        args: functionCall.arguments
+                        args: args
                     }
                 }]
             });
