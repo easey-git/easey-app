@@ -3,6 +3,13 @@ const admin = require("firebase-admin");
 const cors = require('cors')({ origin: true });
 
 // ---------------------------------------------------------
+// CONSTANTS
+// ---------------------------------------------------------
+const ALLOWED_COLLECTIONS = ['orders', 'checkouts'];
+const DEFAULT_LIMIT = 10;
+const MAX_LIMIT = 100; // Prevent excessive queries
+
+// ---------------------------------------------------------
 // INITIALIZATION
 // ---------------------------------------------------------
 if (!admin.apps.length) {
@@ -15,7 +22,7 @@ if (!admin.apps.length) {
             credential: admin.credential.cert(serviceAccount)
         });
     } catch (error) {
-        console.error('Firebase Admin Init Error:', error);
+        console.error('[Firebase] Initialization error:', error.message);
     }
 }
 const db = admin.firestore();
@@ -23,248 +30,256 @@ const db = admin.firestore();
 // Initialize Gemini AI
 let ai;
 try {
+    if (!process.env.GEMINI_API_KEY) {
+        throw new Error('GEMINI_API_KEY environment variable is required');
+    }
     ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 } catch (error) {
-    console.error('Gemini AI Init Error:', error);
+    console.error('[Gemini] Initialization error:', error.message);
 }
 
 // ---------------------------------------------------------
-// SCHEMA DEFINITION - ORDERS & CHECKOUTS ONLY
+// SYSTEM INSTRUCTION
 // ---------------------------------------------------------
-const SYSTEM_INSTRUCTION = `
-You are an expert E-commerce Assistant focused EXCLUSIVELY on Orders and Abandoned Checkouts.
+const SYSTEM_INSTRUCTION = `You are an expert E-commerce Assistant focused EXCLUSIVELY on Orders and Abandoned Checkouts.
 You have access to exactly TWO Firestore collections. Answer questions ONLY about these.
 
 1. **ORDERS** (Collection: "orders")
-   Schema based on actual data:
    - orderNumber (number): e.g. 1611
-   - orderId (number): e.g. 6338007171326
    - customerName (string): e.g. "Pushpanjali ."
-   - email (string): e.g. "xalxopushpanjali@gmail.com"
-   - phone (string): e.g. "+918145082423"
-   - phoneNormalized (string): e.g. "918145082423"
-   - totalPrice (string): e.g. "699.00" (STORED AS STRING)
-   - status (string): e.g. "COD", "Paid"
-   - currency (string): "INR"
+   - email, phone, phoneNormalized (strings)
+   - totalPrice (string): e.g. "699.00" ⚠️ STORED AS STRING
+   - status (string): "COD", "Paid"
    - items (array): [{ name, price (string), quantity (number) }]
    - address1, city, state, zip (strings)
-   - createdAt (timestamp): Order date
-   - updatedAt (timestamp)
-   - whatsappSent (boolean)
+   - createdAt, updatedAt (timestamps)
 
-2. **CHECKOUTS** (Collection: "checkouts" -> Abandoned Carts)
-   Schema based on actual data:
-   - cart_id (string): e.g. "6956795f782cb32245101697"
+2. **CHECKOUTS** (Collection: "checkouts")
+   - cart_id (string)
    - eventType (string): "ABANDONED"
-   - first_name, last_name (strings)
-   - email (string)
-   - phone_number (string): e.g. "8909261148"
-   - phoneNormalized (string): e.g. "918909261148"
-   - total_price (number): e.g. 699 (STORED AS NUMBER)
-   - currency (string): "INR"
-   - items (array): [{ name, title, price (number), quantity, product_id, variant_id, img_url }]
-   - billing_address (map): { address1, city, state, zip, country, phone, email }
-   - shipping_address (map): same structure as billing_address
-   - latest_stage (string): e.g. "ORDER_SCREEN", "PHONE_RECEIVED"
-   - payment_status (string): e.g. "Pending"
-   - rtoPredict (string): e.g. "high", "low"
-   - updatedAt (timestamp): Last activity
-   - updated_at (string): ISO format
-   - source_name (string): e.g. "fastrr"
-   - shipping_price, tax, total_discount (numbers)
+   - first_name, last_name, email, phone_number, phoneNormalized (strings)
+   - total_price (number): e.g. 699 ⚠️ STORED AS NUMBER
+   - items (array): [{ name, title, price (number), quantity, product_id, variant_id }]
+   - billing_address, shipping_address (maps)
+   - latest_stage (string): "ORDER_SCREEN", "PHONE_RECEIVED"
+   - rtoPredict (string): "high", "low"
+   - updatedAt (timestamp)
 
-CRITICAL SEARCH RULES:
-1. **Orders**:
-   - Find by order number: filters=[['orderNumber', '==', 1611]] (as NUMBER)
-   - Find by customer name: filters=[['customerName', '>=', 'Push'], ['customerName', '<=', 'Push\\uf8ff']]
-   - Recent orders: orderBy=['createdAt', 'desc'], limit=10
-   - By status: filters=[['status', '==', 'COD']]
-   - By city: filters=[['city', '==', 'Bangalore']]
+SEARCH RULES:
+- Find by order number: filters=[['orderNumber', '==', 1611]] (NUMBER)
+- Find by name: filters=[['customerName', '>=', 'Push'], ['customerName', '<=', 'Push\\uf8ff']]
+- Recent orders: orderBy=['createdAt', 'desc'], limit=10
+- By status: filters=[['status', '==', 'COD']]
+- By city: filters=[['city', '==', 'Bangalore']]
+- Abandoned carts: filters=[['eventType', '==', 'ABANDONED']]
+- Date ranges: filters=[['createdAt', '>=', 'YYYY-MM-DDTHH:mm:ss'], ['createdAt', '<=', 'YYYY-MM-DDTHH:mm:ss']]
 
-2. **Checkouts**:
-   - Abandoned carts: filters=[['eventType', '==', 'ABANDONED']]
-   - Recent: orderBy=['updatedAt', 'desc'], limit=10
-   - By stage: filters=[['latest_stage', '==', 'ORDER_SCREEN']]
-   - High RTO risk: filters=[['rtoPredict', '==', 'high']]
-
-3. **Date Queries**:
-   - For "today": Use date range with >= start of day, <= end of day
-   - Example: filters=[['createdAt', '>=', '2026-01-04T00:00:00'], ['createdAt', '<=', '2026-01-04T23:59:59']]
-
-4. **Resilience**:
-   - If query fails due to missing index, return the index creation link
-   - Always convert timestamps to ISO strings for display
-   - Remember: totalPrice in orders is STRING, total_price in checkouts is NUMBER
-`;
+IMPORTANT: Default limit is 10. For "all orders" or large queries, use limit up to 100.`;
 
 // ---------------------------------------------------------
-// TOOLS IMPLEMENTATION
+// HELPER FUNCTIONS
 // ---------------------------------------------------------
+
+/**
+ * Convert Firestore Timestamp objects to ISO strings
+ * @param {Object} data - Document data
+ * @returns {Object} Data with converted timestamps
+ */
+const convertTimestamps = (data) => {
+    const converted = { ...data };
+    Object.keys(converted).forEach(key => {
+        const val = converted[key];
+        if (val && typeof val === 'object' && val._seconds) {
+            converted[key] = new Date(val._seconds * 1000).toISOString();
+        } else if (val && val.toDate && typeof val.toDate === 'function') {
+            converted[key] = val.toDate().toISOString();
+        }
+    });
+    return converted;
+};
+
+/**
+ * Query Firestore with validation and error handling
+ * @param {Object} params - Query parameters
+ * @returns {Promise<Array|string>} Query results or error message
+ */
 const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
     try {
-        // Only allow orders and checkouts
-        if (collection !== 'orders' && collection !== 'checkouts') {
+        // Validate collection
+        if (!ALLOWED_COLLECTIONS.includes(collection)) {
             return `Error: Only 'orders' and 'checkouts' collections are supported.`;
         }
 
         let ref = db.collection(collection);
 
+        // Apply filters
         if (filters && Array.isArray(filters)) {
             filters.forEach(([field, op, val]) => {
                 ref = ref.where(field, op, val);
             });
         }
 
+        // Apply sorting
         if (orderBy && orderBy.length > 0) {
             ref = ref.orderBy(orderBy[0], orderBy[1] || 'desc');
         }
 
-        const l = limit || 10;
-        ref = ref.limit(l);
+        // Apply limit with max cap
+        const queryLimit = Math.min(limit || DEFAULT_LIMIT, MAX_LIMIT);
+        ref = ref.limit(queryLimit);
 
+        // Execute query
         const snapshot = await ref.get();
-        if (snapshot.empty) return "No documents found.";
 
-        return snapshot.docs.map(doc => {
-            const data = doc.data();
-            // Convert Firestore Timestamps to ISO strings
-            Object.keys(data).forEach(k => {
-                const val = data[k];
-                if (val && typeof val === 'object' && val._seconds) {
-                    data[k] = new Date(val._seconds * 1000).toISOString();
-                } else if (val && val.toDate && typeof val.toDate === 'function') {
-                    data[k] = val.toDate().toISOString();
-                }
-            });
-            return { id: doc.id, ...data };
-        });
+        if (snapshot.empty) {
+            return "No documents found.";
+        }
+
+        // Map results and convert timestamps
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...convertTimestamps(doc.data())
+        }));
+
     } catch (err) {
-        // Handle missing index errors
+        // Handle Firestore index errors
         if (err.code === 9 || err.message.toLowerCase().includes('index')) {
             const indexUrl = err.message.match(/https?:\/\/[^\s]+/)?.[0];
             if (indexUrl) {
-                return `[INDEX REQUIRED] Create index here: ${indexUrl}`;
+                return `[INDEX REQUIRED] Create index: ${indexUrl}`;
             }
         }
+        console.error('[Firestore] Query error:', err.message);
         return `Error: ${err.message}`;
     }
 };
 
-// ---------------------------------------------------------
-// MIDDLEWARE HELPERS
-// ---------------------------------------------------------
-function runMiddleware(req, res, fn) {
+/**
+ * Run Express middleware in serverless environment
+ */
+const runMiddleware = (req, res, fn) => {
     return new Promise((resolve, reject) => {
         fn(req, res, (result) => {
             if (result instanceof Error) return reject(result);
             return resolve(result);
         });
     });
-}
+};
+
+// ---------------------------------------------------------
+// TOOL DEFINITIONS
+// ---------------------------------------------------------
+const TOOLS = [{
+    functionDeclarations: [{
+        name: "queryFirestore",
+        description: "Query 'orders' or 'checkouts' collections from Firestore database.",
+        parametersJsonSchema: {
+            type: "object",
+            properties: {
+                collection: {
+                    type: "string",
+                    enum: ALLOWED_COLLECTIONS,
+                    description: "Collection to query: 'orders' or 'checkouts'"
+                },
+                filters: {
+                    type: "array",
+                    description: "Array of [field, operator, value] filters. Operators: '==', '>=', '<=', '>', '<', 'array-contains'",
+                    items: {
+                        type: "array",
+                        items: { type: "string" }
+                    }
+                },
+                limit: {
+                    type: "number",
+                    description: `Number of documents to return (default: ${DEFAULT_LIMIT}, max: ${MAX_LIMIT})`
+                },
+                orderBy: {
+                    type: "array",
+                    description: "Sort order: [field, direction]. Direction: 'asc' or 'desc'",
+                    items: { type: "string" }
+                }
+            },
+            required: ["collection"]
+        }
+    }]
+}];
 
 // ---------------------------------------------------------
 // MAIN HANDLER
 // ---------------------------------------------------------
 module.exports = async (req, res) => {
+    // Handle CORS
     await runMiddleware(req, res, cors);
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
+    // Validate AI initialization
+    if (!ai) {
+        return res.status(500).json({
+            error: 'AI service not initialized',
+            details: 'GEMINI_API_KEY is missing or invalid'
+        });
+    }
+
     try {
         const { prompt, history = [] } = req.body;
 
-        if (!ai) {
-            return res.status(500).json({
-                error: 'AI service not initialized',
-                details: 'GEMINI_API_KEY may be missing or invalid'
+        // Validate input
+        if (!prompt || typeof prompt !== 'string') {
+            return res.status(400).json({
+                error: 'Invalid request',
+                details: 'Prompt is required and must be a string'
             });
         }
 
-        // Build conversation history
-        const contents = [];
-
-        // Add history
-        history.forEach(msg => {
-            contents.push({
+        // Build conversation contents
+        const contents = [
+            // Add conversation history
+            ...history.map(msg => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 parts: [{ text: msg.content }]
-            });
-        });
+            })),
+            // Add current prompt
+            {
+                role: 'user',
+                parts: [{ text: prompt }]
+            }
+        ];
 
-        // Add current prompt
-        contents.push({
-            role: 'user',
-            parts: [{ text: prompt }]
-        });
-
-        // Define tools
-        const tools = [{
-            functionDeclarations: [{
-                name: "queryFirestore",
-                description: "Query ONLY 'orders' or 'checkouts' collections.",
-                parametersJsonSchema: {
-                    type: "object",
-                    properties: {
-                        collection: {
-                            type: "string",
-                            enum: ["orders", "checkouts"],
-                            description: "Must be either 'orders' or 'checkouts'"
-                        },
-                        filters: {
-                            type: "array",
-                            description: "Array of [field, operator, value] filters",
-                            items: {
-                                type: "array",
-                                items: { type: "string" }
-                            }
-                        },
-                        limit: {
-                            type: "number",
-                            description: "Maximum number of documents to return (default: 10)"
-                        },
-                        orderBy: {
-                            type: "array",
-                            description: "Sort order: [field, direction]. Direction is 'asc' or 'desc'",
-                            items: { type: "string" }
-                        }
-                    },
-                    required: ["collection"]
-                }
-            }]
-        }];
-
-        // First request
+        // Initial AI request
         let response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: contents,
+            contents,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
-                tools: tools
+                tools: TOOLS
             }
         });
 
         // Handle function calls
         if (response.functionCalls && response.functionCalls.length > 0) {
             const functionCall = response.functionCalls[0];
-            console.log('Function call received:', JSON.stringify(functionCall));
 
-            // Extract arguments - they might be in args or arguments
+            // Extract arguments (SDK may use 'args' or 'arguments')
             const args = functionCall.args || functionCall.arguments || {};
+
+            // Execute function
             const functionResult = await queryFirestore(args);
 
-            // Add function call and result to contents
+            // Add function call to conversation
             contents.push({
                 role: 'model',
                 parts: [{
                     functionCall: {
                         name: functionCall.name,
-                        args: args
+                        args
                     }
                 }]
             });
 
+            // Add function response to conversation
             contents.push({
                 role: 'user',
                 parts: [{
@@ -275,10 +290,10 @@ module.exports = async (req, res) => {
                 }]
             });
 
-            // Second request with function result
+            // Get final response with function results
             response = await ai.models.generateContent({
                 model: 'gemini-2.0-flash-exp',
-                contents: contents,
+                contents,
                 config: {
                     systemInstruction: SYSTEM_INSTRUCTION
                 }
@@ -288,7 +303,10 @@ module.exports = async (req, res) => {
         return res.status(200).json({ text: response.text });
 
     } catch (error) {
-        console.error('Assistant Error:', error);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        console.error('[Assistant] Error:', error.message);
+        return res.status(500).json({
+            error: 'Internal Server Error',
+            details: error.message
+        });
     }
 };

@@ -370,7 +370,6 @@ const HomeScreen = ({ navigation }) => {
 
             <FAB
                 icon="auto-fix" // Magical spark icon for AI
-                label={isDesktop ? "Ask Easey" : null}
                 style={[styles.fab, { backgroundColor: theme.colors.primary }]}
                 color={theme.colors.onPrimary}
                 onPress={() => navigation.navigate('Assistant')}
