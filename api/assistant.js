@@ -1,5 +1,6 @@
 const { GoogleGenAI } = require("@google/genai");
 const admin = require("firebase-admin");
+const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 
 // ---------------------------------------------------------
 // INITIALIZATION
@@ -23,30 +24,50 @@ const db = admin.firestore();
 // SCHEMA DEFINITION
 // ---------------------------------------------------------
 const DB_SCHEMA = `
-You have read-access to a Firestore database for an e-commerce store.
-Collections:
-1. "orders"
-   - documentId: Auto-generated string.
-   - Fields: 
-     - orderNumber (number): The official order number (e.g. 1001, 1630). NOT a string.
-     - customerName (string): Full name. Case-sensitive.
-     - totalPrice (string/number): Total value.
-     - status (string): 'COD', 'Paid', 'CANCELLED'.
-     - phoneNormalized (string): Phone number in E.164 format (e.g. 919876543210).
-2. "checkouts" (Abandoned Carts)
-   - Fields: total_price (number), first_name (string), eventType (string: 'ABANDONED', 'ACTIVE_CART'), updatedAt (timestamp).
-3. "whatsapp_messages"
-   - Fields: phone (string), direction (string: 'inbound', 'outbound'), body (string), status (string: 'sent', 'read', 'failed'), timestamp (timestamp).
+You have access to a live database and external APIs for an e-commerce store.
+
+DATA SOURCES:
+
+1.  **ORDERS** (Collection: "orders")
+    - Fields: orderNumber (number), customerName, totalPrice, status ('COD', 'Paid', 'CANCELLED'), phoneNormalized.
+    - queryFirestore usage: collection='orders'
+
+2.  **ABANDONED CARTS** (Collection: "checkouts")
+    - Fields: total_price (number), first_name, eventType ('ABANDONED'), updatedAt.
+    - queryFirestore usage: collection='checkouts'
+
+3.  **WHATSAPP** (Collection: "whatsapp_messages")
+    - Fields: phone, direction ('inbound', 'outbound'), body, status, timestamp.
+    - queryFirestore usage: collection='whatsapp_messages'
+
+4.  **WALLET / FINANCES** (Collection: "wallet_transactions")
+    - Fields: amount (number), description (string), category (string), type ('income'|'expense'), date (timestamp).
+    - queryFirestore usage: collection='wallet_transactions'
+
+5.  **NOTES** (Collection: "notes")
+    - Fields: title, body, createdAt, updatedAt.
+    - queryFirestore usage: collection='notes'
+
+6.  **NOTEBOOK / SCRATCHPAD** (Doc: "dashboard/notes")
+    - Single document containing a quick scratchpad.
+    - queryFirestore usage: collection='dashboard' (then look for id 'notes' or just search).
+
+7.  **VISITORS / ANALYTICS** (Tool: fetchAnalytics)
+    - Real-time active users on the site right now.
+
+8.  **MARKETING CAMPAIGNS** (Tool: fetchCampaigns)
+    - Facebook Ads performance for TODAY.
+    - Data: Spend, Revenue, ROAS, Purchases, Impressions, Clicks.
 
 SEARCH TIPS:
-- For 'orderNumber', always query as a NUMBER, not a string.
-- For names, if exact match fails, try querying just the first name.
-- Timestamps are ISO strings.
+- For 'orderNumber', always query as a NUMBER.
+- For financial summaries, query 'wallet_transactions' and sum them up yourself or ask for the last N transactions.
 `;
 
 // ---------------------------------------------------------
-// TOOLS
+// TOOLS IMPLEMENTATION
 // ---------------------------------------------------------
+
 const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
     try {
         let ref = db.collection(collection);
@@ -61,7 +82,7 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
             ref = ref.orderBy(orderBy[0], orderBy[1] || 'desc');
         }
 
-        const l = limit || 5;
+        const l = limit || 10;
         ref = ref.limit(l);
 
         const snapshot = await ref.get();
@@ -81,18 +102,70 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
     }
 };
 
+const fetchAnalytics = async () => {
+    try {
+        if (!process.env.GA4_PROPERTY_ID) return "Analytics not configured.";
+
+        const credentials = {
+            type: 'service_account',
+            project_id: process.env.GA4_PROJECT_ID,
+            private_key_id: process.env.GA4_PRIVATE_KEY_ID,
+            private_key: process.env.GA4_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            client_email: process.env.GA4_CLIENT_EMAIL,
+            client_id: process.env.GA4_CLIENT_ID,
+        };
+
+        const analyticsDataClient = new BetaAnalyticsDataClient({ credentials });
+        const [response] = await analyticsDataClient.runRealtimeReport({
+            property: \`properties/\${process.env.GA4_PROPERTY_ID}\`,
+            minuteRanges: [{ name: 'last5Minutes', startMinutesAgo: 4, endMinutesAgo: 0 }],
+            metrics: [{ name: 'activeUsers' }],
+        });
+
+        const activeUsers = parseInt(response.rows?.[0]?.metricValues?.[0]?.value || '0', 10);
+        return { activeVisitors: activeUsers, source: 'GA4 Realtime' };
+    } catch (error) {
+        return { error: "Failed to fetch analytics", details: error.message };
+    }
+};
+
+const fetchCampaigns = async () => {
+    try {
+        const { FACEBOOK_ACCESS_TOKEN, AD_ACCOUNT_ID } = process.env;
+        if (!FACEBOOK_ACCESS_TOKEN || !AD_ACCOUNT_ID) return "Marketing API not configured.";
+
+        const url = new URL(\`https://graph.facebook.com/v21.0/\${AD_ACCOUNT_ID}/insights\`);
+        url.searchParams.set('level', 'campaign');
+        url.searchParams.set('date_preset', 'today');
+        url.searchParams.set('fields', 'campaign_id,campaign_name,spend,purchase_roas,actions,clicks');
+        url.searchParams.set('access_token', FACEBOOK_ACCESS_TOKEN);
+
+        const response = await fetch(url.toString());
+        const data = await response.json();
+
+        if (data.error) return { error: data.error.message };
+
+        return (data.data || []).map(c => ({
+            name: c.campaign_name,
+            spend: c.spend,
+            roas: c.purchase_roas?.[0]?.value || 0,
+            purchases: c.actions?.find(a => a.action_type === 'purchase')?.value || 0,
+            clicks: c.clicks,
+            period: 'Today'
+        }));
+    } catch (error) {
+        return { error: "Failed to fetch campaigns", details: error.message };
+    }
+};
+
 // ---------------------------------------------------------
 // MAIN HANDLER
 // ---------------------------------------------------------
 module.exports = async (req, res) => {
-    // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
     if (req.method === 'OPTIONS') {
         res.status(200).end();
@@ -101,141 +174,115 @@ module.exports = async (req, res) => {
 
     try {
         const { prompt, history = [] } = req.body;
-
-        if (!process.env.GEMINI_API_KEY) {
-            throw new Error("Missing GEMINI_API_KEY");
-        }
+        if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
 
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-        // Tool Definition using parametersJsonSchema as per V2 docs
+        // Tool Definitions
         const queryTimestampDesc = {
             name: 'queryFirestore',
-            description: "Fetch data from the database. Use this when the user asks for specific records, stats, or summaries of orders/carts/messages.",
+            description: "Fetch specific records from the database (orders, wallet, notes, etc).",
             parametersJsonSchema: {
                 type: 'object',
                 properties: {
-                    collection: {
-                        type: 'string',
-                        description: "Collection name: 'orders', 'checkouts', or 'whatsapp_messages'"
-                    },
-                    filters: {
-                        type: 'array',
-                        items: {
-                            type: 'array',
-                            items: { type: 'string' } // Simplified
-                        }
-                    },
+                    collection: { type: 'string', description: "Collection name: 'orders', 'checkouts', 'whatsapp_messages', 'wallet_transactions', 'notes', 'dashboard'" },
+                    filters: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
                     limit: { type: 'number' },
-                    orderBy: {
-                        type: 'array',
-                        items: { type: 'string' }
-                    }
+                    orderBy: { type: 'array', items: { type: 'string' } }
                 },
                 required: ['collection'],
             },
         };
 
-        const config = {
-            tools: [{ functionDeclarations: [queryTimestampDesc] }],
+        const fetchAnalyticsDesc = {
+            name: 'fetchAnalytics',
+            description: "Get real-time active visitor count from Google Analytics.",
+            parametersJsonSchema: { type: 'object', properties: {} },
         };
 
-        // Construct Content with System Prompt logic
-        // We act as if the conversation has been going on. 
-        // Best approach for V2 stateless: Format history as text "User: ... \nModel: ..."
-        // This is robust and cheaper than re-creating complex object chains.
+        const fetchCampaignsDesc = {
+            name: 'fetchCampaigns',
+            description: "Get today's Facebook Ad performance (Spend, ROAS, Purchases).",
+            parametersJsonSchema: { type: 'object', properties: {} },
+        };
 
+        const config = {
+            tools: [{ functionDeclarations: [queryTimestampDesc, fetchAnalyticsDesc, fetchCampaignsDesc] }],
+        };
+
+        // Construct History Prompt
         let historyPrompt = "";
         if (history && history.length > 0) {
-            historyPrompt = history.map(h => `${h.role === 'user' ? 'User' : 'Easey'}: ${h.text}`).join("\n");
+            historyPrompt = history.map(h => \`\${h.role === 'user' ? 'User' : 'Easey'}: \${h.text}\`).join("\\n");
         }
 
-        const fullPrompt = `${DB_SCHEMA}
+        const fullPrompt = \`\${DB_SCHEMA}
 
 CONTEXT OF CONVERSATION:
-${historyPrompt}
+\${historyPrompt}
 
 CURRENT QUERY:
-User: ${prompt}
-Easey:`;
+User: \${prompt}
+Easey:\`;
 
-        // 1. First Turn: Send user query with tools configured
+        // 1. First Turn
         const response1 = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: fullPrompt, // passing string directly is valid in V2
+            contents: fullPrompt,
             config: config
         });
 
         const candidates = response1.candidates;
-        if (!candidates || candidates.length === 0) {
-            return res.status(200).json({ text: "No response." });
-        }
+        if (!candidates || candidates.length === 0) return res.status(200).json({ text: "No response." });
 
         const firstCand = candidates[0];
         const content = firstCand.content;
         const parts = content.parts;
-
-        // Check for function calls
         const functionCalls = parts ? parts.filter(p => p.functionCall) : [];
 
         if (functionCalls.length > 0) {
             const toolOutputs = [];
 
-            // Execute all function calls
             for (const part of functionCalls) {
                 const call = part.functionCall;
-                if (call.name === 'queryFirestore') {
-                    // The args come as a plain object in V2
-                    const result = await queryFirestore(call.args);
+                let result;
 
-                    // Construct function response part
-                    toolOutputs.push({
-                        functionResponse: {
-                            name: 'queryFirestore',
-                            response: { result: result }
-                        }
-                    });
-                }
+                if (call.name === 'queryFirestore') result = await queryFirestore(call.args);
+                else if (call.name === 'fetchAnalytics') result = await fetchAnalytics();
+                else if (call.name === 'fetchCampaigns') result = await fetchCampaigns();
+
+                toolOutputs.push({
+                    functionResponse: {
+                        name: call.name,
+                        response: { result: result }
+                    }
+                });
             }
-
-            // 2. Second Turn: Send tool outputs back to model to get final answer
-            // We must provide the FULL history: [UserPrompt, ModelResponseWithCall, ToolOutputs]
-
-            // Reconstruct the previous turn properly as Part objects
-            // Note: 'parts' from response1 are already valid Part objects
 
             const historyContents = [
                 { role: 'user', parts: [{ text: fullPrompt }] },
-                { role: 'model', parts: parts } // The model's request to call function
+                { role: 'model', parts: parts }
             ];
 
-            // The next message contains the tool outputs
-            const toolMessage = {
-                role: 'user', // In V2, typically tool outputs are 'function_response' role or 'user' role depending on strictness, but docs say "Send the result back (with history)"
-                parts: toolOutputs
-            };
+            const toolMessage = { role: 'user', parts: toolOutputs };
 
-            // Generate final content based on conversation
-            // Note: using generateContent with full history array:
             const response2 = await ai.models.generateContent({
                 model: 'gemini-2.0-flash-exp',
                 contents: [...historyContents, toolMessage],
                 config: config
             });
 
-            const finalText = response2.text; // helper getter
             return res.status(200).json({
-                text: finalText,
+                text: response2.text,
                 data: toolOutputs[0].functionResponse.response.result
             });
 
         } else {
-            // Just a text response
             return res.status(200).json({ text: response1.text });
         }
 
     } catch (error) {
         console.error("Assistant Error:", error);
-        res.status(500).json({ error: error.message, stack: error.stack });
+        res.status(500).json({ error: error.message });
     }
 };
