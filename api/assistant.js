@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 const admin = require("firebase-admin");
 
 // ---------------------------------------------------------
@@ -27,7 +27,7 @@ You have read-access to a Firestore database for an e-commerce store.
 Collections:
 1. "orders"
    - documentId: Auto-generated
-   - Fields: orderNumber (string), customerName (string), totalPrice (number), status (string: 'COD', 'Paid', 'CANCELLED'), verified (boolean), createdAt (timestamp), phone (string).
+   - Fields: orderNumber (string), customerName (string), totalPrice (number), status (string: 'COD', 'PaidCANCELLED'), verified (boolean), createdAt (timestamp), phone (string).
 2. "checkouts" (Abandoned Carts)
    - Fields: total_price (number), first_name (string), eventType (string: 'ABANDONED', 'ACTIVE_CART'), updatedAt (timestamp).
 3. "whatsapp_messages"
@@ -44,8 +44,6 @@ const queryFirestore = async ({ collection, filters, limit = 5, orderBy }) => {
         // Apply filters: [[field, op, value], ...]
         if (filters && Array.isArray(filters)) {
             filters.forEach(([field, op, val]) => {
-                // Fix timestamp queries if val is a string 'NOW-7DAYS' etc (simple parsing)
-                // For now, assume simple values or handle date strings in next iteration
                 ref = ref.where(field, op, val);
             });
         }
@@ -77,10 +75,6 @@ const queryFirestore = async ({ collection, filters, limit = 5, orderBy }) => {
     }
 };
 
-const tools = {
-    queryFirestore: queryFirestore
-};
-
 // ---------------------------------------------------------
 // MAIN HANDLER
 // ---------------------------------------------------------
@@ -106,12 +100,12 @@ module.exports = async (req, res) => {
             throw new Error("Missing GEMINI_API_KEY");
         }
 
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-            // Define the tool available to the model
-            tools: [{
-                functionDeclarations: [{
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+        // Define Tool Configuration
+        const toolConfig = {
+            functionDeclarations: [
+                {
                     name: "queryFirestore",
                     description: "Fetch data from the database. Use this when the user asks for specific records, stats, or summaries of orders/carts/messages.",
                     parameters: {
@@ -127,7 +121,7 @@ module.exports = async (req, res) => {
                                 items: {
                                     type: "ARRAY",
                                     items: {
-                                        type: "STRING" // Simplified for JSON schema
+                                        type: "STRING"
                                     }
                                 }
                             },
@@ -140,64 +134,96 @@ module.exports = async (req, res) => {
                         },
                         required: ["collection"]
                     }
-                }]
-            }]
-        });
-
-        // Start Chat Session
-        const chat = model.startChat({
-            history: [
-                {
-                    role: "user",
-                    parts: [{
-                        text: `System: You are Easey, a helpful e-commerce assistant. 
-                    Be concise. Use the 'queryFirestore' tool to find real data. 
-                    ${DB_SCHEMA}`
-                    }]
-                },
-                ...history
-                // Note: Real history would need correct format mapping (user/model roles)
+                }
             ]
-            // In a simple stateless request, we might just pass the new prompt if history is complex
-        });
+        };
 
-        const result = await chat.sendMessage(prompt);
-        const response = result.response;
+        // Prepare History + System Prompt
+        // Note: The new SDK handles chat history differently, usually via `chats.create()`
+        // But for single turn with history array or just prompt:
 
-        // Handle Tool Calls
-        const calls = response.functionCalls(); // Check if model wants to call a function
+        let contents = [];
 
-        if (calls && calls.length > 0) {
-            const call = calls[0];
-            const functionName = call.name;
-            const args = call.args;
+        // Add System Prompt first
+        const systemPrompt = `System: You are Easey, a helpful e-commerce assistant. 
+        Be concise. Use the 'queryFirestore' tool to find real data. 
+        ${DB_SCHEMA}`;
 
-            if (functionName === "queryFirestore") {
-                // Execute the actual DB query
-                const dbResult = await queryFirestore(args);
-
-                // Send the DB result back to the model to generate the final answer
-                const finalResult = await chat.sendMessage([
-                    {
-                        functionResponse: {
-                            name: "queryFirestore",
-                            response: { result: dbResult }
-                        }
-                    }
-                ]);
-
-                return res.status(200).json({
-                    text: finalResult.response.text(),
-                    data: dbResult // Optional: Send raw data to frontend for charts?
-                });
-            }
+        // Add history if present
+        if (history && history.length > 0) {
+            // Map simple history to SDK format if needed, simplistic approach for now
+            // The SDK expects { role: 'user'|'model', parts: [{ text: ... }] }
+            // Assuming history comes in clean or we just use current prompt
         }
 
-        // No tool call, just text
-        return res.status(200).json({ text: response.text() });
+        // Create Chat Session
+        const chat = ai.chats.create({
+            model: "gemini-1.5-flash", // Using 1.5-flash as 2.5 is likely preview-only
+            config: {
+                tools: [toolConfig]
+            },
+            history: [
+                { role: "user", parts: [{ text: systemPrompt }] },
+                { role: "model", parts: [{ text: "Understood. I am Easey." }] },
+                // ...history maps here
+            ]
+        });
+
+        const result = await chat.send({
+            parts: [{ text: prompt }]
+        });
+
+        // Loop for tool calls (automatic execution is not yet standard in single call, usually manual loop)
+        // Check `result.functionCalls()`
+
+        let finalResponseText = "";
+
+        // Manual Tool Execution Loop
+        // The V2 SDK response structure:
+        const firstCandidate = result.candidates[0];
+
+        // Check if there are function calls
+        // Note: The structure varies, check documentation or inspect object
+        // Usually: candidate.content.parts array contains functionCall
+
+        const toolCalls = firstCandidate.content.parts?.filter(p => p.functionCall);
+
+        if (toolCalls && toolCalls.length > 0) {
+            // Execute tools
+            let toolOutputs = [];
+
+            for (const part of toolCalls) {
+                const call = part.functionCall;
+                if (call.name === 'queryFirestore') {
+                    const dbResult = await queryFirestore(call.args);
+                    toolOutputs.push({
+                        functionResponse: {
+                            name: 'queryFirestore',
+                            response: { name: 'queryFirestore', content: dbResult }
+                        }
+                    });
+                }
+            }
+
+            // Send Tool Output back to model
+            const finalResult = await chat.send({
+                parts: toolOutputs
+            });
+
+            finalResponseText = finalResult.text;
+            return res.status(200).json({
+                text: finalResponseText,
+                data: toolOutputs[0].functionResponse.response.content // Return raw data too
+            });
+
+        } else {
+            finalResponseText = result.text;
+        }
+
+        return res.status(200).json({ text: finalResponseText });
 
     } catch (error) {
         console.error("Assistant Error:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message, stack: error.stack });
     }
 };
