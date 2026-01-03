@@ -247,7 +247,6 @@ const StatsScreen = ({ navigation }) => {
             <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
                 <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
                 <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }} />
-                <Appbar.Action icon="calendar" color={theme.colors.onSurface} onPress={() => { }} />
             </Appbar.Header>
 
             <ScrollView

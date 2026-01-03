@@ -409,7 +409,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
                 <Appbar.BackAction onPress={() => navigation.goBack()} />
                 <Appbar.Content title="WhatsApp Manager" titleStyle={{ fontWeight: 'bold' }} />
-                <Appbar.Action icon="cog" onPress={() => { }} />
             </Appbar.Header>
 
             <View style={styles.segmentContainer}>

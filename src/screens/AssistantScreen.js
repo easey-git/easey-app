@@ -173,13 +173,11 @@ export default function AssistantScreen({ navigation }) {
                     titleStyle={{ fontWeight: '700', fontSize: 18, color: theme.colors.onBackground }}
                     style={{ alignItems: 'center' }}
                 />
-                <Menu
-                    visible={menuVisible}
-                    onDismiss={() => setMenuVisible(false)}
-                    anchor={<Appbar.Action icon="dots-horizontal" onPress={() => setMenuVisible(true)} />}
-                >
-                    <Menu.Item onPress={clearHistory} title="Clear Context" leadingIcon="broom" />
-                </Menu>
+                <Appbar.Action
+                    icon="broom"
+                    color={theme.colors.onBackground}
+                    onPress={clearHistory}
+                />
             </Appbar.Header>
 
             <KeyboardAvoidingView
@@ -210,6 +208,9 @@ export default function AssistantScreen({ navigation }) {
                             style={[styles.nativeInput, { color: theme.colors.onSurface }]}
                             placeholderTextColor={theme.colors.outline}
                             multiline
+                            maxHeight={100}
+                            underlineColorAndroid="transparent" // Removes the Blue Line
+                            selectionColor={theme.colors.primary} // Cursor color
                         />
                         <IconButton
                             icon={loading ? "loading" : "arrow-up-circle"}
@@ -258,14 +259,20 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingVertical: 2, // Slimmer vertical padding
-        borderRadius: 24, // Slightly tighter radius
+        paddingVertical: 4, // Very slim wrapper padding
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.1)',
+        minHeight: 40, // Industry standard tap target
     },
     nativeInput: {
         flex: 1,
         fontSize: 16,
-        maxHeight: 120, // Allow growth
-        paddingTop: 8,
-        paddingBottom: 8,
+        maxHeight: 100,
+        paddingVertical: 0, // CRITICAL: Removes internal padding
+        marginVertical: 4, // Small margin for text breathing room
+        paddingTop: 0,
+        paddingBottom: 0,
+        textAlignVertical: 'center'
     }
 });
