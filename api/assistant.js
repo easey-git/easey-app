@@ -19,7 +19,14 @@ if (!admin.apps.length) {
     }
 }
 const db = admin.firestore();
-const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
+
+// Initialize Gemini AI
+let genAI;
+try {
+    genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
+} catch (error) {
+    console.error('Gemini AI Init Error:', error);
+}
 
 // ---------------------------------------------------------
 // SCHEMA DEFINITION - ORDERS & CHECKOUTS ONLY
@@ -167,6 +174,13 @@ module.exports = async (req, res) => {
 
     try {
         const { prompt, history = [] } = req.body;
+
+        if (!genAI) {
+            return res.status(500).json({
+                error: 'AI service not initialized',
+                details: 'GEMINI_API_KEY may be missing or invalid'
+            });
+        }
 
         const model = genAI.getGenerativeModel({
             model: "gemini-2.0-flash-exp",
