@@ -1,3 +1,4 @@
+// Updated AI Capabilities: Analytics, Wallet, Campaigns
 const { GoogleGenAI } = require("@google/genai");
 const admin = require("firebase-admin");
 const { BetaAnalyticsDataClient } = require('@google-analytics/data');
@@ -117,7 +118,7 @@ const fetchAnalytics = async () => {
 
         const analyticsDataClient = new BetaAnalyticsDataClient({ credentials });
         const [response] = await analyticsDataClient.runRealtimeReport({
-            property: \`properties/\${process.env.GA4_PROPERTY_ID}\`,
+            property: `properties/${process.env.GA4_PROPERTY_ID}`,
             minuteRanges: [{ name: 'last5Minutes', startMinutesAgo: 4, endMinutesAgo: 0 }],
             metrics: [{ name: 'activeUsers' }],
         });
@@ -134,7 +135,7 @@ const fetchCampaigns = async () => {
         const { FACEBOOK_ACCESS_TOKEN, AD_ACCOUNT_ID } = process.env;
         if (!FACEBOOK_ACCESS_TOKEN || !AD_ACCOUNT_ID) return "Marketing API not configured.";
 
-        const url = new URL(\`https://graph.facebook.com/v21.0/\${AD_ACCOUNT_ID}/insights\`);
+        const url = new URL(`https://graph.facebook.com/v21.0/${AD_ACCOUNT_ID}/insights`);
         url.searchParams.set('level', 'campaign');
         url.searchParams.set('date_preset', 'today');
         url.searchParams.set('fields', 'campaign_id,campaign_name,spend,purchase_roas,actions,clicks');
@@ -213,17 +214,17 @@ module.exports = async (req, res) => {
         // Construct History Prompt
         let historyPrompt = "";
         if (history && history.length > 0) {
-            historyPrompt = history.map(h => \`\${h.role === 'user' ? 'User' : 'Easey'}: \${h.text}\`).join("\\n");
+            historyPrompt = history.map(h => `${h.role === 'user' ? 'User' : 'Easey'}: ${h.text}`).join("\n");
         }
 
-        const fullPrompt = \`\${DB_SCHEMA}
+        const fullPrompt = `${DB_SCHEMA}
 
 CONTEXT OF CONVERSATION:
-\${historyPrompt}
+            ${historyPrompt}
 
 CURRENT QUERY:
-User: \${prompt}
-Easey:\`;
+            User: ${prompt}
+Easey: `;
 
         // 1. First Turn
         const response1 = await ai.models.generateContent({
