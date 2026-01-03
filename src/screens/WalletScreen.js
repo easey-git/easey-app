@@ -19,6 +19,13 @@ const CATEGORY_COLORS = {
     'Investment': '#FFD700', // Gold
 };
 
+const ITEM_COLORS = [
+    '#EF5350', '#EC407A', '#AB47BC', '#7E57C2', '#5C6BC0',
+    '#42A5F5', '#29B6F6', '#26C6DA', '#26A69A', '#66BB6A',
+    '#9CCC65', '#D4E157', '#FFEE58', '#FFCA28', '#FFA726',
+    '#FF7043', '#8D6E63', '#BDBDBD', '#78909C'
+];
+
 const CHART_CONFIG = {
     color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
 };
@@ -98,33 +105,62 @@ const WalletScreen = ({ navigation }) => {
     const chartStats = useMemo(() => {
         const expenseTotals = {};
         const incomeTotals = {};
+        const expenseItemTotals = {};
+        const incomeItemTotals = {};
 
         transactions.forEach(t => {
             const amt = parseFloat(t.amount);
             const cat = t.category || 'Misc';
+            const desc = t.description ? t.description.trim() : 'Unknown';
 
             if (t.type === 'income') {
                 incomeTotals[cat] = (incomeTotals[cat] || 0) + amt;
+                incomeItemTotals[desc] = (incomeItemTotals[desc] || 0) + amt;
             } else {
                 expenseTotals[cat] = (expenseTotals[cat] || 0) + amt;
+                expenseItemTotals[desc] = (expenseItemTotals[desc] || 0) + amt;
             }
         });
 
-        // Helper to format chart data
-        const formatChartData = (totals) => Object.keys(totals).map(cat => ({
-            name: cat,
-            amount: totals[cat],
-            color: CATEGORY_COLORS[cat] || '#808080',
-            legendFontColor: theme.colors.onSurfaceVariant,
-            legendFontSize: 12
-        })).sort((a, b) => b.amount - a.amount);
+        // Helper to format chart data with "Others" grouping
+        const formatChartData = (totals, useCategoryColors = true) => {
+            // 1. Convert to array and sort
+            const sortedItems = Object.keys(totals)
+                .map(key => ({
+                    name: key,
+                    amount: totals[key],
+                }))
+                .sort((a, b) => b.amount - a.amount);
+
+            // 2. Group into Top 5 + Others
+            let finalData = sortedItems;
+            if (sortedItems.length > 5) {
+                const top5 = sortedItems.slice(0, 5);
+                const others = sortedItems.slice(5);
+                const othersTotal = others.reduce((sum, item) => sum + item.amount, 0);
+
+                if (othersTotal > 0) {
+                    finalData = [...top5, { name: 'Others', amount: othersTotal }];
+                }
+            }
+
+            // 3. Map to Chart Data format
+            return finalData.map((item, index) => ({
+                name: item.name,
+                amount: item.amount,
+                color: useCategoryColors
+                    ? (CATEGORY_COLORS[item.name] || '#9E9E9E') // Default to Grey if category not found (e.g. Others)
+                    : (item.name === 'Others' ? '#9E9E9E' : ITEM_COLORS[index % ITEM_COLORS.length]),
+                legendFontColor: theme.colors.onSurfaceVariant,
+                legendFontSize: 12
+            }));
+        };
 
         return {
-            expenseChart: formatChartData(expenseTotals),
-            incomeChart: formatChartData(incomeTotals),
-            cashFlowChart: [
-                // ... handled in component if needed or re-calc locally
-            ]
+            expenseChart: formatChartData(expenseTotals, true),
+            incomeChart: formatChartData(incomeTotals, true),
+            expenseItemsChart: formatChartData(expenseItemTotals, false),
+            incomeItemsChart: formatChartData(incomeItemTotals, false),
         };
     }, [transactions, theme]);
 
@@ -584,14 +620,14 @@ const WalletScreen = ({ navigation }) => {
             }
 
             {
-                ((filterType === 'expense') && chartStats.expenseChart.length > 0) && (
-                    <StatChart title="Expense Breakdown (Visible)" data={chartStats.expenseChart} theme={theme} />
+                ((filterType === 'expense') && chartStats.expenseItemsChart.length > 0) && (
+                    <StatChart title="Expense By Items (Visible)" data={chartStats.expenseItemsChart} theme={theme} />
                 )
             }
 
             {
-                ((filterType === 'income') && chartStats.incomeChart.length > 0) && (
-                    <StatChart title="Income Breakdown (Visible)" data={chartStats.incomeChart} theme={theme} />
+                ((filterType === 'income') && chartStats.incomeItemsChart.length > 0) && (
+                    <StatChart title="Income By Items (Visible)" data={chartStats.incomeItemsChart} theme={theme} />
                 )
             }
 
