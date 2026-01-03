@@ -21,9 +21,9 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 // Initialize Gemini AI
-let genAI;
+let ai;
 try {
-    genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
+    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 } catch (error) {
     console.error('Gemini AI Init Error:', error);
 }
@@ -31,7 +31,7 @@ try {
 // ---------------------------------------------------------
 // SCHEMA DEFINITION - ORDERS & CHECKOUTS ONLY
 // ---------------------------------------------------------
-const DB_SCHEMA = `
+const SYSTEM_INSTRUCTION = `
 You are an expert E-commerce Assistant focused EXCLUSIVELY on Orders and Abandoned Checkouts.
 You have access to exactly TWO Firestore collections. Answer questions ONLY about these.
 
@@ -175,85 +175,113 @@ module.exports = async (req, res) => {
     try {
         const { prompt, history = [] } = req.body;
 
-        if (!genAI) {
+        if (!ai) {
             return res.status(500).json({
                 error: 'AI service not initialized',
                 details: 'GEMINI_API_KEY may be missing or invalid'
             });
         }
 
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash-exp",
-            systemInstruction: DB_SCHEMA,
-            tools: [
-                {
-                    functionDeclarations: [
-                        {
-                            name: "queryFirestore",
-                            description: "Query ONLY 'orders' or 'checkouts' collections.",
-                            parameters: {
-                                type: "OBJECT",
-                                properties: {
-                                    collection: {
-                                        type: "STRING",
-                                        enum: ["orders", "checkouts"],
-                                        description: "Must be either 'orders' or 'checkouts'"
-                                    },
-                                    filters: {
-                                        type: "ARRAY",
-                                        description: "Array of [field, operator, value] filters",
-                                        items: { type: "ARRAY", items: { type: "STRING" } }
-                                    },
-                                    limit: {
-                                        type: "NUMBER",
-                                        description: "Maximum number of documents to return (default: 10)"
-                                    },
-                                    orderBy: {
-                                        type: "ARRAY",
-                                        description: "Sort order: [field, direction]. Direction is 'asc' or 'desc'",
-                                        items: { type: "STRING" }
-                                    }
-                                },
-                                required: ["collection"]
+        // Build conversation history
+        const contents = [];
+
+        // Add history
+        history.forEach(msg => {
+            contents.push({
+                role: msg.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: msg.content }]
+            });
+        });
+
+        // Add current prompt
+        contents.push({
+            role: 'user',
+            parts: [{ text: prompt }]
+        });
+
+        // Define tools
+        const tools = [{
+            functionDeclarations: [{
+                name: "queryFirestore",
+                description: "Query ONLY 'orders' or 'checkouts' collections.",
+                parametersJsonSchema: {
+                    type: "object",
+                    properties: {
+                        collection: {
+                            type: "string",
+                            enum: ["orders", "checkouts"],
+                            description: "Must be either 'orders' or 'checkouts'"
+                        },
+                        filters: {
+                            type: "array",
+                            description: "Array of [field, operator, value] filters",
+                            items: {
+                                type: "array",
+                                items: { type: "string" }
                             }
+                        },
+                        limit: {
+                            type: "number",
+                            description: "Maximum number of documents to return (default: 10)"
+                        },
+                        orderBy: {
+                            type: "array",
+                            description: "Sort order: [field, direction]. Direction is 'asc' or 'desc'",
+                            items: { type: "string" }
                         }
-                    ]
+                    },
+                    required: ["collection"]
                 }
-            ]
+            }]
+        }];
+
+        // First request
+        let response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash-exp',
+            contents: contents,
+            config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+                tools: tools
+            }
         });
 
-        const chat = model.startChat({
-            history: history.map(h => ({
-                role: h.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: h.content }]
-            }))
-        });
+        // Handle function calls
+        if (response.functionCalls && response.functionCalls.length > 0) {
+            const functionCall = response.functionCalls[0];
+            const functionResult = await queryFirestore(functionCall.arguments);
 
-        let result = await chat.sendMessage(prompt);
-        let response = result.response;
+            // Add function call and result to contents
+            contents.push({
+                role: 'model',
+                parts: [{
+                    functionCall: {
+                        name: functionCall.name,
+                        args: functionCall.arguments
+                    }
+                }]
+            });
 
-        const calls = response.functionCalls();
-        if (calls && calls.length > 0) {
-            const toolResults = [];
-            for (const call of calls) {
-                if (call.name === "queryFirestore") {
-                    const data = await queryFirestore(call.args);
-                    toolResults.push({
-                        functionResponse: {
-                            name: "queryFirestore",
-                            response: { result: data }
-                        }
-                    });
+            contents.push({
+                role: 'user',
+                parts: [{
+                    functionResponse: {
+                        name: functionCall.name,
+                        response: { result: functionResult }
+                    }
+                }]
+            });
+
+            // Second request with function result
+            response = await ai.models.generateContent({
+                model: 'gemini-2.0-flash-exp',
+                contents: contents,
+                config: {
+                    systemInstruction: SYSTEM_INSTRUCTION
                 }
-            }
-
-            if (toolResults.length > 0) {
-                const secondResult = await chat.sendMessage(toolResults);
-                return res.status(200).json({ text: secondResult.response.text() });
-            }
+            });
         }
 
-        return res.status(200).json({ text: response.text() });
+        return res.status(200).json({ text: response.text });
 
     } catch (error) {
         console.error('Assistant Error:', error);
