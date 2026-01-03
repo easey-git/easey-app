@@ -185,7 +185,7 @@ export default function AssistantScreen({ navigation }) {
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
-                keyboardVerticalOffset={headerHeight}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0} // Android handles resize natively now
             >
                 <View style={{ flex: 1 }}>
                     <FlatList
@@ -193,7 +193,7 @@ export default function AssistantScreen({ navigation }) {
                         data={messages}
                         keyExtractor={item => item.id.toString()}
                         renderItem={renderMessage}
-                        contentContainerStyle={{ padding: 20, paddingBottom: 10 }}
+                        contentContainerStyle={{ padding: 16 }}
                         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                         onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
                         showsVerticalScrollIndicator={false}
@@ -204,26 +204,22 @@ export default function AssistantScreen({ navigation }) {
                 <View style={[styles.inputContainer, { backgroundColor: theme.colors.background }]}>
                     <View style={[styles.inputWrapper, { backgroundColor: theme.colors.surfaceVariant }]}>
                         <TextInput
-                            mode="flat"
                             placeholder="Ask Easey..."
                             value={inputText}
                             onChangeText={setInputText}
-                            style={{ backgroundColor: 'transparent', flex: 1, fontSize: 16 }}
-                            underlineColor="transparent"
-                            activeUnderlineColor="transparent"
+                            style={[styles.nativeInput, { color: theme.colors.onSurface }]}
                             placeholderTextColor={theme.colors.outline}
                             multiline
-                            right={
-                                loading ?
-                                    <TextInput.Icon icon={() => <ActivityIndicator size={20} />} /> :
-                                    <TextInput.Icon
-                                        icon="arrow-up-circle"
-                                        color={inputText.trim() ? theme.colors.primary : theme.colors.outline}
-                                        size={34}
-                                        style={{ marginTop: 4 }}
-                                        onPress={sendMessage}
-                                    />
-                            }
+                        />
+                        <IconButton
+                            icon={loading ? "loading" : "arrow-up-circle"}
+                            mode="contained"
+                            containerColor="transparent"
+                            iconColor={inputText.trim() ? theme.colors.primary : theme.colors.outline}
+                            size={32}
+                            onPress={sendMessage}
+                            style={{ margin: 0 }}
+                            disabled={!inputText.trim() && !loading}
                         />
                     </View>
                 </View>
@@ -255,14 +251,21 @@ const styles = StyleSheet.create({
         minWidth: 60,
     },
     inputContainer: {
-        padding: 12,
+        padding: 8,
         paddingHorizontal: 16,
     },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 4,
-        paddingVertical: 2,
-        borderRadius: 30, // Pill shape
+        paddingHorizontal: 12,
+        paddingVertical: 2, // Slimmer vertical padding
+        borderRadius: 24, // Slightly tighter radius
+    },
+    nativeInput: {
+        flex: 1,
+        fontSize: 16,
+        maxHeight: 120, // Allow growth
+        paddingTop: 8,
+        paddingBottom: 8,
     }
 });
