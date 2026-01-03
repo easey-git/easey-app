@@ -164,14 +164,27 @@ const fetchCampaigns = async () => {
 // ---------------------------------------------------------
 // MAIN HANDLER
 // ---------------------------------------------------------
+const cors = require('cors')({ origin: true });
+
+function runMiddleware(req, res, fn) {
+    return new Promise((resolve, reject) => {
+        fn(req, res, (result) => {
+            if (result instanceof Error) {
+                return reject(result);
+            }
+            return resolve(result);
+        });
+    });
+}
+
 module.exports = async (req, res) => {
+    await runMiddleware(req, res, cors);
+
+    // Legacy manual headers (kept just in case, but overridden by cors)
     res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
     if (req.method === 'OPTIONS') {
-        res.status(200).end();
+        res.status(200).json({});
         return;
     }
 
