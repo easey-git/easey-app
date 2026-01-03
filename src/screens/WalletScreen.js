@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Dimensions, SectionList } from 'react-native';
 import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar } from 'react-native-paper';
-import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, where, getAggregateFromServer, sum } from 'firebase/firestore';
+import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, where, getAggregateFromServer, sum, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { WalletService } from '../services/walletService';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
 import { PieChart } from 'react-native-chart-kit';
 import * as Haptics from 'expo-haptics';
@@ -111,21 +112,65 @@ const WalletScreen = ({ navigation }) => {
     // Separate Data Stream for Charts (High Volume, Client-Side Aggregation)
     const [chartTransactions, setChartTransactions] = useState([]);
 
+    // 4. "All Time" Stats Listener (Stats Doc) - Future Proof
+    const [allTimeStats, setAllTimeStats] = useState(null);
+    useEffect(() => {
+        if (timeRange !== 'all') return;
+
+        const unsubscribe = onSnapshot(doc(db, 'wallet_stats', 'global'), (doc) => {
+            if (doc.exists()) {
+                const data = doc.data();
+                console.log("AllTimeStats Snapshot:", JSON.stringify(data));
+                setAllTimeStats(data);
+            } else {
+                console.log("AllTimeStats: Doc missing");
+                // If missing, we might want to trigger a recalculate (one off) or just show 0
+                setAllTimeStats({ balance: 0, income: 0, expense: 0, categoryBreakdown: { income: {}, expense: {} } });
+            }
+        });
+        return () => unsubscribe();
+    }, [timeRange]);
+
     const itemStats = useMemo(() => {
         const expenseItemTotals = {};
         const incomeItemTotals = {};
 
-        // Use chartTransactions (High Volume) for accuracy
-        chartTransactions.forEach(t => {
-            const amt = parseFloat(t.amount);
-            const desc = t.description ? t.description.trim() : 'Unknown';
+        // CASE 1: All Time (Server Stats Doc)
+        // CASE 1: All Time (Server Stats Doc)
+        // CASE 1: All Time (Server Stats Doc)
+        if (timeRange === 'all') {
+            if (allTimeStats && allTimeStats.categoryBreakdown) {
+                const cats = allTimeStats.categoryBreakdown;
 
-            if (t.type === 'income') {
-                incomeItemTotals[desc] = (incomeItemTotals[desc] || 0) + amt;
-            } else {
-                expenseItemTotals[desc] = (expenseItemTotals[desc] || 0) + amt;
+                // Income
+                if (cats.income) {
+                    Object.keys(cats.income).forEach(key => {
+                        incomeItemTotals[key] = cats.income[key];
+                    });
+                }
+                // Expense
+                if (cats.expense) {
+                    Object.keys(cats.expense).forEach(key => {
+                        expenseItemTotals[key] = cats.expense[key];
+                    });
+                }
             }
-        });
+        }
+        // CASE 2: Week/Month (Client Aggregation of downloaded docs)
+        // OR Fallback if server stats missing for some reason
+        else {
+            chartTransactions.forEach(t => {
+                const amt = parseFloat(t.amount);
+                // Switch recent stats to use Category as well for consistency
+                const key = t.category || 'Misc';
+
+                if (t.type === 'income') {
+                    incomeItemTotals[key] = (incomeItemTotals[key] || 0) + amt;
+                } else {
+                    expenseItemTotals[key] = (expenseItemTotals[key] || 0) + amt;
+                }
+            });
+        }
 
         // Helper
         const formatItemData = (totals) => {
@@ -139,7 +184,7 @@ const WalletScreen = ({ navigation }) => {
             return final.map((item, index) => ({
                 name: item.name,
                 amount: item.amount,
-                color: item.name === 'Others' ? '#9E9E9E' : ITEM_COLORS[index % ITEM_COLORS.length],
+                color: item.name === 'Others' ? '#9E9E9E' : (CATEGORY_COLORS[item.name] || ITEM_COLORS[index % ITEM_COLORS.length]),
                 legendFontColor: theme.colors.onSurfaceVariant,
                 legendFontSize: 12
             }));
@@ -149,7 +194,7 @@ const WalletScreen = ({ navigation }) => {
             expenseItemsChart: formatItemData(expenseItemTotals),
             incomeItemsChart: formatItemData(incomeItemTotals),
         };
-    }, [chartTransactions, theme]);
+    }, [chartTransactions, allTimeStats, timeRange, theme]);
 
     // Real Global Stats (Server-Side Aggregation)
     const [globalStats, setGlobalStats] = useState({ balance: 0, income: 0, expense: 0 });
@@ -160,6 +205,20 @@ const WalletScreen = ({ navigation }) => {
             setStatsLoading(true);
 
             try {
+                // CASE 1: All Time (Use Server Stats Doc)
+                if (timeRange === 'all') {
+                    if (allTimeStats) {
+                        setGlobalStats({
+                            income: allTimeStats.income || 0,
+                            expense: allTimeStats.expense || 0,
+                            balance: allTimeStats.balance || 0
+                        });
+                    }
+                    setStatsLoading(false);
+                    return;
+                }
+
+                // CASE 2: Week/Month (Use Aggregation Query - Fast for small subsets)
                 // Calculate start date based on filter
                 let startDate = new Date();
                 let hasDateFilter = false;
@@ -208,9 +267,17 @@ const WalletScreen = ({ navigation }) => {
             }
         };
         fetchGlobalStats();
-    }, [timeRange]);
+    }, [timeRange, allTimeStats]);
 
+
+    // 5. Chart Data Fetcher
     useEffect(() => {
+        // If 'all', we use 'allTimeStats' and DO NOT fetch chart list
+        if (timeRange === 'all') {
+            setChartTransactions([]);
+            return;
+        }
+
         const fetchChartData = () => {
             try {
                 let startDate = new Date();
@@ -224,7 +291,7 @@ const WalletScreen = ({ navigation }) => {
                     queryConstraints.push(where("date", ">=", startDate));
                 }
 
-                // Fetch ALL items for analytics (Unlimited History - Production Grade)
+                // Fetch items for analytics (Limited history is fine for week/month)
                 const q = query(collection(db, "wallet_transactions"), ...queryConstraints);
 
                 const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -316,12 +383,11 @@ const WalletScreen = ({ navigation }) => {
         setLoading(true);
 
         try {
-            await addDoc(collection(db, "wallet_transactions"), {
+            await WalletService.addTransaction({
                 amount: numericAmount,
                 description: description.trim(),
                 category,
                 type,
-                date: serverTimestamp(),
             });
             setVisible(false);
             setAmount('');
@@ -345,7 +411,18 @@ const WalletScreen = ({ navigation }) => {
 
     const handleDelete = useCallback(async (id) => {
         try {
-            await deleteDoc(doc(db, "wallet_transactions", id));
+            // Need to fetch doc data first to reverse stats, OR pass it in. 
+            // Ideally we pass the whole item to handleDelete. 
+            // For now, let's fetch it quickly if needed, but 'confirmDelete' has the ID. 
+            // We'll update confirmDelete to pass the whole object.
+
+            // Fallback: Read doc
+            const docRef = doc(db, "wallet_transactions", id);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                await WalletService.deleteTransaction(id, docSnap.data());
+            }
+
             if (Platform.OS !== 'web') {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             }
@@ -644,18 +721,18 @@ const WalletScreen = ({ navigation }) => {
 
             {/* Visual Analytics - Pie Chart (Visible Data) */}
             {
-                ((filterType === 'all') && (globalStats.income > 0 || globalStats.expense > 0)) && (
+                ((filterType === 'all') && ((globalStats?.income || 0) > 0 || (globalStats?.expense || 0) > 0)) && (
                     <StatChart title="Cash Flow (All Time Accurate)" data={[
                         {
                             name: 'Income',
-                            amount: globalStats.income, // Use Exact Server Total
+                            amount: globalStats.income || 0, // Use Exact Server Total
                             color: theme.colors.primary,
                             legendFontColor: theme.colors.onSurfaceVariant,
                             legendFontSize: 12
                         },
                         {
                             name: 'Expense',
-                            amount: globalStats.expense, // Use Exact Server Total
+                            amount: globalStats.expense || 0, // Use Exact Server Total
                             color: theme.colors.error,
                             legendFontColor: theme.colors.onSurfaceVariant,
                             legendFontSize: 12
@@ -667,15 +744,17 @@ const WalletScreen = ({ navigation }) => {
 
 
             {
-                // Item breakdown still relies on visible list (High Cardinality)
+                // Item breakdown for Expense
                 (filterType === 'expense' && itemStats.expenseItemsChart.length > 0) && (
-                    <StatChart title="Top Recent Expenses" data={itemStats.expenseItemsChart} theme={theme} />
+                    <StatChart title={timeRange === 'all' ? "All Time Expenses" : "Top Recent Expenses"} data={itemStats.expenseItemsChart} theme={theme} />
                 )
             }
 
+
+
             {
                 (filterType === 'income' && itemStats.incomeItemsChart.length > 0) && (
-                    <StatChart title="Top Recent Income" data={itemStats.incomeItemsChart} theme={theme} />
+                    <StatChart title={timeRange === 'all' ? "All Time Income" : "Top Recent Income"} data={itemStats.incomeItemsChart} theme={theme} />
                 )
             }
 
