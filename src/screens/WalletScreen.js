@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Dimensions, FlatList } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Dimensions, SectionList } from 'react-native';
 import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar } from 'react-native-paper';
 import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, where, getAggregateFromServer, sum } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
 import { PieChart } from 'react-native-chart-kit';
+import * as Haptics from 'expo-haptics';
 
 const EXPENSE_CATEGORIES = ['Business', 'Share', 'Split', 'Misc'];
 const INCOME_CATEGORIES = ['Remittance', 'Fund', 'Share', 'Investment', 'Misc'];
@@ -317,6 +318,9 @@ const WalletScreen = ({ navigation }) => {
             setType(defaultType);
             setCategory(EXPENSE_CATEGORIES[0]);
 
+            if (Platform.OS !== 'web') {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
             showSnackbar("Transaction saved successfully");
         } catch (error) {
             console.error("Error adding transaction: ", error);
@@ -329,6 +333,9 @@ const WalletScreen = ({ navigation }) => {
     const handleDelete = useCallback(async (id) => {
         try {
             await deleteDoc(doc(db, "wallet_transactions", id));
+            if (Platform.OS !== 'web') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }
             showSnackbar("Transaction deleted");
         } catch (error) {
             console.error("Error deleting transaction: ", error);
@@ -387,6 +394,30 @@ const WalletScreen = ({ navigation }) => {
             return matchesType && matchesSearch;
         });
     }, [transactions, filterType, searchQuery]);
+
+    const sections = useMemo(() => {
+        const groups = filteredTransactions.reduce((acc, t) => {
+            const dateObj = t.date?.toDate ? t.date.toDate() : new Date();
+            const dateKey = dateObj.toDateString();
+
+            // Nice Header Text
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            let title = dateObj.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+            if (dateKey === today.toDateString()) title = "Today";
+            else if (dateKey === yesterday.toDateString()) title = "Yesterday";
+
+            if (!acc[dateKey]) {
+                acc[dateKey] = { title, data: [] };
+            }
+            acc[dateKey].data.push(t);
+            return acc;
+        }, {});
+
+        return Object.values(groups);
+    }, [filteredTransactions]);
 
     const renderTransaction = ({ item }) => (
         <TouchableOpacity onLongPress={() => confirmDelete(item.id)} delayLongPress={500}>
@@ -545,8 +576,9 @@ const WalletScreen = ({ navigation }) => {
             </View>
 
             {/* Balance Overview */}
+            {/* Balance Overview */}
             <Surface style={[styles.balanceCard, { backgroundColor: theme.colors.surface }]} elevation={2}>
-                <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>NET</Text>
+                <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>NET WORTH</Text>
                 {statsLoading ? (
                     <View style={{ height: 50, justifyContent: 'center', alignItems: 'flex-start' }}>
                         <ActivityIndicator size="small" />
@@ -676,9 +708,14 @@ const WalletScreen = ({ navigation }) => {
                 </View>
             ) : (
                 <ResponsiveContainer>
-                    <FlatList
-                        data={filteredTransactions}
+                    <SectionList
+                        sections={sections}
                         renderItem={renderTransactionItem}
+                        renderSectionHeader={({ section: { title } }) => (
+                            <View style={{ paddingVertical: 8, paddingHorizontal: 4, marginTop: 8, backgroundColor: theme.colors.background }}>
+                                <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: 'bold', textTransform: 'uppercase' }}>{title}</Text>
+                            </View>
+                        )}
                         keyExtractor={item => item.id}
                         contentContainerStyle={styles.content}
                         ListHeaderComponent={ListHeader}
@@ -687,6 +724,7 @@ const WalletScreen = ({ navigation }) => {
                         maxToRenderPerBatch={20}
                         windowSize={10}
                         removeClippedSubviews={Platform.OS === 'android'}
+                        stickySectionHeadersEnabled={false}
                     />
                 </ResponsiveContainer>
             )}
