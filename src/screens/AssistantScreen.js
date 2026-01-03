@@ -165,7 +165,7 @@ export default function AssistantScreen({ navigation }) {
             <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
                 <Appbar.BackAction onPress={() => navigation.goBack()} />
                 <Appbar.Content
-                    title="Easey Intelligence"
+                    title="Easey-AI"
                     titleStyle={{ fontWeight: '700', fontSize: 18, color: theme.colors.onBackground }}
                     style={{ alignItems: 'center' }}
                 />
