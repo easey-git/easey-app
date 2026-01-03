@@ -178,6 +178,13 @@ const HomeScreen = ({ navigation }) => {
 
     const menuItems = [
         {
+            id: 0,
+            title: 'Easey AI',
+            subtitle: 'Your Assistant',
+            icon: 'robot',
+            screen: 'Assistant',
+        },
+        {
             id: 1,
             title: 'Orders',
             subtitle: 'Manage Orders',

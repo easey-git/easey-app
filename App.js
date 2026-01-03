@@ -14,6 +14,7 @@ import WhatsAppManagerScreen from './src/screens/WhatsAppManagerScreen';
 import CampaignsScreen from './src/screens/CampaignsScreen';
 import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
+import AssistantScreen from './src/screens/AssistantScreen';
 import { theme } from './src/theme/theme';
 import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -216,7 +217,11 @@ function AppNavigator() {
               <Stack.Screen
                 name="Wallet"
                 component={WalletScreen}
-                options={{ title: 'Wallet' }}
+              />
+              <Stack.Screen
+                name="Assistant"
+                component={AssistantScreen}
+                options={{ headerShown: false }}
               />
             </>
           )}

@@ -23,12 +23,20 @@
         {
             "src": "api/campaigns.js",
             "use": "@vercel/node"
+        },
+        {
+            "src": "api/assistant.js",
+            "use": "@vercel/node"
         }
     ],
     "routes": [
         {
             "src": "/api/webhook",
             "dest": "/api/webhook.js"
+        },
+        {
+            "src": "/api/assistant",
+            "dest": "/api/assistant.js"
         },
         {
             "src": "/api/ga4-visitors",
