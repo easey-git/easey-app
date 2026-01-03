@@ -31,10 +31,19 @@ export default function AssistantScreen({ navigation }) {
         // Keyboard.dismiss(); // Optional: keep keyboard up for faster typing
 
         try {
+            // Simplify history for bandwidth/cost (last 10 messages)
+            const history = messages.slice(-10).map(m => ({
+                role: m.sender === 'user' ? 'user' : 'model',
+                text: m.text
+            }));
+
             const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: userMsg.text })
+                body: JSON.stringify({
+                    prompt: userMsg.text,
+                    history: history
+                })
             });
 
             const data = await response.json();

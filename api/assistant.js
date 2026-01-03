@@ -141,9 +141,23 @@ module.exports = async (req, res) => {
         };
 
         // Construct Content with System Prompt logic
-        // Since we are stateless, we prepend system prompt info to the user prompt or use a "Developer System Instruction" if supported,
-        // but simple concatenation works reliably.
-        const fullPrompt = `System: ${DB_SCHEMA}\nUser Query: ${prompt}`;
+        // We act as if the conversation has been going on. 
+        // Best approach for V2 stateless: Format history as text "User: ... \nModel: ..."
+        // This is robust and cheaper than re-creating complex object chains.
+
+        let historyPrompt = "";
+        if (history && history.length > 0) {
+            historyPrompt = history.map(h => `${h.role === 'user' ? 'User' : 'Easey'}: ${h.text}`).join("\n");
+        }
+
+        const fullPrompt = `${DB_SCHEMA}
+
+CONTEXT OF CONVERSATION:
+${historyPrompt}
+
+CURRENT QUERY:
+User: ${prompt}
+Easey:`;
 
         // 1. First Turn: Send user query with tools configured
         const response1 = await ai.models.generateContent({
