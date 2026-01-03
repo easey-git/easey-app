@@ -27,7 +27,8 @@
       ],
       "metaData": {
         "com.google.firebase.messaging.default_notification_channel_id": "easey_default_v1"
-      }
+      },
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "favicon": "./assets/favicon.png"

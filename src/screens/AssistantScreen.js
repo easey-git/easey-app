@@ -1,38 +1,86 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
-import { Text, TextInput, IconButton, Surface, useTheme, ActivityIndicator, Avatar, Appbar } from 'react-native-paper';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback, Animated } from 'react-native';
+import { Text, TextInput, IconButton, Surface, useTheme, ActivityIndicator, Avatar, Appbar, Menu } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useHeaderHeight } from '@react-navigation/elements';
 
 const API_URL = 'https://easey-app.vercel.app/api/assistant';
+const STORAGE_KEY = 'easey_chat_history_v1';
 
 export default function AssistantScreen({ navigation }) {
     const theme = useTheme();
-    const [messages, setMessages] = useState([
-        { id: 1, text: "Hi! I'm Easey. Ask me anything about your store data.", sender: 'bot' }
-    ]);
+    const headerHeight = useHeaderHeight(); // Dynamic, not hardcoded
+    const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
+    const [menuVisible, setMenuVisible] = useState(false);
     const flatListRef = useRef(null);
 
+    // Load History on Mount
     useEffect(() => {
-        // Scroll to bottom when messages change
-        if (flatListRef.current) {
-            setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+        loadHistory();
+    }, []);
+
+    const loadHistory = async () => {
+        try {
+            const stored = await AsyncStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                setMessages(JSON.parse(stored));
+            } else {
+                // Default Welcome Message
+                setMessages([{
+                    id: 1,
+                    text: "Hi! I'm Easey. I can help you find orders, check sales, or track abandoned carts. What do you need?",
+                    sender: 'bot',
+                    timestamp: Date.now()
+                }]);
+            }
+        } catch (e) {
+            console.error("Failed to load history", e);
         }
-    }, [messages]);
+    };
+
+    const saveHistory = async (newMessages) => {
+        try {
+            // Keep last 50 messages to save space
+            const toSave = newMessages.slice(-50);
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+        } catch (e) {
+            console.error("Failed to save history", e);
+        }
+    };
+
+    const clearHistory = async () => {
+        setMessages([{
+            id: Date.now(),
+            text: "Chat cleared. How can I help?",
+            sender: 'bot',
+            timestamp: Date.now()
+        }]);
+        await AsyncStorage.removeItem(STORAGE_KEY);
+        setMenuVisible(false);
+    };
 
     const sendMessage = async () => {
-        if (!inputText.trim()) return;
+        if (!inputText.trim() || loading) return;
 
-        const userMsg = { id: Date.now(), text: inputText, sender: 'user' };
-        setMessages(prev => [...prev, userMsg]);
+        const userText = inputText.trim();
+        const userMsg = { id: Date.now(), text: userText, sender: 'user', timestamp: Date.now() };
+
+        const updatedMessages = [...messages, userMsg];
+        setMessages(updatedMessages);
+        saveHistory(updatedMessages);
+
         setInputText('');
         setLoading(true);
-        // Keyboard.dismiss(); // Optional: keep keyboard up for faster typing
+
+        // Scroll to bottom immediately
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
         try {
-            // Simplify history for bandwidth/cost (last 10 messages)
-            const history = messages.slice(-10).map(m => ({
+            // Context History: Send last 10 messages for context
+            const historyPayload = updatedMessages.slice(-10).map(m => ({
                 role: m.sender === 'user' ? 'user' : 'model',
                 text: m.text
             }));
@@ -41,8 +89,8 @@ export default function AssistantScreen({ navigation }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    prompt: userMsg.text,
-                    history: history
+                    prompt: userText,
+                    history: historyPayload
                 })
             });
 
@@ -54,15 +102,26 @@ export default function AssistantScreen({ navigation }) {
                 id: Date.now() + 1,
                 text: data.text || "I found something, but I'm not sure how to say it.",
                 sender: 'bot',
-                data: data.data
+                data: data.data,
+                timestamp: Date.now()
             };
-            setMessages(prev => [...prev, botMsg]);
+
+            const finalMessages = [...updatedMessages, botMsg];
+            setMessages(finalMessages);
+            saveHistory(finalMessages);
 
         } catch (error) {
-            const errorMsg = { id: Date.now() + 1, text: "Sorry, I encountered an error: " + error.message, sender: 'bot' };
+            const errorMsg = {
+                id: Date.now() + 1,
+                text: "Sorry, I encountered an error: " + error.message,
+                sender: 'bot',
+                isError: true,
+                timestamp: Date.now()
+            };
             setMessages(prev => [...prev, errorMsg]);
         } finally {
             setLoading(false);
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
         }
     };
 
@@ -74,67 +133,113 @@ export default function AssistantScreen({ navigation }) {
                 isUser ? styles.userRow : styles.botRow
             ]}>
                 {!isUser && (
-                    <Avatar.Icon size={32} icon="robot" style={{ backgroundColor: theme.colors.primary, marginRight: 8 }} />
+                    <Avatar.Icon
+                        size={32}
+                        icon="auto-fix"
+                        style={{ backgroundColor: theme.colors.primaryContainer, marginRight: 8 }}
+                        color={theme.colors.primary}
+                    />
                 )}
-                <Surface style={[
+                <View style={[
                     styles.bubble,
-                    isUser ? { backgroundColor: theme.colors.primary } : { backgroundColor: theme.colors.surfaceVariant }
-                ]} elevation={1}>
+                    isUser ? { backgroundColor: theme.colors.primary, borderBottomRightRadius: 4 } : { backgroundColor: theme.colors.surfaceVariant, borderBottomLeftRadius: 4 },
+                ]}>
                     <Text style={{
-                        color: isUser ? theme.colors.onPrimary : theme.colors.onSurfaceVariant
+                        color: isUser ? theme.colors.onPrimary : theme.colors.onSurfaceVariant,
+                        fontSize: 16,
+                        lineHeight: 22,
+                        marginBottom: 4
                     }}>
                         {item.text}
                     </Text>
-                </Surface>
+                    <Text style={{
+                        color: isUser ? 'rgba(255,255,255,0.7)' : theme.colors.outline,
+                        fontSize: 10,
+                        alignSelf: 'flex-end',
+                    }}>
+                        {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                </View>
             </View>
         );
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['bottom', 'left', 'right']}>
-            <Appbar.Header style={{ backgroundColor: theme.colors.background }}>
+        <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+            <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
                 <Appbar.BackAction onPress={() => navigation.goBack()} />
-                <Appbar.Content title="Easey Assistant" />
+                <Appbar.Content
+                    title="Easey Intelligence"
+                    titleStyle={{ fontWeight: '700', fontSize: 18, color: theme.colors.onBackground }}
+                    style={{ alignItems: 'center' }}
+                />
+                <Menu
+                    visible={menuVisible}
+                    onDismiss={() => setMenuVisible(false)}
+                    anchor={<Appbar.Action icon="dots-horizontal" onPress={() => setMenuVisible(true)} />}
+                >
+                    <Menu.Item onPress={clearHistory} title="Clear Context" leadingIcon="broom" />
+                </Menu>
             </Appbar.Header>
 
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                keyExtractor={item => item.id.toString()}
-                renderItem={renderMessage}
-                contentContainerStyle={styles.listContent}
-            />
-
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={headerHeight}
             >
-                <Surface style={[styles.inputContainer, { backgroundColor: theme.colors.surface }]} elevation={4}>
-                    <TextInput
-                        mode="outlined"
-                        placeholder="Ask Easey..."
-                        value={inputText}
-                        onChangeText={setInputText}
-                        style={styles.input}
-                        right={loading ? <TextInput.Icon icon={() => <ActivityIndicator />} /> : <TextInput.Icon icon="send" onPress={sendMessage} />}
-                        onSubmitEditing={sendMessage}
+                <View style={{ flex: 1 }}>
+                    <FlatList
+                        ref={flatListRef}
+                        data={messages}
+                        keyExtractor={item => item.id.toString()}
+                        renderItem={renderMessage}
+                        contentContainerStyle={{ padding: 20, paddingBottom: 10 }}
+                        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                        showsVerticalScrollIndicator={false}
                     />
-                </Surface>
+                </View>
+
+                {/* Modern Floating Input Bar */}
+                <View style={[styles.inputContainer, { backgroundColor: theme.colors.background }]}>
+                    <View style={[styles.inputWrapper, { backgroundColor: theme.colors.surfaceVariant }]}>
+                        <TextInput
+                            mode="flat"
+                            placeholder="Ask Easey..."
+                            value={inputText}
+                            onChangeText={setInputText}
+                            style={{ backgroundColor: 'transparent', flex: 1, fontSize: 16 }}
+                            underlineColor="transparent"
+                            activeUnderlineColor="transparent"
+                            placeholderTextColor={theme.colors.outline}
+                            multiline
+                            right={
+                                loading ?
+                                    <TextInput.Icon icon={() => <ActivityIndicator size={20} />} /> :
+                                    <TextInput.Icon
+                                        icon="arrow-up-circle"
+                                        color={inputText.trim() ? theme.colors.primary : theme.colors.outline}
+                                        size={34}
+                                        style={{ marginTop: 4 }}
+                                        onPress={sendMessage}
+                                    />
+                            }
+                        />
+                    </View>
+                </View>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+
+            <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.colors.background }} />
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    listContent: {
-        padding: 16,
-        paddingBottom: 20
-    },
     messageRow: {
         flexDirection: 'row',
         marginBottom: 16,
+        maxWidth: '85%',
         alignItems: 'flex-end',
-        maxWidth: '80%'
     },
     userRow: {
         alignSelf: 'flex-end',
@@ -144,16 +249,20 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start'
     },
     bubble: {
-        padding: 12,
-        borderRadius: 16,
-        borderBottomLeftRadius: 4, // Bot look
+        padding: 14,
+        paddingHorizontal: 18,
+        borderRadius: 22,
+        minWidth: 60,
     },
     inputContainer: {
-        padding: 16,
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
+        padding: 12,
+        paddingHorizontal: 16,
     },
-    input: {
-        backgroundColor: 'transparent'
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderRadius: 30, // Pill shape
     }
 });
