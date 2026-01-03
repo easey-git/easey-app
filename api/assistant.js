@@ -34,7 +34,7 @@ DATA SOURCES:
     - queryFirestore usage: collection='orders'
 
 2.  **ABANDONED CARTS** (Collection: "checkouts")
-    - Fields: total_price (number), first_name, eventType ('ABANDONED'), updatedAt.
+    - Fields: total_price (number), first_name, eventType ('ABANDONED'), updatedAt (ISO Timestamp string).
     - queryFirestore usage: collection='checkouts'
 
 3.  **WHATSAPP** (Collection: "whatsapp_messages")
@@ -42,7 +42,7 @@ DATA SOURCES:
     - queryFirestore usage: collection='whatsapp_messages'
 
 4.  **WALLET / FINANCES** (Collection: "wallet_transactions")
-    - Fields: amount (number), description (string), category (string), type ('income'|'expense'), date (timestamp).
+    - Fields: amount (number), description (string), category (string), type ('income'|'expense'), date (timestamp object with _seconds).
     - queryFirestore usage: collection='wallet_transactions'
 
 5.  **NOTES** (Collection: "notes")
@@ -61,8 +61,10 @@ DATA SOURCES:
     - Data: Spend, Revenue, ROAS, Purchases, Impressions, Clicks.
 
 SEARCH TIPS:
-- For 'orderNumber', always query as a NUMBER.
-- For financial summaries, query 'wallet_transactions' and sum them up yourself or ask for the last N transactions.
+- **Dates**: To search for a specific day (e.g. "Today", "29th Dec"), ALWAYS use a range query with '>=' start-of-day and '<=' end-of-day. NEVER use '==' for dates.
+    - Example: for "Today", filters=[['date', '>=', '2026-01-04T00:00:00'], ['date', '<=', '2026-01-04T23:59:59']]
+- **Wallet**: To calculate "How much made/spend", query 'wallet_transactions' with type='income' or 'expense' and the date range. Then sum the 'amount' field manually.
+- **Indexes**: IF you get an error about "requiring an index", TRY AGAIN by fetching the *latest 20 transactions* (orderBy 'date' desc) and filtering them in memory yourself. Do NOT ask the user to create an index.
 `;
 
 // ---------------------------------------------------------
