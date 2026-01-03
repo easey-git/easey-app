@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Dimensions, SectionList } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, SectionList, ScrollView } from 'react-native';
 import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar } from 'react-native-paper';
-import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, where, getAggregateFromServer, sum, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { WalletService } from '../services/walletService';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
@@ -221,6 +221,8 @@ const WalletScreen = ({ navigation }) => {
     const [statsLoading, setStatsLoading] = useState(true);
 
     useEffect(() => {
+        let isActive = true;
+
         const fetchGlobalStats = async () => {
             setStatsLoading(true);
 
@@ -228,13 +230,18 @@ const WalletScreen = ({ navigation }) => {
                 // CASE 1: All Time (Use Server Stats Doc)
                 if (timeRange === 'all') {
                     if (allTimeStats) {
-                        setGlobalStats({
-                            income: allTimeStats.income || 0,
-                            expense: allTimeStats.expense || 0,
-                            balance: allTimeStats.balance || 0
-                        });
+                        if (isActive) {
+                            setGlobalStats({
+                                income: allTimeStats.income || 0,
+                                expense: allTimeStats.expense || 0,
+                                balance: allTimeStats.balance || 0
+                            });
+                            setStatsLoading(false);
+                        }
+                    } else {
+                        // Wait for listener to populate allTimeStats
+                        // Do NOT setStatsLoading(false) yet.
                     }
-                    setStatsLoading(false);
                     return;
                 }
 
@@ -270,23 +277,30 @@ const WalletScreen = ({ navigation }) => {
                     getAggregateFromServer(expenseQuery, { total: sum('amount') })
                 ]);
 
-                const totalIncome = incomeSnap.data().total || 0;
-                const totalExpense = expenseSnap.data().total || 0;
+                if (isActive) {
+                    const totalIncome = incomeSnap.data().total || 0;
+                    const totalExpense = expenseSnap.data().total || 0;
 
-                setGlobalStats({
-                    income: totalIncome,
-                    expense: totalExpense,
-                    balance: totalIncome - totalExpense
-                });
+                    setGlobalStats({
+                        income: totalIncome,
+                        expense: totalExpense,
+                        balance: totalIncome - totalExpense
+                    });
 
+                    setStatsLoading(false); // Only finish loading here for Aggregation path
+                }
 
             } catch (error) {
                 console.error("Stats Aggregation Failed:", error);
-            } finally {
-                setStatsLoading(false);
+                if (isActive) setStatsLoading(false); // Error fallback
             }
         };
+
         fetchGlobalStats();
+
+        return () => {
+            isActive = false;
+        };
     }, [timeRange, allTimeStats]);
 
 

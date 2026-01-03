@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
-import { Surface, Text, useTheme, Button, IconButton, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon } from 'react-native-paper';
-import { collection, query, orderBy, limit, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, getAggregateFromServer, sum, where } from 'firebase/firestore';
+import { View, StyleSheet } from 'react-native';
+import { Surface, Text, useTheme, Button, IconButton, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, ActivityIndicator } from 'react-native-paper';
+import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { WalletService } from '../services/walletService';
 
@@ -95,13 +95,7 @@ export const WalletCard = () => {
         }
     };
 
-    const handleDelete = async (id) => {
-        try {
-            await deleteDoc(doc(db, "wallet_transactions", id));
-        } catch (error) {
-            console.error("Error deleting transaction: ", error);
-        }
-    };
+
 
     const renderTransaction = ({ item }) => (
         <View style={styles.transactionRow}>
