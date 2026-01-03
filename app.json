@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Easey CRM",
+    "name": "Easey",
     "slug": "easey-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Allow Easey CRM to use FaceID for secure login."
+        "NSFaceIDUsageDescription": "Allow Easey to use FaceID for secure login."
       }
     },
     "android": {

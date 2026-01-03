@@ -104,7 +104,7 @@ const LoginScreen = () => {
                             />
                         </Surface>
                         <Text variant="headlineLarge" style={{ fontWeight: 'bold', marginTop: 24, color: theme.colors.onBackground }}>
-                            Easey CRM
+                            Easey
                         </Text>
                         <Text variant="bodyMedium" style={{ marginTop: 8, color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
                             Sign in to access your dashboard

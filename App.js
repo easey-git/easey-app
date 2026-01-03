@@ -81,7 +81,7 @@ function AppNavigator() {
       }
 
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Unlock Easey CRM',
+        promptMessage: 'Unlock Easey',
         fallbackLabel: 'Use Passcode',
         cancelLabel: 'Cancel',
         disableDeviceFallback: false, // Allow PIN/Pattern if biometrics fail
