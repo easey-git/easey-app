@@ -138,8 +138,33 @@ const WalletScreen = ({ navigation }) => {
         // CASE 1: All Time (Server Stats Doc)
         // CASE 1: All Time (Server Stats Doc)
         // CASE 1: All Time (Server Stats Doc)
+        // CASE 1: All Time (Server Stats Doc)
         if (timeRange === 'all') {
-            if (allTimeStats && allTimeStats.categoryBreakdown) {
+            // Auto-Migration Check: If descriptions missing, trigger recalculate
+            if (allTimeStats && allTimeStats.categoryBreakdown && !allTimeStats.descriptionBreakdown) {
+                console.log("Auto-Migrating Stats to include descriptions...");
+                WalletService.recalculateAllStats();
+                // We don't wait. Next snapshot update will bring data.
+            }
+
+            if (allTimeStats && allTimeStats.descriptionBreakdown) {
+                const descs = allTimeStats.descriptionBreakdown;
+
+                // Income
+                if (descs.income) {
+                    Object.keys(descs.income).forEach(key => {
+                        incomeItemTotals[key] = descs.income[key];
+                    });
+                }
+                // Expense
+                if (descs.expense) {
+                    Object.keys(descs.expense).forEach(key => {
+                        expenseItemTotals[key] = descs.expense[key];
+                    });
+                }
+            }
+            // Fallback to Category
+            else if (allTimeStats && allTimeStats.categoryBreakdown) {
                 const cats = allTimeStats.categoryBreakdown;
 
                 // Income
@@ -161,8 +186,8 @@ const WalletScreen = ({ navigation }) => {
         else {
             chartTransactions.forEach(t => {
                 const amt = parseFloat(t.amount);
-                // Switch recent stats to use Category as well for consistency
-                const key = t.category || 'Misc';
+                // Switch recent stats to use Description (User Request)
+                const key = t.description || 'Unknown';
 
                 if (t.type === 'income') {
                     incomeItemTotals[key] = (incomeItemTotals[key] || 0) + amt;

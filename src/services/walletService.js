@@ -40,19 +40,27 @@ export const WalletService = {
                 if (!stats.categoryBreakdown.income) stats.categoryBreakdown.income = {};
                 if (!stats.categoryBreakdown.expense) stats.categoryBreakdown.expense = {};
 
+                // Description Breakdown (New Feature)
+                if (!stats.descriptionBreakdown) stats.descriptionBreakdown = { income: {}, expense: {} };
+                if (!stats.descriptionBreakdown.income) stats.descriptionBreakdown.income = {};
+                if (!stats.descriptionBreakdown.expense) stats.descriptionBreakdown.expense = {};
+
                 // 3. Calculate New Stats
                 const amount = parseFloat(transactionData.amount);
                 const type = transactionData.type; // 'income' | 'expense'
                 const category = transactionData.category || 'Misc';
+                const description = transactionData.description || 'Unknown';
 
                 if (type === 'income') {
                     stats.income = (stats.income || 0) + amount;
                     stats.balance = (stats.balance || 0) + amount;
                     stats.categoryBreakdown.income[category] = (stats.categoryBreakdown.income[category] || 0) + amount;
+                    stats.descriptionBreakdown.income[description] = (stats.descriptionBreakdown.income[description] || 0) + amount;
                 } else {
                     stats.expense = (stats.expense || 0) + amount;
                     stats.balance = (stats.balance || 0) - amount;
                     stats.categoryBreakdown.expense[category] = (stats.categoryBreakdown.expense[category] || 0) + amount;
+                    stats.descriptionBreakdown.expense[description] = (stats.descriptionBreakdown.expense[description] || 0) + amount;
                 }
 
                 // 4. Commit Writes
@@ -99,21 +107,33 @@ export const WalletService = {
                 if (!stats.categoryBreakdown.income) stats.categoryBreakdown.income = {};
                 if (!stats.categoryBreakdown.expense) stats.categoryBreakdown.expense = {};
 
+                // Description Breakdown
+                if (!stats.descriptionBreakdown) stats.descriptionBreakdown = { income: {}, expense: {} };
+
 
                 const amount = parseFloat(txData.amount);
                 const type = txData.type;
                 const category = txData.category || 'Misc';
+                const description = txData.description || 'Unknown';
 
                 if (type === 'income') {
                     stats.income = Math.max(0, (stats.income || 0) - amount);
                     stats.balance = (stats.balance || 0) - amount;
+
                     const currentCatTotal = stats.categoryBreakdown.income[category] || 0;
                     stats.categoryBreakdown.income[category] = Math.max(0, currentCatTotal - amount);
+
+                    const currentDescTotal = stats.descriptionBreakdown.income[description] || 0;
+                    stats.descriptionBreakdown.income[description] = Math.max(0, currentDescTotal - amount);
                 } else {
                     stats.expense = Math.max(0, (stats.expense || 0) - amount);
                     stats.balance = (stats.balance || 0) + amount;
+
                     const currentCatTotal = stats.categoryBreakdown.expense[category] || 0;
                     stats.categoryBreakdown.expense[category] = Math.max(0, currentCatTotal - amount);
+
+                    const currentDescTotal = stats.descriptionBreakdown.expense[description] || 0;
+                    stats.descriptionBreakdown.expense[description] = Math.max(0, currentDescTotal - amount);
                 }
 
                 transaction.delete(txRef);
@@ -139,6 +159,10 @@ export const WalletService = {
                 income: 0,
                 expense: 0,
                 categoryBreakdown: {
+                    income: {},
+                    expense: {}
+                },
+                descriptionBreakdown: {
                     income: {},
                     expense: {}
                 }
@@ -168,15 +192,18 @@ export const WalletService = {
                     const amount = parseFloat(data.amount) || 0;
                     const type = data.type;
                     const category = data.category || 'Misc';
+                    const description = data.description || 'Unknown';
 
                     if (type === 'income') {
                         newStats.income += amount;
                         newStats.balance += amount;
                         newStats.categoryBreakdown.income[category] = (newStats.categoryBreakdown.income[category] || 0) + amount;
+                        newStats.descriptionBreakdown.income[description] = (newStats.descriptionBreakdown.income[description] || 0) + amount;
                     } else {
                         newStats.expense += amount;
                         newStats.balance -= amount;
                         newStats.categoryBreakdown.expense[category] = (newStats.categoryBreakdown.expense[category] || 0) + amount;
+                        newStats.descriptionBreakdown.expense[description] = (newStats.descriptionBreakdown.expense[description] || 0) + amount;
                     }
                 });
 
