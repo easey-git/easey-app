@@ -1,7 +1,6 @@
-// Updated AI Capabilities: Analytics, Wallet, Campaigns
 const { GoogleGenAI } = require("@google/genai");
 const admin = require("firebase-admin");
-const { BetaAnalyticsDataClient } = require('@google-analytics/data');
+const cors = require('cors')({ origin: true });
 
 // ---------------------------------------------------------
 // INITIALIZATION
@@ -20,59 +19,87 @@ if (!admin.apps.length) {
     }
 }
 const db = admin.firestore();
+const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
 
 // ---------------------------------------------------------
-// SCHEMA DEFINITION
+// SCHEMA DEFINITION - ORDERS & CHECKOUTS ONLY
 // ---------------------------------------------------------
 const DB_SCHEMA = `
-You have access to a live database and external APIs for an e-commerce store.
+You are an expert E-commerce Assistant focused EXCLUSIVELY on Orders and Abandoned Checkouts.
+You have access to exactly TWO Firestore collections. Answer questions ONLY about these.
 
-DATA SOURCES:
+1. **ORDERS** (Collection: "orders")
+   Schema based on actual data:
+   - orderNumber (number): e.g. 1611
+   - orderId (number): e.g. 6338007171326
+   - customerName (string): e.g. "Pushpanjali ."
+   - email (string): e.g. "xalxopushpanjali@gmail.com"
+   - phone (string): e.g. "+918145082423"
+   - phoneNormalized (string): e.g. "918145082423"
+   - totalPrice (string): e.g. "699.00" (STORED AS STRING)
+   - status (string): e.g. "COD", "Paid"
+   - currency (string): "INR"
+   - items (array): [{ name, price (string), quantity (number) }]
+   - address1, city, state, zip (strings)
+   - createdAt (timestamp): Order date
+   - updatedAt (timestamp)
+   - whatsappSent (boolean)
 
-1.  **ORDERS** (Collection: "orders")
-    - Fields: orderNumber (number), customerName, totalPrice, status ('COD', 'Paid', 'CANCELLED'), phoneNormalized.
-    - queryFirestore usage: collection='orders'
+2. **CHECKOUTS** (Collection: "checkouts" -> Abandoned Carts)
+   Schema based on actual data:
+   - cart_id (string): e.g. "6956795f782cb32245101697"
+   - eventType (string): "ABANDONED"
+   - first_name, last_name (strings)
+   - email (string)
+   - phone_number (string): e.g. "8909261148"
+   - phoneNormalized (string): e.g. "918909261148"
+   - total_price (number): e.g. 699 (STORED AS NUMBER)
+   - currency (string): "INR"
+   - items (array): [{ name, title, price (number), quantity, product_id, variant_id, img_url }]
+   - billing_address (map): { address1, city, state, zip, country, phone, email }
+   - shipping_address (map): same structure as billing_address
+   - latest_stage (string): e.g. "ORDER_SCREEN", "PHONE_RECEIVED"
+   - payment_status (string): e.g. "Pending"
+   - rtoPredict (string): e.g. "high", "low"
+   - updatedAt (timestamp): Last activity
+   - updated_at (string): ISO format
+   - source_name (string): e.g. "fastrr"
+   - shipping_price, tax, total_discount (numbers)
 
-2.  **ABANDONED CARTS** (Collection: "checkouts")
-    - Fields: total_price (number), first_name, eventType ('ABANDONED'), updatedAt (ISO Timestamp string).
-    - queryFirestore usage: collection='checkouts'
+CRITICAL SEARCH RULES:
+1. **Orders**:
+   - Find by order number: filters=[['orderNumber', '==', 1611]] (as NUMBER)
+   - Find by customer name: filters=[['customerName', '>=', 'Push'], ['customerName', '<=', 'Push\\uf8ff']]
+   - Recent orders: orderBy=['createdAt', 'desc'], limit=10
+   - By status: filters=[['status', '==', 'COD']]
+   - By city: filters=[['city', '==', 'Bangalore']]
 
-3.  **WHATSAPP** (Collection: "whatsapp_messages")
-    - Fields: phone, direction ('inbound', 'outbound'), body, status, timestamp.
-    - queryFirestore usage: collection='whatsapp_messages'
+2. **Checkouts**:
+   - Abandoned carts: filters=[['eventType', '==', 'ABANDONED']]
+   - Recent: orderBy=['updatedAt', 'desc'], limit=10
+   - By stage: filters=[['latest_stage', '==', 'ORDER_SCREEN']]
+   - High RTO risk: filters=[['rtoPredict', '==', 'high']]
 
-4.  **WALLET / FINANCES** (Collection: "wallet_transactions")
-    - Fields: amount (number), description (string), category (string), type ('income'|'expense'), date (timestamp object with _seconds).
-    - queryFirestore usage: collection='wallet_transactions'
+3. **Date Queries**:
+   - For "today": Use date range with >= start of day, <= end of day
+   - Example: filters=[['createdAt', '>=', '2026-01-04T00:00:00'], ['createdAt', '<=', '2026-01-04T23:59:59']]
 
-5.  **NOTES** (Collection: "notes")
-    - Fields: title, body, createdAt, updatedAt.
-    - queryFirestore usage: collection='notes'
-
-6.  **NOTEBOOK / SCRATCHPAD** (Doc: "dashboard/notes")
-    - Single document containing a quick scratchpad.
-    - queryFirestore usage: collection='dashboard' (then look for id 'notes' or just search).
-
-7.  **VISITORS / ANALYTICS** (Tool: fetchAnalytics)
-    - Real-time active users on the site right now.
-
-8.  **MARKETING CAMPAIGNS** (Tool: fetchCampaigns)
-    - Facebook Ads performance for TODAY.
-    - Data: Spend, Revenue, ROAS, Purchases, Impressions, Clicks.
-
-SEARCH TIPS:
-- **Dates**: To search for a specific day (e.g. "Today", "29th Dec"), ALWAYS use a range query with '>=' start-of-day and '<=' end-of-day. NEVER use '==' for dates.
-    - Example: for "Today", filters=[['date', '>=', '2026-01-04T00:00:00'], ['date', '<=', '2026-01-04T23:59:59']]
-- **Wallet**: To calculate "How much made/spend", query 'wallet_transactions' with type='income' or 'expense' and the date range. Then sum the 'amount' field manually.
-- **Indexes**: IF you get an error about "requiring an index", TRY AGAIN by fetching the *latest 20 transactions* (orderBy 'date' desc) and filtering them in memory yourself. Do NOT ask the user to create an index.
+4. **Resilience**:
+   - If query fails due to missing index, return the index creation link
+   - Always convert timestamps to ISO strings for display
+   - Remember: totalPrice in orders is STRING, total_price in checkouts is NUMBER
 `;
 
 // ---------------------------------------------------------
 // TOOLS IMPLEMENTATION
 // ---------------------------------------------------------
-
 const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
     try {
+        // Only allow orders and checkouts
+        if (collection !== 'orders' && collection !== 'checkouts') {
+            return `Error: Only 'orders' and 'checkouts' collections are supported.`;
+        }
+
         let ref = db.collection(collection);
 
         if (filters && Array.isArray(filters)) {
@@ -93,212 +120,129 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
 
         return snapshot.docs.map(doc => {
             const data = doc.data();
+            // Convert Firestore Timestamps to ISO strings
             Object.keys(data).forEach(k => {
-                if (data[k] && data[k]._seconds) {
-                    data[k] = new Date(data[k]._seconds * 1000).toISOString();
+                const val = data[k];
+                if (val && typeof val === 'object' && val._seconds) {
+                    data[k] = new Date(val._seconds * 1000).toISOString();
+                } else if (val && val.toDate && typeof val.toDate === 'function') {
+                    data[k] = val.toDate().toISOString();
                 }
             });
             return { id: doc.id, ...data };
         });
     } catch (err) {
-        return `Error querying database: ${err.message}`;
-    }
-};
-
-const fetchAnalytics = async () => {
-    try {
-        if (!process.env.GA4_PROPERTY_ID) return "Analytics not configured.";
-
-        const credentials = {
-            type: 'service_account',
-            project_id: process.env.GA4_PROJECT_ID,
-            private_key_id: process.env.GA4_PRIVATE_KEY_ID,
-            private_key: process.env.GA4_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-            client_email: process.env.GA4_CLIENT_EMAIL,
-            client_id: process.env.GA4_CLIENT_ID,
-        };
-
-        const analyticsDataClient = new BetaAnalyticsDataClient({ credentials });
-        const [response] = await analyticsDataClient.runRealtimeReport({
-            property: `properties/${process.env.GA4_PROPERTY_ID}`,
-            minuteRanges: [{ name: 'last5Minutes', startMinutesAgo: 4, endMinutesAgo: 0 }],
-            metrics: [{ name: 'activeUsers' }],
-        });
-
-        const activeUsers = parseInt(response.rows?.[0]?.metricValues?.[0]?.value || '0', 10);
-        return { activeVisitors: activeUsers, source: 'GA4 Realtime' };
-    } catch (error) {
-        return { error: "Failed to fetch analytics", details: error.message };
-    }
-};
-
-const fetchCampaigns = async () => {
-    try {
-        const { FACEBOOK_ACCESS_TOKEN, AD_ACCOUNT_ID } = process.env;
-        if (!FACEBOOK_ACCESS_TOKEN || !AD_ACCOUNT_ID) return "Marketing API not configured.";
-
-        const url = new URL(`https://graph.facebook.com/v21.0/${AD_ACCOUNT_ID}/insights`);
-        url.searchParams.set('level', 'campaign');
-        url.searchParams.set('date_preset', 'today');
-        url.searchParams.set('fields', 'campaign_id,campaign_name,spend,purchase_roas,actions,clicks');
-        url.searchParams.set('access_token', FACEBOOK_ACCESS_TOKEN);
-
-        const response = await fetch(url.toString());
-        const data = await response.json();
-
-        if (data.error) return { error: data.error.message };
-
-        return (data.data || []).map(c => ({
-            name: c.campaign_name,
-            spend: c.spend,
-            roas: c.purchase_roas?.[0]?.value || 0,
-            purchases: c.actions?.find(a => a.action_type === 'purchase')?.value || 0,
-            clicks: c.clicks,
-            period: 'Today'
-        }));
-    } catch (error) {
-        return { error: "Failed to fetch campaigns", details: error.message };
+        // Handle missing index errors
+        if (err.code === 9 || err.message.toLowerCase().includes('index')) {
+            const indexUrl = err.message.match(/https?:\/\/[^\s]+/)?.[0];
+            if (indexUrl) {
+                return `[INDEX REQUIRED] Create index here: ${indexUrl}`;
+            }
+        }
+        return `Error: ${err.message}`;
     }
 };
 
 // ---------------------------------------------------------
-// MAIN HANDLER
+// MIDDLEWARE HELPERS
 // ---------------------------------------------------------
-const cors = require('cors')({ origin: true });
-
 function runMiddleware(req, res, fn) {
     return new Promise((resolve, reject) => {
         fn(req, res, (result) => {
-            if (result instanceof Error) {
-                return reject(result);
-            }
+            if (result instanceof Error) return reject(result);
             return resolve(result);
         });
     });
 }
 
+// ---------------------------------------------------------
+// MAIN HANDLER
+// ---------------------------------------------------------
 module.exports = async (req, res) => {
     await runMiddleware(req, res, cors);
 
-    // Legacy manual headers (kept just in case, but overridden by cors)
-    res.setHeader('Access-Control-Allow-Credentials', true);
-
     if (req.method === 'OPTIONS') {
-        res.status(200).json({});
-        return;
+        return res.status(200).end();
     }
 
     try {
         const { prompt, history = [] } = req.body;
-        if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
 
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-        // Tool Definitions
-        const queryTimestampDesc = {
-            name: 'queryFirestore',
-            description: "Fetch specific records from the database (orders, wallet, notes, etc).",
-            parametersJsonSchema: {
-                type: 'object',
-                properties: {
-                    collection: { type: 'string', description: "Collection name: 'orders', 'checkouts', 'whatsapp_messages', 'wallet_transactions', 'notes', 'dashboard'" },
-                    filters: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
-                    limit: { type: 'number' },
-                    orderBy: { type: 'array', items: { type: 'string' } }
-                },
-                required: ['collection'],
-            },
-        };
-
-        const fetchAnalyticsDesc = {
-            name: 'fetchAnalytics',
-            description: "Get real-time active visitor count from Google Analytics.",
-            parametersJsonSchema: { type: 'object', properties: {} },
-        };
-
-        const fetchCampaignsDesc = {
-            name: 'fetchCampaigns',
-            description: "Get today's Facebook Ad performance (Spend, ROAS, Purchases).",
-            parametersJsonSchema: { type: 'object', properties: {} },
-        };
-
-        const config = {
-            tools: [{ functionDeclarations: [queryTimestampDesc, fetchAnalyticsDesc, fetchCampaignsDesc] }],
-        };
-
-        // Construct History Prompt
-        let historyPrompt = "";
-        if (history && history.length > 0) {
-            historyPrompt = history.map(h => `${h.role === 'user' ? 'User' : 'Easey'}: ${h.text}`).join("\n");
-        }
-
-        const fullPrompt = `${DB_SCHEMA}
-
-CONTEXT OF CONVERSATION:
-            ${historyPrompt}
-
-CURRENT QUERY:
-            User: ${prompt}
-Easey: `;
-
-        // 1. First Turn
-        const response1 = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
-            contents: fullPrompt,
-            config: config
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.0-flash-exp",
+            systemInstruction: DB_SCHEMA,
+            tools: [
+                {
+                    functionDeclarations: [
+                        {
+                            name: "queryFirestore",
+                            description: "Query ONLY 'orders' or 'checkouts' collections.",
+                            parameters: {
+                                type: "OBJECT",
+                                properties: {
+                                    collection: {
+                                        type: "STRING",
+                                        enum: ["orders", "checkouts"],
+                                        description: "Must be either 'orders' or 'checkouts'"
+                                    },
+                                    filters: {
+                                        type: "ARRAY",
+                                        description: "Array of [field, operator, value] filters",
+                                        items: { type: "ARRAY", items: { type: "STRING" } }
+                                    },
+                                    limit: {
+                                        type: "NUMBER",
+                                        description: "Maximum number of documents to return (default: 10)"
+                                    },
+                                    orderBy: {
+                                        type: "ARRAY",
+                                        description: "Sort order: [field, direction]. Direction is 'asc' or 'desc'",
+                                        items: { type: "STRING" }
+                                    }
+                                },
+                                required: ["collection"]
+                            }
+                        }
+                    ]
+                }
+            ]
         });
 
-        const candidates = response1.candidates;
-        if (!candidates || candidates.length === 0) return res.status(200).json({ text: "No response." });
+        const chat = model.startChat({
+            history: history.map(h => ({
+                role: h.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: h.content }]
+            }))
+        });
 
-        const firstCand = candidates[0];
-        const content = firstCand.content;
-        const parts = content.parts;
-        const functionCalls = parts ? parts.filter(p => p.functionCall) : [];
+        let result = await chat.sendMessage(prompt);
+        let response = result.response;
 
-        if (functionCalls.length > 0) {
-            const toolOutputs = [];
-
-            for (const part of functionCalls) {
-                const call = part.functionCall;
-                let result;
-
-                if (call.name === 'queryFirestore') result = await queryFirestore(call.args);
-                else if (call.name === 'fetchAnalytics') result = await fetchAnalytics();
-                else if (call.name === 'fetchCampaigns') result = await fetchCampaigns();
-
-                toolOutputs.push({
-                    functionResponse: {
-                        name: call.name,
-                        response: { result: result }
-                    }
-                });
+        const calls = response.functionCalls();
+        if (calls && calls.length > 0) {
+            const toolResults = [];
+            for (const call of calls) {
+                if (call.name === "queryFirestore") {
+                    const data = await queryFirestore(call.args);
+                    toolResults.push({
+                        functionResponse: {
+                            name: "queryFirestore",
+                            response: { result: data }
+                        }
+                    });
+                }
             }
 
-            const historyContents = [
-                { role: 'user', parts: [{ text: fullPrompt }] },
-                { role: 'model', parts: parts }
-            ];
-
-            const toolMessage = { role: 'user', parts: toolOutputs };
-
-            const response2 = await ai.models.generateContent({
-                model: 'gemini-2.0-flash-exp',
-                contents: [...historyContents, toolMessage],
-                config: config
-            });
-
-            return res.status(200).json({
-                text: response2.text,
-                data: toolOutputs[0].functionResponse.response.result
-            });
-
-        } else {
-            return res.status(200).json({ text: response1.text });
+            if (toolResults.length > 0) {
+                const secondResult = await chat.sendMessage(toolResults);
+                return res.status(200).json({ text: secondResult.response.text() });
+            }
         }
 
+        return res.status(200).json({ text: response.text() });
+
     } catch (error) {
-        console.error("Assistant Error:", error);
-        res.status(500).json({ error: error.message });
+        console.error('Assistant Error:', error);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
     }
 };
