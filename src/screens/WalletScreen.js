@@ -79,6 +79,7 @@ const WalletScreen = ({ navigation }) => {
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [dataLoading, setDataLoading] = useState(true);
+    const [displayLimit, setDisplayLimit] = useState(20); // Pagination Limit
 
     // Filters
     const [timeRange, setTimeRange] = useState('month'); // 'week' | 'month' | 'all'
@@ -103,70 +104,51 @@ const WalletScreen = ({ navigation }) => {
     }, [theme]);
 
     // Derived Stats (Charts - Visible Data Only)
-    const chartStats = useMemo(() => {
-        const expenseTotals = {};
-        const incomeTotals = {};
+    // Derived Stats (Charts - Visible Data Only for Items, Server Data for Categories)
+    // We will now merge Client Stats (Items) with a new Server Stats (Categories) state
+    // For now, let's keep ItemStats derived from visible transactions
+    const itemStats = useMemo(() => {
         const expenseItemTotals = {};
         const incomeItemTotals = {};
 
         transactions.forEach(t => {
             const amt = parseFloat(t.amount);
-            const cat = t.category || 'Misc';
             const desc = t.description ? t.description.trim() : 'Unknown';
 
             if (t.type === 'income') {
-                incomeTotals[cat] = (incomeTotals[cat] || 0) + amt;
                 incomeItemTotals[desc] = (incomeItemTotals[desc] || 0) + amt;
             } else {
-                expenseTotals[cat] = (expenseTotals[cat] || 0) + amt;
                 expenseItemTotals[desc] = (expenseItemTotals[desc] || 0) + amt;
             }
         });
 
-        // Helper to format chart data with "Others" grouping
-        const formatChartData = (totals, useCategoryColors = true) => {
-            // 1. Convert to array and sort
-            const sortedItems = Object.keys(totals)
-                .map(key => ({
-                    name: key,
-                    amount: totals[key],
-                }))
-                .sort((a, b) => b.amount - a.amount);
-
-            // 2. Group into Top 5 + Others
-            let finalData = sortedItems;
-            if (sortedItems.length > 5) {
-                const top5 = sortedItems.slice(0, 5);
-                const others = sortedItems.slice(5);
-                const othersTotal = others.reduce((sum, item) => sum + item.amount, 0);
-
-                if (othersTotal > 0) {
-                    finalData = [...top5, { name: 'Others', amount: othersTotal }];
-                }
+        // Helper
+        const formatItemData = (totals) => {
+            const sorted = Object.keys(totals).map(key => ({ name: key, amount: totals[key] })).sort((a, b) => b.amount - a.amount);
+            let final = sorted;
+            if (sorted.length > 5) {
+                const top5 = sorted.slice(0, 5);
+                const others = sorted.slice(5).reduce((acc, curr) => acc + curr.amount, 0);
+                if (others > 0) final = [...top5, { name: 'Others', amount: others }];
             }
-
-            // 3. Map to Chart Data format
-            return finalData.map((item, index) => ({
+            return final.map((item, index) => ({
                 name: item.name,
                 amount: item.amount,
-                color: useCategoryColors
-                    ? (CATEGORY_COLORS[item.name] || '#9E9E9E') // Default to Grey if category not found (e.g. Others)
-                    : (item.name === 'Others' ? '#9E9E9E' : ITEM_COLORS[index % ITEM_COLORS.length]),
+                color: item.name === 'Others' ? '#9E9E9E' : ITEM_COLORS[index % ITEM_COLORS.length],
                 legendFontColor: theme.colors.onSurfaceVariant,
                 legendFontSize: 12
             }));
         };
 
         return {
-            expenseChart: formatChartData(expenseTotals, true),
-            incomeChart: formatChartData(incomeTotals, true),
-            expenseItemsChart: formatChartData(expenseItemTotals, false),
-            incomeItemsChart: formatChartData(incomeItemTotals, false),
+            expenseItemsChart: formatItemData(expenseItemTotals),
+            incomeItemsChart: formatItemData(incomeItemTotals),
         };
     }, [transactions, theme]);
 
     // Real Global Stats (Server-Side Aggregation)
     const [globalStats, setGlobalStats] = useState({ balance: 0, income: 0, expense: 0 });
+    const [categoryStats, setCategoryStats] = useState({ expense: [], income: [] }); // Server-side Category Data
     const [statsLoading, setStatsLoading] = useState(true);
 
     useEffect(() => {
@@ -183,8 +165,6 @@ const WalletScreen = ({ navigation }) => {
                     hasDateFilter = true;
                 } else if (timeRange === 'month') {
                     startDate.setMonth(startDate.getMonth() - 1);
-                    // Ensure we reset time to start of day for accurate <= comparisons? 
-                    // Actually standard setDate/Month preserves time, which is fine for "Rolling 30 days".
                     hasDateFilter = true;
                 }
 
@@ -198,10 +178,10 @@ const WalletScreen = ({ navigation }) => {
                     expenseConstraints.push(where("date", ">=", startDate));
                 }
 
+                // 1. Fetch Global Totals
                 const incomeQuery = query(coll, ...incomeConstraints);
                 const expenseQuery = query(coll, ...expenseConstraints);
 
-                // Fetch Aggregations
                 const [incomeSnap, expenseSnap] = await Promise.all([
                     getAggregateFromServer(incomeQuery, { total: sum('amount') }),
                     getAggregateFromServer(expenseQuery, { total: sum('amount') })
@@ -216,10 +196,42 @@ const WalletScreen = ({ navigation }) => {
                     balance: totalIncome - totalExpense
                 });
 
+                // 2. Fetch Category Breakdown (Server-Side) - Industry Standard Scalability
+                // We fire parallel queries for each category. Efficient for fixed categories.
+                const fetchCatStats = async (categories, type) => {
+                    const promises = categories.map(async (cat) => {
+                        const constraints = [where("type", "==", type), where("category", "==", cat)];
+                        if (hasDateFilter) constraints.push(where("date", ">=", startDate));
+
+                        const q = query(coll, ...constraints);
+                        const snap = await getAggregateFromServer(q, { total: sum('amount') });
+                        return { name: cat, amount: snap.data().total || 0 };
+                    });
+                    const results = await Promise.all(promises);
+                    // Filter out zero
+                    const filtered = results.filter(r => r.amount > 0).sort((a, b) => b.amount - a.amount);
+
+                    // Format for Chart
+                    return filtered.map((item) => ({
+                        name: item.name,
+                        amount: item.amount,
+                        color: CATEGORY_COLORS[item.name] || '#9E9E9E',
+                        legendFontColor: theme.colors.onSurfaceVariant,
+                        legendFontSize: 12
+                    }));
+                };
+
+                const [expCats, incCats] = await Promise.all([
+                    fetchCatStats(EXPENSE_CATEGORIES, 'expense'),
+                    fetchCatStats(INCOME_CATEGORIES, 'income')
+                ]);
+
+                setCategoryStats({ expense: expCats, income: incCats });
+
             } catch (error) {
                 console.error("Stats Aggregation Failed:", error);
                 if (error.message.includes("index")) {
-                    Alert.alert("Missing Index", "To filter by date, you need to create a Firestore Index. Check your console logs or ask your developer for the link.");
+                    Alert.alert("Missing Index", "To filter by date, please check console for index link.");
                 }
             } finally {
                 setStatsLoading(false);
@@ -252,7 +264,8 @@ const WalletScreen = ({ navigation }) => {
         // 'all' time -> no start date filter
 
         // Limit list to prevent JS heap crash on mobile
-        const listQuery = query(collection(db, "wallet_transactions"), ...queryConstraints, limit(1000));
+        // Industry Standard: Pagination
+        const listQuery = query(collection(db, "wallet_transactions"), ...queryConstraints, limit(displayLimit));
 
         const unsubscribe = onSnapshot(listQuery, (snapshot) => {
             const list = [];
@@ -277,7 +290,7 @@ const WalletScreen = ({ navigation }) => {
         });
 
         return () => unsubscribe();
-    }, [timeRange, showSnackbar]);
+    }, [timeRange, showSnackbar, displayLimit]);
 
     // Update default category when type changes
     useEffect(() => {
@@ -632,17 +645,17 @@ const WalletScreen = ({ navigation }) => {
             {/* Visual Analytics - Pie Chart (Visible Data) */}
             {
                 ((filterType === 'all') && (globalStats.income > 0 || globalStats.expense > 0)) && (
-                    <StatChart title="Cash Flow (Visible)" data={[
+                    <StatChart title="Cash Flow (All Time Accurate)" data={[
                         {
                             name: 'Income',
-                            amount: chartStats.incomeChart.reduce((a, b) => a + b.amount, 0), // Use total of visible income
+                            amount: globalStats.income, // Use Exact Server Total
                             color: theme.colors.primary,
                             legendFontColor: theme.colors.onSurfaceVariant,
                             legendFontSize: 12
                         },
                         {
                             name: 'Expense',
-                            amount: chartStats.expenseChart.reduce((a, b) => a + b.amount, 0), // Use total of visible expense
+                            amount: globalStats.expense, // Use Exact Server Total
                             color: theme.colors.error,
                             legendFontColor: theme.colors.onSurfaceVariant,
                             legendFontSize: 12
@@ -652,14 +665,27 @@ const WalletScreen = ({ navigation }) => {
             }
 
             {
-                ((filterType === 'expense') && chartStats.expenseItemsChart.length > 0) && (
-                    <StatChart title="Expense By Items (Visible)" data={chartStats.expenseItemsChart} theme={theme} />
+                ((filterType === 'expense') && categoryStats.expense.length > 0) && (
+                    <StatChart title="Expense Breakdown (All Time Accurate)" data={categoryStats.expense} theme={theme} />
                 )
             }
 
             {
-                ((filterType === 'income') && chartStats.incomeItemsChart.length > 0) && (
-                    <StatChart title="Income By Items (Visible)" data={chartStats.incomeItemsChart} theme={theme} />
+                ((filterType === 'income') && categoryStats.income.length > 0) && (
+                    <StatChart title="Income Breakdown (All Time Accurate)" data={categoryStats.income} theme={theme} />
+                )
+            }
+
+            {
+                // Item breakdown still relies on visible list (High Cardinality)
+                (filterType === 'expense' && itemStats.expenseItemsChart.length > 0) && (
+                    <StatChart title="Top Expense Items (Visible)" data={itemStats.expenseItemsChart} theme={theme} />
+                )
+            }
+
+            {
+                (filterType === 'income' && itemStats.incomeItemsChart.length > 0) && (
+                    <StatChart title="Top Income Items (Visible)" data={itemStats.incomeItemsChart} theme={theme} />
                 )
             }
 
@@ -692,7 +718,7 @@ const WalletScreen = ({ navigation }) => {
                 )
             }
         </View >
-    ), [timeRange, globalStats, theme, filterType, chartStats, searchQuery, filteredTransactions.length]);
+    ), [timeRange, globalStats, categoryStats, itemStats, theme, filterType, searchQuery, filteredTransactions.length]);
 
     return (
         <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -716,6 +742,18 @@ const WalletScreen = ({ navigation }) => {
                                 <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: 'bold', textTransform: 'uppercase' }}>{title}</Text>
                             </View>
                         )}
+                        ListFooterComponent={
+                            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                                <Button
+                                    mode="text"
+                                    onPress={() => setDisplayLimit(prev => prev + 20)}
+                                    loading={dataLoading}
+                                    textColor={theme.colors.secondary}
+                                >
+                                    Load More
+                                </Button>
+                            </View>
+                        }
                         keyExtractor={item => item.id}
                         contentContainerStyle={styles.content}
                         ListHeaderComponent={ListHeader}
