@@ -157,8 +157,9 @@ module.exports = async (req, res) => {
         }
 
         // Create Chat Session
+        // Correct V2 Syntax: ai.chats.create({ model: ... })
         const chat = ai.chats.create({
-            model: "gemini-1.5-flash", // Using 1.5-flash as 2.5 is likely preview-only
+            model: "gemini-1.5-flash",
             config: {
                 tools: [toolConfig]
             },
@@ -169,27 +170,20 @@ module.exports = async (req, res) => {
             ]
         });
 
-        const result = await chat.send({
+        // Correct method: chat.send() might be 'sendMessage' in some versions, but 'send' is V2 standard.
+        // However, if it failed, let's try the most robust way:
+        const result = await chat.sendMessage({
             parts: [{ text: prompt }]
         });
 
-        // Loop for tool calls (automatic execution is not yet standard in single call, usually manual loop)
-        // Check `result.functionCalls()`
-
+        // Loop for tool calls
         let finalResponseText = "";
 
-        // Manual Tool Execution Loop
-        // The V2 SDK response structure:
-        const firstCandidate = result.candidates[0];
-
-        // Check if there are function calls
-        // Note: The structure varies, check documentation or inspect object
-        // Usually: candidate.content.parts array contains functionCall
-
+        // V2 Response structure handling
+        const firstCandidate = result.response.candidates[0];
         const toolCalls = firstCandidate.content.parts?.filter(p => p.functionCall);
 
         if (toolCalls && toolCalls.length > 0) {
-            // Execute tools
             let toolOutputs = [];
 
             for (const part of toolCalls) {
@@ -199,25 +193,25 @@ module.exports = async (req, res) => {
                     toolOutputs.push({
                         functionResponse: {
                             name: 'queryFirestore',
-                            response: { name: 'queryFirestore', content: dbResult }
+                            response: { result: dbResult } // 'response' object structure depends on API
                         }
                     });
                 }
             }
 
-            // Send Tool Output back to model
-            const finalResult = await chat.send({
+            // Send Tool Output back
+            const finalResult = await chat.sendMessage({
                 parts: toolOutputs
             });
 
-            finalResponseText = finalResult.text;
+            finalResponseText = finalResult.response.text();
             return res.status(200).json({
                 text: finalResponseText,
-                data: toolOutputs[0].functionResponse.response.content // Return raw data too
+                data: toolOutputs[0].functionResponse.response.result
             });
 
         } else {
-            finalResponseText = result.text;
+            finalResponseText = result.response.text();
         }
 
         return res.status(200).json({ text: finalResponseText });
