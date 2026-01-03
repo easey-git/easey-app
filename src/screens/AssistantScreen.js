@@ -207,6 +207,12 @@ export default function AssistantScreen({ navigation }) {
                             maxHeight={100}
                             underlineColorAndroid="transparent"
                             selectionColor={theme.colors.primary}
+                            onKeyPress={({ nativeEvent }) => {
+                                if (Platform.OS === 'web' && nativeEvent.key === 'Enter' && !nativeEvent.shiftKey) {
+                                    nativeEvent.preventDefault?.(); // Prevent newline if possible
+                                    sendMessage();
+                                }
+                            }}
                         />
                         {loading ? (
                             <View style={{ width: 32, height: 32, justifyContent: 'center', alignItems: 'center', margin: 6 }}>
