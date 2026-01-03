@@ -178,7 +178,7 @@ const NotesScreen = ({ navigation }) => {
 
             {filteredNotes.length === 0 ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', opacity: 0.5 }}>
-                    <IconButton icon="notebook-off" size={64} iconColor={theme.colors.onSurfaceVariant} />
+                    <IconButton icon="book-off-outline" size={64} iconColor={theme.colors.onSurfaceVariant} />
                     <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>No notes found</Text>
                 </View>
             ) : (

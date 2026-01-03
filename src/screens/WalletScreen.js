@@ -79,7 +79,7 @@ const WalletScreen = ({ navigation }) => {
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [dataLoading, setDataLoading] = useState(true);
-    const [displayLimit, setDisplayLimit] = useState(20); // Pagination Limit
+    const [displayLimit, setDisplayLimit] = useState(50); // Pagination Limit
 
     // Filters
     const [timeRange, setTimeRange] = useState('month'); // 'week' | 'month' | 'all'
@@ -679,13 +679,13 @@ const WalletScreen = ({ navigation }) => {
             {
                 // Item breakdown still relies on visible list (High Cardinality)
                 (filterType === 'expense' && itemStats.expenseItemsChart.length > 0) && (
-                    <StatChart title="Top Expense Items (Visible)" data={itemStats.expenseItemsChart} theme={theme} />
+                    <StatChart title="Top Recent Expenses" data={itemStats.expenseItemsChart} theme={theme} />
                 )
             }
 
             {
                 (filterType === 'income' && itemStats.incomeItemsChart.length > 0) && (
-                    <StatChart title="Top Income Items (Visible)" data={itemStats.incomeItemsChart} theme={theme} />
+                    <StatChart title="Top Recent Income" data={itemStats.incomeItemsChart} theme={theme} />
                 )
             }
 
