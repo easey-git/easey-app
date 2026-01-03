@@ -148,6 +148,7 @@ const WalletScreen = ({ navigation }) => {
 
     // Real Global Stats (Server-Side Aggregation)
     const [globalStats, setGlobalStats] = useState({ balance: 0, income: 0, expense: 0 });
+    const [categoryStats, setCategoryStats] = useState({ expense: [], income: [] }); // Server-side Category Data
     const [statsLoading, setStatsLoading] = useState(true);
 
     useEffect(() => {
@@ -200,6 +201,38 @@ const WalletScreen = ({ navigation }) => {
                     expense: totalExpense,
                     balance: totalIncome - totalExpense
                 });
+
+                // 2. Fetch Category Breakdown (Server-Side) - Industry Standard Scalability
+                // We fire parallel queries for each category. Efficient for fixed categories.
+                const fetchCatStats = async (categories, type) => {
+                    const promises = categories.map(async (cat) => {
+                        const constraints = [where("type", "==", type), where("category", "==", cat)];
+                        if (hasDateFilter) constraints.push(where("date", ">=", startDate));
+
+                        const q = query(coll, ...constraints);
+                        const snap = await getAggregateFromServer(q, { total: sum('amount') });
+                        return { name: cat, amount: snap.data().total || 0 };
+                    });
+                    const results = await Promise.all(promises);
+                    // Filter out zero
+                    const filtered = results.filter(r => r.amount > 0).sort((a, b) => b.amount - a.amount);
+
+                    // Format for Chart
+                    return filtered.map((item) => ({
+                        name: item.name,
+                        amount: item.amount,
+                        color: CATEGORY_COLORS[item.name] || '#9E9E9E',
+                        legendFontColor: theme.colors.onSurfaceVariant,
+                        legendFontSize: 12
+                    }));
+                };
+
+                const [expCats, incCats] = await Promise.all([
+                    fetchCatStats(EXPENSE_CATEGORIES, 'expense'),
+                    fetchCatStats(INCOME_CATEGORIES, 'income')
+                ]);
+
+                setCategoryStats({ expense: expCats, income: incCats });
 
             } catch (error) {
                 console.error("Stats Aggregation Failed:", error);
@@ -637,7 +670,17 @@ const WalletScreen = ({ navigation }) => {
                 )
             }
 
+            {
+                ((filterType === 'expense') && categoryStats.expense.length > 0) && (
+                    <StatChart title="Expense Breakdown (All Time Accurate)" data={categoryStats.expense} theme={theme} />
+                )
+            }
 
+            {
+                ((filterType === 'income') && categoryStats.income.length > 0) && (
+                    <StatChart title="Income Breakdown (All Time Accurate)" data={categoryStats.income} theme={theme} />
+                )
+            }
 
             {
                 // Item breakdown still relies on visible list (High Cardinality)
@@ -681,7 +724,7 @@ const WalletScreen = ({ navigation }) => {
                 )
             }
         </View >
-    ), [timeRange, globalStats, itemStats, theme, filterType, searchQuery, filteredTransactions.length]);
+    ), [timeRange, globalStats, categoryStats, itemStats, theme, filterType, searchQuery, filteredTransactions.length]);
 
     return (
         <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
