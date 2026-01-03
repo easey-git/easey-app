@@ -90,7 +90,7 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
             ref = ref.orderBy(orderBy[0], orderBy[1] || 'desc');
         }
 
-        // Allow up to 1000 records for deep analysis. Default to 50 for speed.
+        // Hard cap at 1000 for safety, but rely on DB for performance
         let l = limit || 50;
         if (l > 1000) l = 1000;
         ref = ref.limit(l);
@@ -108,6 +108,13 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
             return { id: doc.id, ...data };
         });
     } catch (err) {
+        // If it's an index error, purely return the helpful message with the URL
+        if (err.code === 9 || err.message.toLowerCase().includes('index')) {
+            const indexUrl = err.message.match(/https?:\/\/[^\s]+/)?.[0];
+            if (indexUrl) {
+                return `[Database Optimization Required] This query requires a new index to run efficiently on the server. Please create it here: ${indexUrl}`;
+            }
+        }
         return `Error querying database: ${err.message}`;
     }
 };
