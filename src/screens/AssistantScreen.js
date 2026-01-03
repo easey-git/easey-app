@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useHeaderHeight } from '@react-navigation/elements';
 
-const API_URL = 'https://easey-app.vercel.app/api/assistant';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://easey-app.vercel.app/api/assistant';
 const STORAGE_KEY = 'easey_chat_history_v1';
 
 export default function AssistantScreen({ navigation }) {
@@ -75,8 +75,8 @@ export default function AssistantScreen({ navigation }) {
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
         try {
-            // Context History: Send last 10 messages
-            const historyPayload = updatedMessages.slice(-10).map(m => ({
+            // Context History: Send last 10 messages (excluding current new one)
+            const historyPayload = messages.slice(-10).map(m => ({
                 role: m.sender === 'user' ? 'user' : 'assistant',
                 content: m.text
             }));
