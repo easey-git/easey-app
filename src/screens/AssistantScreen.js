@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback, Animated } from 'react-native';
-import { Text, TextInput, IconButton, Surface, useTheme, ActivityIndicator, Avatar, Appbar, Menu } from 'react-native-paper';
+import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, TextInput } from 'react-native';
+import { Text, IconButton, useTheme, ActivityIndicator, Avatar, Appbar } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -10,11 +10,10 @@ const STORAGE_KEY = 'easey_chat_history_v1';
 
 export default function AssistantScreen({ navigation }) {
     const theme = useTheme();
-    const headerHeight = useHeaderHeight(); // Dynamic, not hardcoded
+    const headerHeight = useHeaderHeight();
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
-    const [menuVisible, setMenuVisible] = useState(false);
     const flatListRef = useRef(null);
 
     // Load History on Mount
@@ -28,7 +27,6 @@ export default function AssistantScreen({ navigation }) {
             if (stored) {
                 setMessages(JSON.parse(stored));
             } else {
-                // Default Welcome Message
                 setMessages([{
                     id: 1,
                     text: "Hi! I'm Easey. I can help you find orders, check sales, or track abandoned carts. What do you need?",
@@ -59,7 +57,6 @@ export default function AssistantScreen({ navigation }) {
             timestamp: Date.now()
         }]);
         await AsyncStorage.removeItem(STORAGE_KEY);
-        setMenuVisible(false);
     };
 
     const sendMessage = async () => {
@@ -75,11 +72,10 @@ export default function AssistantScreen({ navigation }) {
         setInputText('');
         setLoading(true);
 
-        // Scroll to bottom immediately
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
         try {
-            // Context History: Send last 10 messages for context
+            // Context History: Send last 10 messages
             const historyPayload = updatedMessages.slice(-10).map(m => ({
                 role: m.sender === 'user' ? 'user' : 'model',
                 text: m.text
@@ -125,7 +121,7 @@ export default function AssistantScreen({ navigation }) {
         }
     };
 
-    const renderMessage = ({ item }) => {
+    const renderMessage = useCallback(({ item }) => {
         const isUser = item.sender === 'user';
         return (
             <View style={[
@@ -162,7 +158,7 @@ export default function AssistantScreen({ navigation }) {
                 </View>
             </View>
         );
-    };
+    }, [theme]);
 
     return (
         <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -183,7 +179,7 @@ export default function AssistantScreen({ navigation }) {
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0} // Android handles resize natively now
+                keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
             >
                 <View style={{ flex: 1 }}>
                     <FlatList
@@ -209,19 +205,25 @@ export default function AssistantScreen({ navigation }) {
                             placeholderTextColor={theme.colors.outline}
                             multiline
                             maxHeight={100}
-                            underlineColorAndroid="transparent" // Removes the Blue Line
-                            selectionColor={theme.colors.primary} // Cursor color
+                            underlineColorAndroid="transparent"
+                            selectionColor={theme.colors.primary}
                         />
-                        <IconButton
-                            icon={loading ? "loading" : "arrow-up-circle"}
-                            mode="contained"
-                            containerColor="transparent"
-                            iconColor={inputText.trim() ? theme.colors.primary : theme.colors.outline}
-                            size={32}
-                            onPress={sendMessage}
-                            style={{ margin: 0 }}
-                            disabled={!inputText.trim() && !loading}
-                        />
+                        {loading ? (
+                            <View style={{ width: 32, height: 32, justifyContent: 'center', alignItems: 'center', margin: 6 }}>
+                                <ActivityIndicator size={24} color={theme.colors.primary} />
+                            </View>
+                        ) : (
+                            <IconButton
+                                icon="arrow-up-circle"
+                                mode="contained"
+                                containerColor="transparent"
+                                iconColor={inputText.trim() ? theme.colors.primary : theme.colors.outline}
+                                size={32}
+                                onPress={sendMessage}
+                                style={{ margin: 0 }}
+                                disabled={!inputText.trim()}
+                            />
+                        )}
                     </View>
                 </View>
             </KeyboardAvoidingView>
@@ -259,18 +261,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingVertical: 4, // Very slim wrapper padding
+        paddingVertical: 4,
         borderRadius: 20,
         borderWidth: 1,
         borderColor: 'rgba(0,0,0,0.1)',
-        minHeight: 40, // Industry standard tap target
+        minHeight: 40,
     },
     nativeInput: {
         flex: 1,
         fontSize: 16,
         maxHeight: 100,
-        paddingVertical: 0, // CRITICAL: Removes internal padding
-        marginVertical: 4, // Small margin for text breathing room
+        paddingVertical: 0,
+        marginVertical: 4,
         paddingTop: 0,
         paddingBottom: 0,
         textAlignVertical: 'center'
