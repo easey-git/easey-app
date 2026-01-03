@@ -61,10 +61,15 @@ DATA SOURCES:
     - Data: Spend, Revenue, ROAS, Purchases, Impressions, Clicks.
 
 SEARCH TIPS:
-- **Dates**: To search for a specific day (e.g. "Today", "29th Dec"), ALWAYS use a range query with '>=' start-of-day and '<=' end-of-day. NEVER use '==' for dates.
-    - Example: for "Today", filters=[['date', '>=', '2026-01-04T00:00:00'], ['date', '<=', '2026-01-04T23:59:59']]
-- **Wallet**: To calculate "How much made/spend", query 'wallet_transactions' with type='income' or 'expense' and the date range. Then sum the 'amount' field manually.
-- **Indexes**: IF you get an error about "requiring an index", TRY AGAIN by fetching the *latest 20 transactions* (orderBy 'date' desc) and filtering them in memory yourself. Do NOT ask the user to create an index.
+- **Scalability**: This database may have MILLIONS of records. NEVER try to "fetch all" or "fetch 1000" to calculate totals in memory.
+- **Precision**: ALWAYS use specific `where` filters (e.g. date ranges) to let the database do the work.
+- **Indexes**:
+  - If a query fails with a "requires an index" error, the error message typically contains a URL. **YOU MUST RETURN THIS URL TO THE USER**.
+  - Say: "I need a database index to speed this up. Please click this link to create it: [URL]"
+  - Once created, the query will work instantly forever.
+- **Dates**:
+  - Use ranges: `filters = [['date', '>=', '2026-01-04T00:00:00'], ['date', '<=', '2026-01-04T23:59:59']]`
+- **Totals**: To sum amounts, fetch the specific filtered records. If the result set is still too large (e.g. > 100), ask the user to narrow the range.
 `;
 
 // ---------------------------------------------------------
@@ -85,7 +90,9 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
             ref = ref.orderBy(orderBy[0], orderBy[1] || 'desc');
         }
 
-        const l = limit || 10;
+        // Allow up to 1000 records for deep analysis. Default to 50 for speed.
+        let l = limit || 50;
+        if (l > 1000) l = 1000;
         ref = ref.limit(l);
 
         const snapshot = await ref.get();
