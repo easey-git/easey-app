@@ -1,34 +1,4 @@
 {
-    "version": 2,
-    "builds": [
-        {
-            "src": "package.json",
-            "use": "@vercel/static-build",
-            "config": {
-                "distDir": "dist"
-            }
-        },
-        {
-            "src": "api/webhook.js",
-            "use": "@vercel/node"
-        },
-        {
-            "src": "api/ga4-visitors.js",
-            "use": "@vercel/node"
-        },
-        {
-            "src": "api/whatsapp.js",
-            "use": "@vercel/node"
-        },
-        {
-            "src": "api/campaigns.js",
-            "use": "@vercel/node"
-        },
-        {
-            "src": "api/assistant.js",
-            "use": "@vercel/node"
-        }
-    ],
     "headers": [
         {
             "source": "/api/(.*)",
@@ -52,33 +22,14 @@
             ]
         }
     ],
-    "routes": [
+    "rewrites": [
         {
-            "src": "/api/webhook",
-            "dest": "/api/webhook.js"
+            "source": "/api/(.*)",
+            "destination": "/api/$1"
         },
         {
-            "src": "/api/assistant",
-            "dest": "/api/assistant.js"
-        },
-        {
-            "src": "/api/ga4-visitors",
-            "dest": "/api/ga4-visitors.js"
-        },
-        {
-            "src": "/api/whatsapp",
-            "dest": "/api/whatsapp.js"
-        },
-        {
-            "src": "/api/campaigns",
-            "dest": "/api/campaigns.js"
-        },
-        {
-            "handle": "filesystem"
-        },
-        {
-            "src": "/((?!api/.*).*)",
-            "dest": "/index.html"
+            "source": "/((?!api/.*).*)",
+            "destination": "/index.html"
         }
     ]
 }
