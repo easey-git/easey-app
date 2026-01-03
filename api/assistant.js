@@ -61,16 +61,10 @@ DATA SOURCES:
     - Data: Spend, Revenue, ROAS, Purchases, Impressions, Clicks.
 
 SEARCH TIPS:
-- **Scalability**: This database has MILLIONS of records. NEVER try to "fetch latest 20" to filter in memory.
-- **Precision**: ALWAYS use specific `where` filters (e.g. date ranges) to let the database do the work.
-- **Indexes**:
-  - If a query fails with a "requires an index" error, the error message contains a URL. **YOU MUST RETURN THIS URL TO THE USER**.
-  - Say: "I need a database index to speed this up. Please click this link to create it: [URL]"
-  - Once created, the query will work instantly forever.
-- **Dates**:
-  - Use ranges: `filters = [['date', '>=', '2026-01-04T00:00:00'], ['date', '<=', '2026-01-04T23:59:59']]`
-- **Totals**: To sum amounts, fetch the specific filtered records.
-
+- **Dates**: To search for a specific day (e.g. "Today", "29th Dec"), ALWAYS use a range query with '>=' start-of-day and '<=' end-of-day. NEVER use '==' for dates.
+    - Example: for "Today", filters=[['date', '>=', '2026-01-04T00:00:00'], ['date', '<=', '2026-01-04T23:59:59']]
+- **Wallet**: To calculate "How much made/spend", query 'wallet_transactions' with type='income' or 'expense' and the date range. Then sum the 'amount' field manually.
+- **Indexes**: IF you get an error about "requiring an index", TRY AGAIN by fetching the *latest 20 transactions* (orderBy 'date' desc) and filtering them in memory yourself. Do NOT ask the user to create an index.
 `;
 
 // ---------------------------------------------------------
@@ -91,9 +85,7 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
             ref = ref.orderBy(orderBy[0], orderBy[1] || 'desc');
         }
 
-        // Hard cap at 1000 for safety, but rely on DB for performance
-        let l = limit || 50;
-        if (l > 1000) l = 1000;
+        const l = limit || 10;
         ref = ref.limit(l);
 
         const snapshot = await ref.get();
@@ -109,13 +101,6 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
             return { id: doc.id, ...data };
         });
     } catch (err) {
-        // If it's an index error, purely return the helpful message with the URL
-        if (err.code === 9 || err.message.toLowerCase().includes('index')) {
-            const indexUrl = err.message.match(/https?:\/\/[^\s]+/)?.[0];
-            if (indexUrl) {
-                return `[Database Optimization Required] This query requires a new index to run efficiently on the server. Please create it here: ${indexUrl}`;
-            }
-        }
         return `Error querying database: ${err.message}`;
     }
 };
@@ -179,27 +164,14 @@ const fetchCampaigns = async () => {
 // ---------------------------------------------------------
 // MAIN HANDLER
 // ---------------------------------------------------------
-const cors = require('cors')({ origin: true });
-
-function runMiddleware(req, res, fn) {
-    return new Promise((resolve, reject) => {
-        fn(req, res, (result) => {
-            if (result instanceof Error) {
-                return reject(result);
-            }
-            return resolve(result);
-        });
-    });
-}
-
 module.exports = async (req, res) => {
-    await runMiddleware(req, res, cors);
-
-    // Legacy manual headers (kept just in case, but overridden by cors)
     res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
     if (req.method === 'OPTIONS') {
-        res.status(200).json({});
+        res.status(200).end();
         return;
     }
 
