@@ -279,6 +279,19 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         </TouchableOpacity>
     );
 
+    const handleCodToggle = async (item) => {
+        try {
+            const newStatus = item.cod_status === 'confirmed' ? 'pending' : 'confirmed';
+            await updateDoc(item.ref, { cod_status: newStatus });
+            // Local state update (optional if real-time listener is fast enough, but good for UX)
+            setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
+            showSnackbar(`Order marked as ${newStatus}`);
+        } catch (error) {
+            console.error("Error toggling COD status:", error);
+            showSnackbar("Failed to update status", true);
+        }
+    };
+
     const renderDocItem = useCallback(({ item }) => {
         const isSelected = selectedItems.has(item.id);
         return (
@@ -289,6 +302,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 theme={theme}
                 onPress={showDocDetails}
                 onToggle={toggleSelection}
+                onCodToggle={handleCodToggle}
             />
         );
     }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection]);

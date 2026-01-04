@@ -28,7 +28,7 @@ const CopyableText = ({ text, display, style, theme, numberOfLines = 1 }) => {
     );
 };
 
-const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle }) => {
+const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle }) => {
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
 
     // Special rendering for Push Tokens
@@ -224,23 +224,27 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                     {item.stage || item.latest_stage || 'ACTIVE'}
                                 </Chip>
                             ) : (
-                                <Chip
-                                    mode="flat"
-                                    compact
-                                    style={[styles.chip, {
-                                        backgroundColor: isCOD ? theme.colors.errorContainer : theme.colors.primaryContainer,
-                                    }]}
-                                    textStyle={{
-                                        fontSize: 10,
-                                        lineHeight: 10,
-                                        marginVertical: 0,
-                                        marginHorizontal: 8,
-                                        color: isCOD ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
-                                        fontWeight: 'bold'
-                                    }}
-                                >
-                                    {isCOD ? 'COD' : 'PAID'}
-                                </Chip>
+                                <>
+                                    <Chip
+                                        mode="flat"
+                                        compact
+                                        style={[styles.chip, {
+                                            backgroundColor: isCOD ? theme.colors.errorContainer : theme.colors.primaryContainer,
+                                            justifyContent: 'center',
+                                            alignItems: 'center'
+                                        }]}
+                                        textStyle={{
+                                            fontSize: 10,
+                                            lineHeight: 16,
+                                            marginVertical: 0,
+                                            marginHorizontal: 8,
+                                            color: isCOD ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {isCOD ? 'COD' : 'PAID'}
+                                    </Chip>
+                                </>
                             )}
                         </View>
                         <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontFamily: 'monospace', marginBottom: 6 }}>
@@ -276,6 +280,32 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 <Text variant="bodySmall" style={{ color: theme.colors.primary, marginLeft: 6, fontWeight: 'bold' }}>
                                     ₹{item.totalPrice}
                                 </Text>
+                                {(isCOD && selectedCollection !== 'checkouts') && (
+                                    <Chip
+                                        mode="flat"
+                                        compact
+                                        onPress={() => onCodToggle && onCodToggle(item)}
+                                        style={[styles.chip, {
+                                            marginLeft: 12,
+                                            height: 24,
+                                            backgroundColor: item.cod_status === 'confirmed' ? '#e6fffa' : '#fff7ed',
+                                            borderWidth: 1,
+                                            borderColor: item.cod_status === 'confirmed' ? '#4ade80' : '#fdba74',
+                                            justifyContent: 'center',
+                                            alignItems: 'center'
+                                        }]}
+                                        textStyle={{
+                                            fontSize: 10,
+                                            lineHeight: 16,
+                                            marginVertical: 0,
+                                            marginHorizontal: 8,
+                                            color: item.cod_status === 'confirmed' ? '#047857' : '#c2410c',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {item.cod_status === 'confirmed' ? 'CONFIRMED' : 'PENDING'}
+                                    </Chip>
+                                )}
                             </View>
                         )}
                     </View>
@@ -311,7 +341,9 @@ const styles = StyleSheet.create({
     chip: {
         height: 20,
         borderRadius: 4,
-        paddingHorizontal: 0
+        paddingHorizontal: 0,
+        justifyContent: 'center',
+        alignItems: 'center'
     }
 });
 
