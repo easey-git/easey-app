@@ -40,10 +40,12 @@ module.exports = async (req, res) => {
         const today = new Date();
         const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
-        // Meta Graph API endpoint (Updated to v21.0)
+        // Meta Graph API endpoint (Using v21.0 as stable version)
         const url = `https://graph.facebook.com/v21.0/act_${adAccountId}/campaigns`;
 
         // Fields to fetch
+        // Note: We removed 'purchases' and 'purchase_roas' direct fields as they can cause 500 errors
+        // if custom headers or attribution settings are required. We calculate them manually.
         const fields = [
             'id',
             'name',
@@ -58,8 +60,7 @@ module.exports = async (req, res) => {
             'cpc,' +
             'cpm,' +
             'ctr,' +
-            'purchase_roas,' +
-            'purchases,' +
+            'actions,' +
             'action_values' +
             '}'
         ].join(',');
@@ -92,7 +93,6 @@ module.exports = async (req, res) => {
             if (!insights) continue; // Skip campaigns with no data today
 
             const spend = parseFloat(insights.spend || 0);
-            const purchases = parseInt(insights.purchases || 0);
             const impressions = parseInt(insights.impressions || 0);
             const reach = parseInt(insights.reach || 0);
             const clicks = parseInt(insights.clicks || 0);
@@ -100,16 +100,26 @@ module.exports = async (req, res) => {
             const cpm = parseFloat(insights.cpm || 0);
             const ctr = parseFloat(insights.ctr || 0);
 
-            // Calculate revenue from action_values
+            // Calculate Metrics manually to avoid API errors
+            // 1. Purchases Count (from 'actions')
+            let purchases = 0;
+            if (insights.actions) {
+                const purchaseAction = insights.actions.find(
+                    a => a.action_type === 'omni_purchase' || a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase'
+                );
+                purchases = parseInt(purchaseAction?.value || 0);
+            }
+
+            // 2. Revenue (from 'action_values')
             let revenue = 0;
             if (insights.action_values) {
                 const purchaseValue = insights.action_values.find(
-                    av => av.action_type === 'omni_purchase' || av.action_type === 'purchase'
+                    av => av.action_type === 'omni_purchase' || av.action_type === 'purchase' || av.action_type === 'offsite_conversion.fb_pixel_purchase'
                 );
                 revenue = parseFloat(purchaseValue?.value || 0);
             }
 
-            // Calculate ROAS
+            // 3. Calculate ROAS
             const roas = spend > 0 ? (revenue / spend).toFixed(2) : '0.00';
 
             // Determine platform (facebook or instagram based on campaign name)
