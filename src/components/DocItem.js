@@ -1,6 +1,32 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Surface, Checkbox, Avatar, Text, IconButton, Chip, Icon } from 'react-native-paper';
+import * as Clipboard from 'expo-clipboard';
+
+const CopyableText = ({ text, display, style, theme, numberOfLines = 1 }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        await Clipboard.setStringAsync(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <TouchableOpacity onPress={handleCopy} style={[{ flexDirection: 'row', alignItems: 'flex-start' }, style]}>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flexShrink: 1 }} numberOfLines={numberOfLines}>
+                {display || text}
+            </Text>
+            <View style={{ marginLeft: 6, marginTop: 2 }}>
+                <Icon
+                    source={copied ? "check" : "content-copy"}
+                    size={12}
+                    color={copied ? theme.colors.primary : theme.colors.outline}
+                />
+            </View>
+        </TouchableOpacity>
+    );
+};
 
 const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle }) => {
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
@@ -223,9 +249,7 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                         {item.phone && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
                                 <Icon source="phone" size={14} color={theme.colors.onSurfaceVariant} />
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6 }}>
-                                    {item.phone}
-                                </Text>
+                                <CopyableText text={item.phone} style={{ marginLeft: 6 }} theme={theme} />
                             </View>
                         )}
                         {item.email && (
@@ -238,9 +262,13 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                         )}
                         <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 2 }}>
                             <Icon source="map-marker" size={14} color={theme.colors.onSurfaceVariant} />
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6, flex: 1 }} numberOfLines={2}>
-                                {[item.address1, item.city, item.province, item.zip].filter(Boolean).join(', ') || 'No Address'}
-                            </Text>
+                            <CopyableText
+                                text={[item.address1, item.city, item.province, item.zip].filter(Boolean).join(', ') || 'No Address'}
+                                display={[item.address1, item.city, item.province, item.zip].filter(Boolean).join(', ') || 'No Address'}
+                                style={{ marginLeft: 6, flex: 1 }}
+                                theme={theme}
+                                numberOfLines={2}
+                            />
                         </View>
                         {item.totalPrice && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
