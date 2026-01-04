@@ -28,7 +28,7 @@ const CopyableText = ({ text, display, style, theme, numberOfLines = 1 }) => {
     );
 };
 
-const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, onVoiceNoteAttach, onVoiceNoteDelete }) => {
+const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle }) => {
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
 
     // Special rendering for Push Tokens
@@ -285,55 +285,6 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 </Text>
                             </View>
                         )}
-
-                        {/* Voice Note Section - Only for Orders */}
-                        {selectedCollection === 'orders' && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 }}>
-                                <Icon source="microphone" size={14} color={item.voiceNoteUrl ? theme.colors.primary : theme.colors.outline} />
-                                {item.voiceNoteUrl ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                                        <Text variant="bodySmall" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>
-                                            Voice Note Attached
-                                        </Text>
-                                        <TouchableOpacity
-                                            onPress={(e) => {
-                                                e.stopPropagation();
-                                                // Play voice note
-                                                alert('Play voice note - implement audio player');
-                                            }}
-                                            style={{ padding: 4 }}
-                                        >
-                                            <Icon source="play-circle" size={16} color={theme.colors.primary} />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            onPress={(e) => {
-                                                e.stopPropagation();
-                                                // Delete voice note
-                                                if (onVoiceNoteDelete) onVoiceNoteDelete(item);
-                                            }}
-                                            style={{ padding: 4 }}
-                                        >
-                                            <Icon source="delete" size={16} color={theme.colors.error} />
-                                        </TouchableOpacity>
-                                    </View>
-                                ) : (
-                                    <TouchableOpacity
-                                        onPress={(e) => {
-                                            e.stopPropagation();
-                                            // Attach voice note
-                                            if (onVoiceNoteAttach) onVoiceNoteAttach(item);
-                                        }}
-                                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                                    >
-                                        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
-                                            Attach Voice Note
-                                        </Text>
-                                        <Icon source="plus-circle" size={14} color={theme.colors.outline} />
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        )}
-
                         {item.totalPrice && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                                 <Icon source="cash" size={14} color={theme.colors.primary} />

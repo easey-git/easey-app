@@ -49,18 +49,9 @@ service cloud.firestore {
     }
 
     // 3. Orders & Checkouts (Database)
-    match /orders/{orderId} {
+    match /orders/{document=**} {
       allow read: if hasPermission('access_orders');
-      
-      // Allow support agents to update order status and voice notes
-      allow update: if hasPermission('manage_orders') && (
-        // If updating admin fields, must be admin
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['adminEdited', 'adminModifiedFields']) ||
-        isAdmin()
-      );
-      
-      // Only admins can create/delete orders
-      allow create, delete: if isAdmin();
+      allow write: if hasPermission('manage_orders'); // Verifying orders, etc.
     }
     
     match /checkouts/{document=**} {
