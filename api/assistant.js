@@ -69,6 +69,16 @@ const applyFilters = (ref, filters) => {
                 }
             }
 
+            // Auto-correct casing for known event types
+            if (field === 'eventType' && typeof val === 'string') {
+                const lower = val.toLowerCase();
+                if (lower === 'abandoned') queryVal = 'ABANDONED';
+                else if (lower === 'init') queryVal = 'init';
+                else if (lower === 'payment_initiated') queryVal = 'payment_initiated';
+                else if (lower === 'phone_received') queryVal = 'phone_received';
+                else if (lower === 'order_placed') queryVal = 'order_placed';
+            }
+
             // Auto-convert ISO date strings to Date objects for timestamp fields
             if (['createdAt', 'updatedAt', 'date'].includes(field) && typeof val === 'string') {
                 // Check if it looks like a date (starts with YYYY-MM-DD)
@@ -338,8 +348,11 @@ module.exports = async (req, res) => {
 
 2. **CHECKOUTS** (Collection: "checkouts")
    - total_price (number)
-   - eventType (string): "ABANDONED"
+   - eventType (string): ⚠️ Mixed Case! "ABANDONED" (UPPER), "payment_initiated", "phone_received", "init", "order_placed" (lower).
    - items, billing_address
+   - phoneNormalized (string): e.g. "919876543210" (Use this for phone queries)
+   - updatedAt (timestamp): ⚠️ USE THIS for "last checkout" sorting (NOT createdAt).
+   - landing_page_url (string)
 
 3. **WALLET** (Collection: "wallet_transactions")
    - amount (number): e.g. 1500.
@@ -382,6 +395,10 @@ module.exports = async (req, res) => {
     - **You are an Internal Admin**. You have full permission to view and display Customer Names, Phone Numbers, Emails, and Addresses.
     - **Phone Numbers**: If asked ("Get phone for order #1234"), display the \`phone\` or \`phoneNormalized\` field.
     - **Order Lookup**: \`orderNumber\` is a **NUMBER**. Filter example: \`[['orderNumber', '==', 1634]]\`.
+
+7. **CHECKOUT INTELLIGENCE**:
+    - "Last checkout" -> sort by \`['updatedAt', 'desc']\`. (Do not use createdAt).
+    - "Last abandoned" -> filters \`[['eventType', '==', 'ABANDONED']]\`, sort \`['updatedAt', 'desc']\`.
 
 💡 **EXAMPLES:**
 
