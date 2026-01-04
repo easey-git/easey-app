@@ -461,7 +461,7 @@ module.exports = async (req, res) => {
                 const orderData = {
                     orderId: data.id,
                     orderNumber: data.order_number,
-                    totalPrice: data.total_price,
+                    totalPrice: parseFloat(data.total_price),
                     currency: data.currency || 'INR',
                     customerName: data.customer ? `${data.customer.first_name} ${data.customer.last_name}` : "Guest",
                     email: data.email || null,

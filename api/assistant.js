@@ -48,6 +48,37 @@ try {
 // ---------------------------------------------------------
 
 /**
+ * Apply filters to a Firestore query reference
+ * @param {Object} ref - Firestore query reference
+ * @param {Array} filters - Array of filter arrays
+ * @returns {Object} Modified reference
+ */
+const applyFilters = (ref, filters) => {
+    let queryRef = ref;
+
+    if (filters && Array.isArray(filters)) {
+        // Use for...of to ensure sequential reference updates
+        for (const [field, op, val] of filters) {
+            let queryVal = val;
+
+            // Auto-convert ISO date strings to Date objects for timestamp fields
+            if (['createdAt', 'updatedAt'].includes(field) && typeof val === 'string') {
+                // Check if it looks like a date (starts with YYYY-MM-DD)
+                if (/^\d{4}-\d{2}-\d{2}/.test(val)) {
+                    const date = new Date(val);
+                    if (!isNaN(date.getTime())) {
+                        queryVal = date;
+                    }
+                }
+            }
+
+            queryRef = queryRef.where(field, op, queryVal);
+        }
+    }
+    return queryRef;
+};
+
+/**
  * Convert Firestore Timestamp objects to ISO strings
  * @param {Object} data - Document data
  * @returns {Object} Data with converted timestamps
@@ -66,6 +97,56 @@ const convertTimestamps = (data) => {
 };
 
 /**
+ * perform server-side aggregation (Count, Sum, Average)
+ * This is efficient for large datasets (millions of records)
+ */
+const aggregateFirestore = async ({ collection, filters, aggregationType, field }) => {
+    try {
+        if (!ALLOWED_COLLECTIONS.includes(collection)) {
+            return `Error: Only 'orders' and 'checkouts' collections are supported.`;
+        }
+
+        let ref = db.collection(collection);
+        ref = applyFilters(ref, filters);
+
+        if (aggregationType === 'count') {
+            const snapshot = await ref.count().get();
+            return { count: snapshot.data().count };
+        }
+
+        // Sum and Average only work on numeric fields
+        if (['sum', 'average'].includes(aggregationType)) {
+            if (!field) return `Error: 'field' parameter is required for ${aggregationType}.`;
+
+            // Check for known string fields to prevent valid errors
+            if (collection === 'orders' && field === 'totalPrice') {
+                return "Error: 'orders.totalPrice' is stored as a STRING string in database. Server-side aggregation is impossible. Please use queryFirestore to fetch records and sum them manually (limit applies).";
+            }
+
+            const aggField = aggregationType === 'sum'
+                ? admin.firestore.AggregateField.sum(field)
+                : admin.firestore.AggregateField.average(field);
+
+            const snapshot = await ref.aggregate({ result: aggField }).get();
+            return { [aggregationType]: snapshot.data().result || 0 };
+        }
+
+        return "Error: Invalid aggregationType. Use 'count', 'sum', or 'average'.";
+
+    } catch (err) {
+        // Handle Firestore index errors
+        if (err.code === 9 || err.message.toLowerCase().includes('index')) {
+            const indexUrl = err.message.match(/https?:\/\/[^\s]+/)?.[0];
+            if (indexUrl) {
+                return `[INDEX REQUIRED] Create index: ${indexUrl}`;
+            }
+        }
+        console.error('[Firestore] Aggregation error:', err.message);
+        return `Error: ${err.message}`;
+    }
+};
+
+/**
  * Query Firestore with validation and error handling
  * @param {Object} params - Query parameters
  * @returns {Promise<Array|string>} Query results or error message
@@ -80,24 +161,7 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
         let ref = db.collection(collection);
 
         // Apply filters
-        if (filters && Array.isArray(filters)) {
-            filters.forEach(([field, op, val]) => {
-                let queryVal = val;
-
-                // Auto-convert ISO date strings to Date objects for timestamp fields
-                if (['createdAt', 'updatedAt'].includes(field) && typeof val === 'string') {
-                    // Check if it looks like a date (starts with YYYY-MM-DD)
-                    if (/^\d{4}-\d{2}-\d{2}/.test(val)) {
-                        const date = new Date(val);
-                        if (!isNaN(date.getTime())) {
-                            queryVal = date;
-                        }
-                    }
-                }
-
-                ref = ref.where(field, op, queryVal);
-            });
-        }
+        ref = applyFilters(ref, filters);
 
         // Apply sorting
         if (orderBy && orderBy.length > 0) {
@@ -150,38 +214,68 @@ const runMiddleware = (req, res, fn) => {
 // TOOL DEFINITIONS
 // ---------------------------------------------------------
 const TOOLS = [{
-    functionDeclarations: [{
-        name: "queryFirestore",
-        description: "Query 'orders' or 'checkouts' collections from Firestore database.",
-        parametersJsonSchema: {
-            type: "object",
-            properties: {
-                collection: {
-                    type: "string",
-                    enum: ALLOWED_COLLECTIONS,
-                    description: "Collection to query: 'orders' or 'checkouts'"
-                },
-                filters: {
-                    type: "array",
-                    description: "Array of [field, operator, value] filters. Operators: '==', '>=', '<=', '>', '<', 'array-contains'",
-                    items: {
+    functionDeclarations: [
+        {
+            name: "queryFirestore",
+            description: "Query specific documents from 'orders' or 'checkouts'. Use this to VIEW details or when you need string fields.",
+            parametersJsonSchema: {
+                type: "object",
+                properties: {
+                    collection: {
+                        type: "string",
+                        enum: ALLOWED_COLLECTIONS,
+                        description: "Collection to query: 'orders' or 'checkouts'"
+                    },
+                    filters: {
                         type: "array",
+                        description: "Array of [field, operator, value] filters. Operators: '==', '>=', '<=', '>', '<', 'array-contains'",
+                        items: {
+                            type: "array",
+                            items: { type: "string" }
+                        }
+                    },
+                    limit: {
+                        type: "number",
+                        description: `Number of documents to return (default: ${DEFAULT_LIMIT}, max: ${MAX_LIMIT})`
+                    },
+                    orderBy: {
+                        type: "array",
+                        description: "Sort order: [field, direction]. Direction: 'asc' or 'desc'",
                         items: { type: "string" }
                     }
                 },
-                limit: {
-                    type: "number",
-                    description: `Number of documents to return (default: ${DEFAULT_LIMIT}, max: ${MAX_LIMIT})`
+                required: ["collection"]
+            }
+        },
+        {
+            name: "aggregateFirestore",
+            description: "Perform server-side COUNT, SUM, or AVERAGE. Use this for 'how many', 'total stats', or analyzing large datasets (supports millions of records).",
+            parametersJsonSchema: {
+                type: "object",
+                properties: {
+                    collection: {
+                        type: "string",
+                        enum: ALLOWED_COLLECTIONS,
+                        description: "Collection to analyze"
+                    },
+                    filters: {
+                        type: "array",
+                        description: "Filters to apply before aggregating"
+                    },
+                    aggregationType: {
+                        type: "string",
+                        enum: ["count", "sum", "average"],
+                        description: "Type of calculation"
+                    },
+                    field: {
+                        type: "string",
+                        description: "Field to sum or average (required for sum/average). MUST be a numeric field."
+                    }
                 },
-                orderBy: {
-                    type: "array",
-                    description: "Sort order: [field, direction]. Direction: 'asc' or 'desc'",
-                    items: { type: "string" }
-                }
-            },
-            required: ["collection"]
+                required: ["collection", "aggregationType"]
+            }
         }
-    }]
+    ]
 }];
 
 // ---------------------------------------------------------
@@ -217,163 +311,60 @@ module.exports = async (req, res) => {
         // ---------------------------------------------------------
         // DYNAMIC SYSTEM INSTRUCTION
         // ---------------------------------------------------------
-        const SYSTEM_INSTRUCTION = `You are an expert E-commerce Assistant focused EXCLUSIVELY on Orders and Abandoned Checkouts.
-You have access to exactly TWO Firestore collections. Answer questions ONLY about these.
+        const SYSTEM_INSTRUCTION = `You are an expert E-commerce Assistant. You have access to Orders and Abandoned Checkouts.
 
 📊 **DATA SCHEMA:**
 
 1. **ORDERS** (Collection: "orders")
-   - orderNumber (number): e.g. 1611
-   - customerName (string): e.g. "Pushpanjali ."
-   - email, phone, phoneNormalized (strings)
-   - totalPrice (string): e.g. "699.00" ⚠️ STORED AS STRING - convert to number for calculations
-   - status (string): "COD", "Paid", "CANCELLED"
-   - items (array): [{ name, price (string), quantity (number) }]
-   - address1, city, state, zip (strings)
+   - orderNumber (number)
+   - customerName, email, phoneNormalized
+   - totalPrice (number): e.g. 699.00 ✅ NUMBER! Use this for UNLIMITED server-side math.
+   - status (string): "COD", "Paid"
+   - address1, city, state, zip
    - createdAt, updatedAt (timestamps)
 
 2. **CHECKOUTS** (Collection: "checkouts")
-   - cart_id (string)
+   - total_price (number): e.g. 699 ✅ NUMBER! Can be summed server-side.
    - eventType (string): "ABANDONED"
-   - first_name, last_name, email, phone_number, phoneNormalized (strings)
-   - total_price (number): e.g. 699 ⚠️ STORED AS NUMBER
-   - items (array): [{ name, title, price (number), quantity, product_id, variant_id }]
-   - billing_address, shipping_address (maps)
-   - latest_stage (string): "ORDER_SCREEN", "PHONE_RECEIVED"
    - rtoPredict (string): "high", "low"
-   - updatedAt (timestamp)
+   - items, billing_address, etc.
 
-🔍 **SEARCH PATTERNS:**
+🛠️ **TOOL USAGE STRATEGY:**
 
-Basic Queries:
-- Find by order number: filters=[['orderNumber', '==', 1611]] (NUMBER, not string)
-- Find by customer name: filters=[['customerName', '>=', 'Push'], ['customerName', '<=', 'Push\\uf8ff']]
-- Recent orders: orderBy=['createdAt', 'desc'], limit=10
-- By status: filters=[['status', '==', 'COD']]
-- By city: filters=[['city', '==', 'Bangalore']] (case-sensitive)
-- Abandoned carts: filters=[['eventType', '==', 'ABANDONED']]
-- High RTO risk: filters=[['rtoPredict', '==', 'high']]
+1. **aggregateFirestore** (The "Unlimited" Tool):
+   - USE FOR: "How many?", "Total revenue?", "Average value?".
+   - ADVANTAGE: Zero limit. Calculates on server.
+
+2. **queryFirestore** (The "Viewer" Tool):
+   - USE FOR: "Show me order details", "Find a person".
+   - LIMITATION: Max 500 documents.
+
+💡 **REVENUE CALCULATION LOGIC:**
+- **Standard (Fast/Unlimited)**: Use \`aggregateFirestore\` with \`field: 'totalPrice'\`.
+  -> "Calculating total from 15,000 orders..." (Instant)
+  
+- **Fallback (If numeric field missing)**: Use \`queryFirestore\` (limit 500) and sum manually.
+  -> "Calculating from last 500 orders (data not migrated yet)..."
+
+🧠 **SMART EXAMPLES:**
+
+Q: "Total revenue?"
+A: Call \`aggregateFirestore\` ({ collection: 'orders', aggregationType: 'sum', field: 'totalPrice' }).
+   -> "Total revenue is ₹1,500,000 (from all orders)."
+
+Q: "Sales from Bangalore?"
+A: Call \`aggregateFirestore\` ({ collection: 'orders', aggregationType: 'sum', field: 'totalPrice', filters: [['city', '==', 'Bangalore']] }).
+   -> "Bangalore sales: ₹200,000."
 
 📅 **DATE INTELLIGENCE:**
+Current time: ${new Date().toISOString()}
+- "Today": Start of today 00:00 to now.
+- "This Month": 1st of month to now.
+- Use ISO strings for date filters.
 
-Current date/time: ${new Date().toISOString()}
-Current date (India): ${new Date().toLocaleDateString('en-IN')}
-
-Date Query Examples:
-- "Today": filters=[['createdAt', '>=', '${new Date().toISOString().split('T')[0]}T00:00:00'], ['createdAt', '<=', '${new Date().toISOString().split('T')[0]}T23:59:59']]
-- "Yesterday": Calculate date as (today - 1 day), use same pattern
-- "This week": Last 7 days from today
-- "This month": First day of current month to today
-- "Last month": First day to last day of previous month
-
-Always use ISO format: 'YYYY-MM-DDTHH:mm:ss' for timestamp queries.
-
-🧮 **CALCULATION ABILITIES:**
-
-When asked for totals, averages, or counts:
-1. Query the data (use appropriate limit, max 100)
-2. Parse the results and calculate:
-   - **Total Revenue**: Sum all totalPrice values (convert string to number: parseFloat(totalPrice))
-   - **Average Order Value**: Total revenue / number of orders
-   - **Count**: Number of documents returned
-3. Present results clearly with currency symbol (₹)
-
-Examples:
-- "What's total revenue from COD orders?" 
-  → Query COD orders, sum totalPrice, respond: "Total revenue from 45 COD orders: ₹31,500"
-- "Average order value today?"
-  → Query today's orders, calculate sum/count, respond: "Average: ₹699 (from 12 orders)"
-- "How many abandoned carts?"
-  → Query checkouts with eventType='ABANDONED', respond: "15 abandoned carts"
-
-🎯 **SMART SEARCH TIPS:**
-
-1. **Case-Insensitive Names**: 
-   - If exact match fails, suggest: "Try searching with different capitalization"
-   - Example: "Pushpa" might be stored as "pushpa" or "PUSHPA"
-
-2. **Partial Matches**:
-   - Use prefix search: customerName >= 'Pus' AND customerName <= 'Pus\\uf8ff'
-   - This finds: "Pushpanjali", "Pushpa", "Puspita"
-
-3. **Phone Numbers**:
-   - Always use phoneNormalized (without +, spaces, or dashes)
-   - Example: "+91 814 508 2423" → search for "918145082423"
-
-4. **Multiple Filters**:
-   - Combine filters: [['status', '==', 'COD'], ['city', '==', 'Bangalore']]
-   - This finds: COD orders from Bangalore only
-
-🧠 **CONTEXT AWARENESS:**
-
-- Remember the conversation context
-- If user asks "What's the total?" after showing orders, calculate total from those orders
-- If user asks "How many?", count the results from previous query
-- Reference previous answers when relevant
-
-🔄 **MULTI-STEP REASONING:**
-
-For complex questions, break them down:
-1. "Compare today's orders to yesterday"
-   → Query today's orders, calculate total
-   → Query yesterday's orders, calculate total
-   → Compare and present: "Today: ₹15,000 (20 orders) vs Yesterday: ₹12,000 (18 orders) - Up 25%"
-
-2. "Which city has most orders?"
-   → Query recent orders (limit 100)
-   → Group by city, count each
-   → Present top cities
-
-3. "Show high-value abandoned carts"
-   → Query abandoned checkouts
-   → Filter where total_price > 1000
-   → Sort by total_price descending
-
-⚠️ **IMPORTANT RULES:**
-
-1. **Data Type Awareness**:
-   - orders.totalPrice is STRING → Use parseFloat() for math
-   - checkouts.total_price is NUMBER → Use directly for math
-
-2. **Limit Management**:
-   - Default limit: 10 for "show me orders"
-   - Use limit: 50-100 for "all orders" or calculations
-   - Mention if results are limited: "Showing 100 of potentially more results"
-
-3. **Error Handling**:
-   - If query fails with index error, return the index creation link
-   - If no results, suggest alternative searches
-   - If ambiguous query, ask for clarification
-
-4. **Response Quality**:
-   - Be concise but complete
-   - Use bullet points for multiple items
-   - Include relevant details (order number, customer name, amount)
-   - Format currency properly: ₹699, ₹1,500, ₹45,000
-
-5. **Scope Boundaries**:
-   - ONLY answer questions about orders and checkouts
-   - Politely decline questions about other topics
-   - Don't make up data - only use what's in the database
-
-💡 **EXAMPLES OF SMART RESPONSES:**
-
-Q: "Show me today's COD orders"
-A: Query with date range + status filter, present results with total
-
-Q: "What's my best-selling city?"
-A: Query recent orders, group by city, identify top city
-
-Q: "How many high-risk abandoned carts?"
-A: Query checkouts with rtoPredict='high' AND eventType='ABANDONED', count results
-
-Q: "Find order for phone 8145082423"
-A: Search phoneNormalized='918145082423' (add country code)
-
-Q: "Revenue from Bangalore this month?"
-A: Query orders with city='Bangalore' + month date range, sum totalPrice
-
-Remember: You're not just a search tool - you're an intelligent assistant that understands e-commerce, calculates metrics, and provides actionable insights!`;
+Response Style:
+- Professional, concise, data-driven.
+- Always use the currency symbol ₹.`;
 
         // Build conversation contents
         const contents = [
@@ -406,8 +397,12 @@ Remember: You're not just a search tool - you're an intelligent assistant that u
             // Extract arguments (SDK may use 'args' or 'arguments')
             const args = functionCall.args || functionCall.arguments || {};
 
-            // Execute function
-            const functionResult = await queryFirestore(args);
+            let functionResult;
+            if (functionCall.name === 'queryFirestore') {
+                functionResult = await queryFirestore(args);
+            } else if (functionCall.name === 'aggregateFirestore') {
+                functionResult = await aggregateFirestore(args);
+            }
 
             // Add function call to conversation
             contents.push({
