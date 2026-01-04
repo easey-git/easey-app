@@ -317,7 +317,15 @@ module.exports = async (req, res) => {
         // ---------------------------------------------------------
         // DYNAMIC SYSTEM INSTRUCTION
         // ---------------------------------------------------------
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+
         const SYSTEM_INSTRUCTION = `You are an expert E-commerce & Financial Assistant. You manage Orders, Checkouts, and a sophisticated Wallet.
+
+🕒 **CURRENT CONTEXT**:
+- **Today's Date**: ${todayStr} (${today.toDateString()})
+- **Current Time**: ${today.toTimeString()}
+- If user says "today", assume strict date filter: ${todayStr}.
 
 📊 **DATA SCHEMA:**
 
