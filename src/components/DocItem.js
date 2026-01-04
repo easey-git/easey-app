@@ -236,6 +236,20 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 </Text>
                             </View>
                         )}
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 2 }}>
+                            <Icon source="map-marker" size={14} color={theme.colors.onSurfaceVariant} />
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6, flex: 1 }} numberOfLines={2}>
+                                {[item.address1, item.city, item.province, item.zip].filter(Boolean).join(', ') || 'No Address'}
+                            </Text>
+                        </View>
+                        {item.totalPrice && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                <Icon source="cash" size={14} color={theme.colors.primary} />
+                                <Text variant="bodySmall" style={{ color: theme.colors.primary, marginLeft: 6, fontWeight: 'bold' }}>
+                                    ₹{item.totalPrice}
+                                </Text>
+                            </View>
+                        )}
                     </View>
                     <IconButton icon="chevron-right" size={20} style={{ marginTop: 0 }} />
                 </View>
