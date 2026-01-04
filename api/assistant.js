@@ -341,38 +341,38 @@ module.exports = async (req, res) => {
    - ADVANTAGE: Zero limit. Calculates on server.
    
 2. **queryFirestore** (The "Viewer" Tool):
-   - USE FOR: "Show me recent expenses", "Find a specific transaction".
+   - USE FOR: "Show me details", "For what?", "List them".
    - LIMITATION: Max 500 documents.
 
-💡 **WALLET INTELLIGENCE:**
-- **Filtering**: Always filter by **'type'** ('income' or 'expense') appropriately.
-- **Profit Calculation**:
-  - Response: "I will calculate total income and total expenses to find your profit."
-  - Step 1: Sum 'amount' where type == 'income'.
-  - Step 2: Sum 'amount' where type == 'expense'.
-  - Step 3: Profit = Income - Expense.
+🧠 **SMART BEHAVIOR:**
 
-🧠 **SMART EXAMPLES:**
+1. **Date Assumptions**:
+   - If user says "Dec 18" or "January", assume the **CURRENT YEAR** (or the most recent past occurrence if currently early in the year). DO NOT assume random past years like 2023.
+   - Today is: ${new Date().toDateString()}.
 
-Q: "Total revenue?"
-A: Call \`aggregateFirestore\` ({ collection: 'orders', aggregationType: 'sum', field: 'totalPrice' }).
-   -> "Total revenue is ₹1,500,000 (from all orders)."
+2. **Keyword Search**:
+   - If user says "Expenses on DEL" or "Income from PayU", automatically assume they mean the **'description'** or **'category'** field. Do not ask "Is this a description?". Just search it.
 
-Q: "Total expenses?"
-A: Call \`aggregateFirestore\` ({ collection: 'wallet_transactions', aggregationType: 'sum', field: 'amount', filters: [['type', '==', 'expense']] }).
-   -> "Total expenses: ₹50,000."
+3. **Context Switching**:
+   - If user asks "Total spent on Dec 18?" (Aggregation) -> And then asks "For what?" (Details):
+     - You MUST switch to \`queryFirestore\` using the **SAME FILTERS** (date=Dec 18, type=expense) to list the items.
 
-Q: "Profit this month?"
-A: 
-   1. Sum Income (type='income') for this month.
-   2. Sum Expense (type='expense') for this month.
-   3. Calculate difference.
+💡 **EXAMPLES:**
 
-📅 **DATE INTELLIGENCE:**
-Current time: ${new Date().toISOString()}
-- "Today": Start of today 00:00 to now.
-- "This Month": 1st of month to now.
-- Use ISO strings for date filters.
+Q: "How much spent on Ads?"
+A: (Auto-assumes 'Ads' is in description/category)
+   -> Call \`aggregateFirestore\` (filters: [['description', '==', 'Ads']]).
+
+Q: "For what?" (After asking about expenses)
+A: (Switches to view mode)
+   -> "Here are the details:"
+   -> Call \`queryFirestore\` (limit 10, same date filters).
+
+Q: "Profit?"
+A: (Income - Expense)
+   1. Sum Income.
+   2. Sum Expense.
+   3. Report Profit.
 
 Response Style:
 - Professional, concise, data-driven.
