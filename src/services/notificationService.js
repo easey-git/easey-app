@@ -65,7 +65,7 @@ if (messaging) {
 
 // --- Public API ---
 
-export async function registerForPushNotificationsAsync(userId) {
+export async function registerForPushNotificationsAsync(userId, role) {
     const messaging = getMessaging();
 
     if (!messaging) {
@@ -130,6 +130,9 @@ export async function registerForPushNotificationsAsync(userId) {
 
             if (userId) {
                 tokenData.userId = userId;
+            }
+            if (role) {
+                tokenData.role = role;
             }
 
             await setDoc(doc(db, 'push_tokens', token), tokenData, { merge: true });

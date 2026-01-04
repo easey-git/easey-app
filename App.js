@@ -250,7 +250,7 @@ function AppNavigator() {
 
 function Main() {
   const { isThemeDark, notificationsEnabled } = usePreferences();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [fontsLoaded] = useFonts({
     'MaterialCommunityIcons': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
   });
@@ -263,12 +263,12 @@ function Main() {
       // Only attempt push notifications if on a physical device to avoid Expo Go warnings
       // logic is handled inside registerForPushNotificationsAsync but we can add a guard here too
       if (notificationsEnabled) {
-        registerForPushNotificationsAsync(user.uid).catch(err => console.error("Push registration failed:", err.message));
+        registerForPushNotificationsAsync(user.uid, role).catch(err => console.error("Push registration failed:", err.message));
       } else {
         unregisterPushNotificationsAsync().catch(() => { });
       }
     }
-  }, [user, notificationsEnabled]);
+  }, [user, role, notificationsEnabled]);
 
   if (!fontsLoaded) {
     return <ActivityIndicator size="large" style={{ flex: 1, justifyContent: 'center' }} />;

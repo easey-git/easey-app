@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
-import { collection, getDocsFromServer, deleteDoc, updateDoc, doc, limit, query, writeBatch, where } from 'firebase/firestore';
+import { collection, getDocsFromServer, deleteDoc, updateDoc, doc, limit, query, writeBatch, where, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import DocItem from '../components/DocItem';
 import { CRMLayout } from '../components/CRMLayout';
@@ -106,10 +106,24 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const fetchDocuments = async () => {
         setLoading(true);
         try {
-            let constraints = [limit(100)];
+            let constraints = [];
             if (filter) {
-                constraints.unshift(where(filter.field, "==", filter.value));
+                constraints.push(where(filter.field, "==", filter.value));
             }
+
+            // Determine correct sort field based on collection schema
+            const sortMapping = {
+                whatsapp_messages: 'timestamp',
+                checkouts: 'updatedAt',
+                push_tokens: 'updatedAt',
+                wallet_transactions: 'date'
+            };
+            const sortField = sortMapping[selectedCollection] || 'createdAt';
+
+            // Sort by newest first
+            constraints.push(orderBy(sortField, 'desc'));
+            constraints.push(limit(100));
+
             const q = query(collection(db, selectedCollection), ...constraints);
 
             // Force fetch from server to avoid stale cache issues
@@ -122,7 +136,12 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             setDocuments(docs);
         } catch (error) {
             console.error("Error fetching docs:", error);
-            showSnackbar("Failed to fetch documents", true);
+            // If sorting fails (missing index or field), valid fallback to unsorted
+            if (error.code === 'failed-precondition' || error.message.includes('index')) {
+                showSnackbar("Missing Index: detailed sort disabled", true);
+            } else {
+                showSnackbar("Failed to fetch documents", true);
+            }
         }
         setLoading(false);
     };

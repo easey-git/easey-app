@@ -129,7 +129,10 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
  */
 const sendFCMNotifications = async (title, body, dataPayload) => {
     try {
-        const tokensSnapshot = await db.collection('push_tokens').get();
+        // Only send to registered admins
+        const tokensSnapshot = await db.collection('push_tokens')
+            .where('role', '==', 'admin')
+            .get();
         if (tokensSnapshot.empty) return;
 
         const pushTokens = tokensSnapshot.docs.map(doc => doc.data().token);
