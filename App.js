@@ -16,11 +16,22 @@ import CampaignsScreen from './src/screens/CampaignsScreen';
 import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
 import AssistantScreen from './src/screens/AssistantScreen';
+import AdminPanelScreen from './src/screens/AdminPanelScreen';
 import { theme } from './src/theme/theme';
 import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SoundProvider } from './src/context/SoundContext';
 import { registerForPushNotificationsAsync, unregisterPushNotificationsAsync } from './src/services/notificationService';
+import { AccessDenied } from './src/components/AccessDenied';
+
+// Wrapper to protect Admin Panel route at navigation level
+const AdminPanelWrapper = (props) => {
+  const { isAdmin } = useAuth();
+  if (!isAdmin) {
+    return <AccessDenied title="Admin Restricted" message="Only administrators can access this area." />;
+  }
+  return <AdminPanelScreen {...props} />;
+};
 
 const Stack = createNativeStackNavigator();
 
@@ -204,6 +215,11 @@ function AppNavigator() {
                 name="Settings"
                 component={SettingsScreen}
                 options={{ title: 'Settings' }}
+              />
+              <Stack.Screen
+                name="AdminPanel"
+                component={AdminPanelWrapper}
+                options={{ title: 'Admin Panel' }}
               />
               <Stack.Screen
                 name="Campaigns"

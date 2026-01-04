@@ -7,9 +7,17 @@ import { db } from '../config/firebase';
 import { getCachedDetailedVisitors } from '../services/ga4Service';
 import { useSound } from '../context/SoundContext';
 import { CRMLayout } from '../components/CRMLayout';
+import { useAuth } from '../context/AuthContext';
+import { AccessDenied } from '../components/AccessDenied';
 
 const StatsScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { hasPermission } = useAuth();
+
+    if (!hasPermission('access_analytics')) {
+        return <AccessDenied title="Analytics Restricted" message="You need permission to view analytics." />;
+    }
+
     const { playSound } = useSound();
     const screenWidth = Dimensions.get('window').width;
     const [loading, setLoading] = useState(true);

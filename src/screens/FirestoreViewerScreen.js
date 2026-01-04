@@ -5,8 +5,16 @@ import { collection, getDocsFromServer, deleteDoc, updateDoc, doc, limit, query,
 import { db } from '../config/firebase';
 import DocItem from '../components/DocItem';
 import { CRMLayout } from '../components/CRMLayout';
+import { useAuth } from '../context/AuthContext';
+import { AccessDenied } from '../components/AccessDenied';
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
+    const { hasPermission } = useAuth();
+
+    if (!hasPermission('access_orders')) {
+        return <AccessDenied title="Database Restricted" message="You need permission to access the database." />;
+    }
+
     const [collections, setCollections] = useState(['orders', 'checkouts', 'push_tokens', 'whatsapp_messages', 'wallet_transactions', 'dashboard']);
     const [selectedCollection, setSelectedCollection] = useState(route.params?.collection || 'orders');
     const [documents, setDocuments] = useState([]);

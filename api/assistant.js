@@ -114,14 +114,33 @@ const convertTimestamps = (data) => {
     return converted;
 };
 
+// ---------------------------------------------------------
+// PERMISSION CHECKER
+// ---------------------------------------------------------
+const checkPermission = (collection, userContext) => {
+    const { isAdmin, permissions = [] } = userContext;
+    if (isAdmin) return true;
+
+    if (collection === 'orders' || collection === 'checkouts') {
+        return permissions.includes('access_orders');
+    }
+    if (collection === 'wallet_transactions') {
+        return permissions.includes('access_wallet');
+    }
+    return false;
+};
+
 /**
  * perform server-side aggregation (Count, Sum, Average)
- * This is efficient for large datasets (millions of records)
  */
-const aggregateFirestore = async ({ collection, filters, aggregationType, field }) => {
+const aggregateFirestore = async ({ collection, filters, aggregationType, field }, userContext) => {
     try {
+        if (!checkPermission(collection, userContext)) {
+            return `Error: Access Denied. You do not have permission to view ${collection}.`;
+        }
+
         if (!ALLOWED_COLLECTIONS.includes(collection)) {
-            return `Error: Only 'orders' and 'checkouts' collections are supported.`;
+            return `Error: Only 'orders', 'checkouts', and 'wallet_transactions' collections are supported.`;
         }
 
         let ref = db.collection(collection);
@@ -136,9 +155,6 @@ const aggregateFirestore = async ({ collection, filters, aggregationType, field 
         if (['sum', 'average'].includes(aggregationType)) {
             if (!field) return `Error: 'field' parameter is required for ${aggregationType}.`;
 
-            // Check for known string fields to prevent valid errors
-            // if (collection === 'orders' && field === 'totalPrice') { ... } REMOVED strictly to allow number calculation
-
             const aggField = aggregationType === 'sum'
                 ? admin.firestore.AggregateField.sum(field)
                 : admin.firestore.AggregateField.average(field);
@@ -150,12 +166,9 @@ const aggregateFirestore = async ({ collection, filters, aggregationType, field 
         return "Error: Invalid aggregationType. Use 'count', 'sum', or 'average'.";
 
     } catch (err) {
-        // Handle Firestore index errors
         if (err.code === 9 || err.message.toLowerCase().includes('index')) {
             const indexUrl = err.message.match(/https?:\/\/[^\s]+/)?.[0];
-            if (indexUrl) {
-                return `[INDEX REQUIRED] Create index: ${indexUrl}`;
-            }
+            if (indexUrl) return `[INDEX REQUIRED] Create index: ${indexUrl}`;
         }
         console.error('[Firestore] Aggregation error:', err.message);
         return `Error: ${err.message}`;
@@ -164,14 +177,15 @@ const aggregateFirestore = async ({ collection, filters, aggregationType, field 
 
 /**
  * Query Firestore with validation and error handling
- * @param {Object} params - Query parameters
- * @returns {Promise<Array|string>} Query results or error message
  */
-const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
+const queryFirestore = async ({ collection, filters, limit, orderBy }, userContext) => {
     try {
-        // Validate collection
+        if (!checkPermission(collection, userContext)) {
+            return `Error: Access Denied. You do not have permission to view ${collection}.`;
+        }
+
         if (!ALLOWED_COLLECTIONS.includes(collection)) {
-            return `Error: Only 'orders' and 'checkouts' collections are supported.`;
+            return `Error: Only 'orders', 'checkouts', and 'wallet_transactions' collections are supported.`;
         }
 
         let ref = db.collection(collection);
@@ -202,12 +216,9 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
         }));
 
     } catch (err) {
-        // Handle Firestore index errors
         if (err.code === 9 || err.message.toLowerCase().includes('index')) {
             const indexUrl = err.message.match(/https?:\/\/[^\s]+/)?.[0];
-            if (indexUrl) {
-                return `[INDEX REQUIRED] Create index: ${indexUrl}`;
-            }
+            if (indexUrl) return `[INDEX REQUIRED] Create index: ${indexUrl}`;
         }
         console.error('[Firestore] Query error:', err.message);
         return `Error: ${err.message}`;
@@ -314,6 +325,36 @@ module.exports = async (req, res) => {
     }
 
     try {
+        // ---------------------------------------------------------
+        // SECURE AUTHENTICATION
+        // ---------------------------------------------------------
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Unauthorized: Missing token' });
+        }
+
+        const token = authHeader.split('Bearer ')[1];
+        let userContext = { isAdmin: false, permissions: [] };
+
+        try {
+            const decodedToken = await admin.auth().verifyIdToken(token);
+            const uid = decodedToken.uid;
+
+            // Fetch trusted permissions from Firestore
+            const userDoc = await db.collection('users').doc(uid).get();
+            if (userDoc.exists) {
+                const data = userDoc.data();
+                userContext = {
+                    userId: uid,
+                    isAdmin: data.role === 'admin',
+                    permissions: data.permissions || []
+                };
+            }
+        } catch (error) {
+            console.error('[Auth] Token verification failed:', error.message);
+            return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+        }
+
         const { prompt, history = [] } = req.body;
 
         // Validate input
@@ -449,9 +490,9 @@ Response Style:
 
             let functionResult;
             if (functionCall.name === 'queryFirestore') {
-                functionResult = await queryFirestore(args);
+                functionResult = await queryFirestore(args, userContext);
             } else if (functionCall.name === 'aggregateFirestore') {
-                functionResult = await aggregateFirestore(args);
+                functionResult = await aggregateFirestore(args, userContext);
             }
 
             // Add function call to conversation

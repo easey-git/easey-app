@@ -224,27 +224,25 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                     {item.stage || item.latest_stage || 'ACTIVE'}
                                 </Chip>
                             ) : (
-                                <>
-                                    <Chip
-                                        mode="flat"
-                                        compact
-                                        style={[styles.chip, {
-                                            backgroundColor: isCOD ? theme.colors.errorContainer : theme.colors.primaryContainer,
-                                            justifyContent: 'center',
-                                            alignItems: 'center'
-                                        }]}
-                                        textStyle={{
-                                            fontSize: 10,
-                                            lineHeight: 16,
-                                            marginVertical: 0,
-                                            marginHorizontal: 8,
-                                            color: isCOD ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
-                                            fontWeight: 'bold'
-                                        }}
-                                    >
-                                        {isCOD ? 'COD' : 'PAID'}
-                                    </Chip>
-                                </>
+                                <Chip
+                                    mode="flat"
+                                    compact
+                                    style={[styles.chip, {
+                                        backgroundColor: isCOD ? theme.colors.errorContainer : theme.colors.primaryContainer,
+                                        justifyContent: 'center',
+                                        alignItems: 'center'
+                                    }]}
+                                    textStyle={{
+                                        fontSize: 10,
+                                        lineHeight: 16,
+                                        marginVertical: 0,
+                                        marginHorizontal: 8,
+                                        color: isCOD ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    {isCOD ? 'COD' : 'PAID'}
+                                </Chip>
                             )}
                         </View>
                         <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontFamily: 'monospace', marginBottom: 6 }}>

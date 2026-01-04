@@ -3,18 +3,23 @@ import { View, StyleSheet } from 'react-native';
 import { Surface, Text, TextInput, useTheme, IconButton } from 'react-native-paper';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useAuth } from '../context/AuthContext';
 
 export const NotesCard = () => {
     const theme = useTheme();
+    const { user } = useAuth();
     const [note, setNote] = useState('');
     const [status, setStatus] = useState('Loading...');
     const isFirstLoad = useRef(true);
 
     // Load note on mount
     useEffect(() => {
+        if (!user) return;
+
         const loadNote = async () => {
             try {
-                const docRef = doc(db, 'dashboard', 'notes');
+                // User-specific notes path
+                const docRef = doc(db, 'users', user.uid, 'dashboard', 'notes');
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     setNote(docSnap.data().content || '');
@@ -33,17 +38,18 @@ export const NotesCard = () => {
             }
         };
         loadNote();
-    }, []);
+    }, [user]);
 
     // Auto-save logic
     useEffect(() => {
-        if (isFirstLoad.current) return;
+        if (isFirstLoad.current || !user) return;
 
         setStatus('Typing...');
         const handler = setTimeout(async () => {
             setStatus('Saving...');
             try {
-                await setDoc(doc(db, 'dashboard', 'notes'), {
+                // User-specific notes path
+                await setDoc(doc(db, 'users', user.uid, 'dashboard', 'notes'), {
                     content: note,
                     updatedAt: serverTimestamp()
                 }, { merge: true });

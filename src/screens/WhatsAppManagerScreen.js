@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList } from 'react-native';
-import { Text, Surface, Appbar, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip } from 'react-native-paper';
+import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip } from 'react-native-paper';
 import { BarChart } from 'react-native-gifted-charts';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { CRMLayout } from '../components/CRMLayout';
+import { useAuth } from '../context/AuthContext';
+import { AccessDenied } from '../components/AccessDenied';
 
 const WhatsAppManagerScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { hasPermission } = useAuth();
+
+    if (!hasPermission('access_whatsapp')) {
+        return <AccessDenied title="WhatsApp Restricted" message="You need permission to access WhatsApp tools." />;
+    }
+
     const [tab, setTab] = useState('overview');
     const [codTab, setCodTab] = useState('pending'); // pending | approved
     const screenWidth = Dimensions.get('window').width;
@@ -405,12 +414,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     );
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
-                <Appbar.BackAction onPress={() => navigation.goBack()} />
-                <Appbar.Content title="WhatsApp Manager" titleStyle={{ fontWeight: 'bold' }} />
-            </Appbar.Header>
-
+        <CRMLayout title="WhatsApp Manager" navigation={navigation}>
             <View style={styles.segmentContainer}>
                 <SegmentedButtons
                     value={tab}
@@ -487,7 +491,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
-        </View>
+        </CRMLayout>
     );
 };
 
@@ -579,7 +583,6 @@ const AbandonedCartItem = React.memo(({ item, theme, onOpenChat }) => (
 ));
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
     segmentContainer: { padding: 16 },
     tabContent: { flex: 1, paddingHorizontal: 16 },
     statsGrid: { flexDirection: 'row', gap: 12, marginBottom: 16 },

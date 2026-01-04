@@ -8,7 +8,7 @@ import { CRMLayout } from '../components/CRMLayout';
 
 const SettingsScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { user, logout } = useAuth();
+    const { user, logout, isAdmin } = useAuth();
     const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
 
@@ -90,6 +90,22 @@ const SettingsScreen = ({ navigation }) => {
             </List.Section>
 
             <Divider />
+
+            {/* Admin Section - Only visible to admins */}
+            {isAdmin && (
+                <>
+                    <List.Section title="System Administration">
+                        <List.Item
+                            title="Admin Panel"
+                            description="Manage users and system settings"
+                            left={props => <List.Icon {...props} icon="shield-crown-outline" color={theme.colors.primary} />}
+                            onPress={() => navigation.navigate('AdminPanel')}
+                            style={styles.listItem}
+                        />
+                    </List.Section>
+                    <Divider />
+                </>
+            )}
 
             {/* Logout Button */}
             <View style={{ marginTop: 24, marginBottom: 32 }}>

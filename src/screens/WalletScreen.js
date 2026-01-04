@@ -8,6 +8,8 @@ import { ResponsiveContainer } from '../components/ResponsiveContainer';
 import { PieChart } from 'react-native-chart-kit';
 import * as Haptics from 'expo-haptics';
 import { CRMLayout } from '../components/CRMLayout';
+import { useAuth } from '../context/AuthContext';
+import { AccessDenied } from '../components/AccessDenied';
 
 const EXPENSE_CATEGORIES = ['Business', 'Share', 'Split', 'Misc'];
 const INCOME_CATEGORIES = ['Remittance', 'Fund', 'Share', 'Investment', 'Misc'];
@@ -76,6 +78,11 @@ const StatChart = ({ title, data, theme }) => {
 
 const WalletScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { hasPermission } = useAuth();
+
+    if (!hasPermission('access_wallet')) {
+        return <AccessDenied title="Wallet Restricted" message="You need permission to access financial records." />;
+    }
 
     const [transactions, setTransactions] = useState([]);
     const [visible, setVisible] = useState(false);
@@ -345,6 +352,11 @@ const WalletScreen = ({ navigation }) => {
     }, [type]);
 
     const handleSave = useCallback(async () => {
+        if (!hasPermission('manage_wallet')) {
+            showSnackbar("Permission denied: Cannot manage wallet", true);
+            return;
+        }
+
         if (!amount || !description) {
             showSnackbar("Please enter both amount and description", true);
             return;
@@ -382,9 +394,14 @@ const WalletScreen = ({ navigation }) => {
         } finally {
             setLoading(false);
         }
-    }, [amount, description, category, type, showSnackbar]);
+    }, [amount, description, category, type, showSnackbar, hasPermission]);
 
     const handleDelete = useCallback(async (id) => {
+        if (!hasPermission('manage_wallet')) {
+            showSnackbar("Permission denied: Cannot delete transactions", true);
+            return;
+        }
+
         try {
             const docRef = doc(db, "wallet_transactions", id);
             const docSnap = await getDoc(docRef);
@@ -400,7 +417,7 @@ const WalletScreen = ({ navigation }) => {
             console.error("Error deleting transaction: ", error);
             showSnackbar("Failed to delete transaction", true);
         }
-    }, [showSnackbar]);
+    }, [showSnackbar, hasPermission]);
 
     const confirmDelete = useCallback((id) => {
         if (Platform.OS === 'web') {

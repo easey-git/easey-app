@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Modal, TouchableOpacity } from 'react-native';
 import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Menu, Button, Divider, IconButton, Portal } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
+import { useAuth } from '../context/AuthContext';
+import { AccessDenied } from '../components/AccessDenied';
 
 /**
  * CampaignsScreen - Real-time Today's Campaign Performance
@@ -18,6 +20,12 @@ const API_URL = 'https://easey-app.vercel.app/api/campaigns';
 
 const CampaignsScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { hasPermission } = useAuth();
+
+    if (!hasPermission('access_campaigns')) {
+        return <AccessDenied title="Campaigns Restricted" message="You need permission to view campaigns." />;
+    }
+
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
     const [campaigns, setCampaigns] = useState([]);

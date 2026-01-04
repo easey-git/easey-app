@@ -6,12 +6,14 @@ import { db } from '../config/firebase';
 import { NotesCard } from '../components/NotesCard';
 import { useSound } from '../context/SoundContext';
 import { CRMLayout } from '../components/CRMLayout';
+import { useAuth } from '../context/AuthContext';
 
 const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
     const { width } = useWindowDimensions();
     const isDesktop = width >= 1024;
     const { playSound } = useSound();
+    const { hasPermission } = useAuth(); // Auth Hook
     const prevOrdersRef = React.useRef(0);
     const [timeRange, setTimeRange] = useState('today');
     const [stats, setStats] = useState({
@@ -31,6 +33,7 @@ const HomeScreen = ({ navigation }) => {
 
     const menuCardWidth = isDesktop ? '23%' : '48%';
 
+    // ... (Keep existing Listeners: useEffects for workQuery, checkWebhookHealth, fetchStats) ...
     // Listener for Action Items (Pending/Confirmed Orders)
     useEffect(() => {
         const workQuery = query(
@@ -189,15 +192,17 @@ const HomeScreen = ({ navigation }) => {
     }, [fetchStats]);
 
     const menuItems = [
-        { id: 1, title: 'Orders', subtitle: 'Manage Orders', icon: 'package-variant', screen: 'DatabaseManager' },
-        { id: 2, title: 'Analytics', subtitle: 'Sales Trends', icon: 'chart-bar', screen: 'Stats' },
-        { id: 3, title: 'Settings', subtitle: 'App Configuration', icon: 'cog', screen: 'Settings' },
-        { id: 8, title: 'Wallet', subtitle: 'Expenses & Income', icon: 'wallet-outline', screen: 'Wallet' },
-        { id: 4, title: 'Firebase', subtitle: 'Raw Data', icon: 'database', screen: 'DatabaseManager' },
-        { id: 5, title: 'WhatsApp', subtitle: 'Automations', icon: 'whatsapp', screen: 'WhatsAppManager' },
-        { id: 6, title: 'Campaigns', subtitle: 'Ad Manager', icon: 'bullhorn', screen: 'Campaigns' },
-        { id: 7, title: 'Notes', subtitle: 'Write Stuff', icon: 'notebook', screen: 'Notes' },
+        { id: 1, title: 'Orders', subtitle: 'Manage Orders', icon: 'package-variant', screen: 'DatabaseManager', permission: 'access_orders' },
+        { id: 2, title: 'Analytics', subtitle: 'Sales Trends', icon: 'chart-bar', screen: 'Stats', permission: 'access_analytics' },
+        { id: 3, title: 'Settings', subtitle: 'App Configuration', icon: 'cog', screen: 'Settings' }, // Everyone access
+        { id: 8, title: 'Wallet', subtitle: 'Expenses & Income', icon: 'wallet-outline', screen: 'Wallet', permission: 'access_wallet' },
+        { id: 4, title: 'Firebase', subtitle: 'Raw Data', icon: 'database', screen: 'DatabaseManager', permission: 'access_orders' },
+        { id: 5, title: 'WhatsApp', subtitle: 'Automations', icon: 'whatsapp', screen: 'WhatsAppManager', permission: 'access_whatsapp' },
+        { id: 6, title: 'Campaigns', subtitle: 'Ad Manager', icon: 'bullhorn', screen: 'Campaigns', permission: 'access_campaigns' },
+        { id: 7, title: 'Notes', subtitle: 'Write Stuff', icon: 'notebook', screen: 'Notes' }, // Everyone access
     ];
+
+    const visibleMenuItems = menuItems.filter(item => !item.permission || hasPermission(item.permission));
 
     return (
         <CRMLayout title="Overview" navigation={navigation} scrollable={true}>
@@ -217,55 +222,63 @@ const HomeScreen = ({ navigation }) => {
 
             {/* Stats Grid */}
             <View style={[styles.statsGrid, { gap: isDesktop ? 20 : 12 }]}>
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Total Sales</Text>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
-                        ₹{stats.sales.toLocaleString('en-IN')}
-                    </Text>
-                </Surface>
+                {hasPermission('view_financial_stats') && (
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Total Sales</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                            ₹{stats.sales.toLocaleString('en-IN')}
+                        </Text>
+                    </Surface>
+                )}
 
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Orders</Text>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
-                        {stats.orders}
-                    </Text>
-                </Surface>
+                {hasPermission('view_order_stats') && (
+                    <>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Orders</Text>
+                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                                {stats.orders}
+                            </Text>
+                        </Surface>
 
-                {/* Work Queue: Pending */}
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.errorContainer, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onErrorContainer }}>Pending</Text>
-                        <Icon source="clock-alert-outline" size={16} color={theme.colors.onErrorContainer} />
-                    </View>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
-                        {workQueue.pending}
-                    </Text>
-                </Surface>
+                        {/* Work Queue: Pending */}
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.errorContainer, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text variant="labelMedium" style={{ color: theme.colors.onErrorContainer }}>Pending</Text>
+                                <Icon source="clock-alert-outline" size={16} color={theme.colors.onErrorContainer} />
+                            </View>
+                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                                {workQueue.pending}
+                            </Text>
+                        </Surface>
 
-                {/* Work Queue: Confirmed */}
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.secondaryContainer, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSecondaryContainer }}>Confirmed</Text>
-                        <Icon source="check-circle-outline" size={16} color={theme.colors.onSecondaryContainer} />
-                    </View>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
-                        {workQueue.confirmed}
-                    </Text>
-                </Surface>
+                        {/* Work Queue: Confirmed */}
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.secondaryContainer, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text variant="labelMedium" style={{ color: theme.colors.onSecondaryContainer }}>Confirmed</Text>
+                                <Icon source="check-circle-outline" size={16} color={theme.colors.onSecondaryContainer} />
+                            </View>
+                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                                {workQueue.confirmed}
+                            </Text>
+                        </Surface>
 
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Active Carts</Text>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
-                        {stats.activeCarts}
-                    </Text>
-                </Surface>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Active Carts</Text>
+                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                                {stats.activeCarts}
+                            </Text>
+                        </Surface>
+                    </>
+                )}
 
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>AOV</Text>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
-                        ₹{Math.round(stats.aov).toLocaleString('en-IN')}
-                    </Text>
-                </Surface>
+                {hasPermission('view_financial_stats') && (
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>AOV</Text>
+                        <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                            ₹{Math.round(stats.aov).toLocaleString('en-IN')}
+                        </Text>
+                    </Surface>
+                )}
             </View>
 
             {/* Split Content for Desktop */}
@@ -281,77 +294,83 @@ const HomeScreen = ({ navigation }) => {
                     {isDesktop ? (
                         <View style={{ gap: 24 }}>
                             {/* System Status Widget */}
-                            <Surface style={{ padding: 24, borderRadius: 16, backgroundColor: theme.colors.surfaceVariant }} elevation={0}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>System Status</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.outline, marginRight: 8 }}>
-                                            {refreshing ? 'Checking...' : 'Live'}
-                                        </Text>
-                                        <IconButton icon="refresh" size={18} onPress={onRefresh} style={{ margin: 0 }} />
-                                    </View>
-                                </View>
-                                <Divider style={{ marginBottom: 16 }} />
-                                <View style={{ gap: 20 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            {hasPermission('access_analytics') && (
+                                <Surface style={{ padding: 24, borderRadius: 16, backgroundColor: theme.colors.surfaceVariant }} elevation={0}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>System Status</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Icon source={connectionStatus.firestore ? "database-check" : "database-off"} size={22} color={connectionStatus.firestore ? "#4ade80" : theme.colors.error} />
-                                            <View style={{ marginLeft: 12 }}>
-                                                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Database</Text>
-                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Firestore Cloud</Text>
-                                            </View>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.outline, marginRight: 8 }}>
+                                                {refreshing ? 'Checking...' : 'Live'}
+                                            </Text>
+                                            <IconButton icon="refresh" size={18} onPress={onRefresh} style={{ margin: 0 }} />
                                         </View>
-                                        <Text variant="labelSmall" style={{ color: connectionStatus.firestore ? "#4ade80" : theme.colors.error, fontWeight: 'bold' }}>
-                                            {connectionStatus.firestore ? "Active" : "Down"}
-                                        </Text>
                                     </View>
+                                    <Divider style={{ marginBottom: 16 }} />
+                                    <View style={{ gap: 20 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Icon source={connectionStatus.firestore ? "database-check" : "database-off"} size={22} color={connectionStatus.firestore ? "#4ade80" : theme.colors.error} />
+                                                <View style={{ marginLeft: 12 }}>
+                                                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Database</Text>
+                                                    <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Firestore Cloud</Text>
+                                                </View>
+                                            </View>
+                                            <Text variant="labelSmall" style={{ color: connectionStatus.firestore ? "#4ade80" : theme.colors.error, fontWeight: 'bold' }}>
+                                                {connectionStatus.firestore ? "Active" : "Down"}
+                                            </Text>
+                                        </View>
 
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Icon source="truck-delivery" size={22} color={connectionStatus.shiprocket ? "#4ade80" : "#fbbf24"} />
-                                            <View style={{ marginLeft: 12 }}>
-                                                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Logistics</Text>
-                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shiprocket API</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Icon source="truck-delivery" size={22} color={connectionStatus.shiprocket ? "#4ade80" : "#fbbf24"} />
+                                                <View style={{ marginLeft: 12 }}>
+                                                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Logistics</Text>
+                                                    <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shiprocket API</Text>
+                                                </View>
                                             </View>
+                                            <Text variant="labelSmall" style={{ color: connectionStatus.shiprocket ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
+                                                {connectionStatus.shiprocket ? "Connected" : "Pending"}
+                                            </Text>
                                         </View>
-                                        <Text variant="labelSmall" style={{ color: connectionStatus.shiprocket ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
-                                            {connectionStatus.shiprocket ? "Connected" : "Pending"}
-                                        </Text>
-                                    </View>
 
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Icon source="store" size={22} color={connectionStatus.shopify ? "#4ade80" : "#fbbf24"} />
-                                            <View style={{ marginLeft: 12 }}>
-                                                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Storefront</Text>
-                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shopify Webhooks</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Icon source="store" size={22} color={connectionStatus.shopify ? "#4ade80" : "#fbbf24"} />
+                                                <View style={{ marginLeft: 12 }}>
+                                                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Storefront</Text>
+                                                    <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shopify Webhooks</Text>
+                                                </View>
                                             </View>
+                                            <Text variant="labelSmall" style={{ color: connectionStatus.shopify ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
+                                                {connectionStatus.shopify ? "Synced" : "Waiting"}
+                                            </Text>
                                         </View>
-                                        <Text variant="labelSmall" style={{ color: connectionStatus.shopify ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
-                                            {connectionStatus.shopify ? "Synced" : "Waiting"}
-                                        </Text>
                                     </View>
-                                </View>
-                            </Surface>
+                                </Surface>
+                            )}
 
                             {/* Pending Actions Widget (New) */}
                             <Surface style={{ padding: 24, borderRadius: 16, backgroundColor: theme.colors.surface }} elevation={1}>
                                 <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16 }}>Quick Actions</Text>
                                 <View style={{ gap: 12 }}>
-                                    <TouchableOpacity onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders' })}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: theme.colors.secondaryContainer, borderRadius: 12 }}>
-                                            <Icon source="package-variant-closed" size={20} color={theme.colors.onSecondaryContainer} />
-                                            <Text variant="bodyMedium" style={{ marginLeft: 12, flex: 1, color: theme.colors.onSecondaryContainer, fontWeight: '600' }}>Review Orders</Text>
-                                            <Icon source="chevron-right" size={20} color={theme.colors.onSecondaryContainer} />
-                                        </View>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => navigation.navigate('Wallet')}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: theme.colors.errorContainer, borderRadius: 12 }}>
-                                            <Icon source="wallet-outline" size={20} color={theme.colors.onErrorContainer} />
-                                            <Text variant="bodyMedium" style={{ marginLeft: 12, flex: 1, color: theme.colors.onErrorContainer, fontWeight: '600' }}>Approve Expenses</Text>
-                                            <Icon source="chevron-right" size={20} color={theme.colors.onErrorContainer} />
-                                        </View>
-                                    </TouchableOpacity>
+                                    {hasPermission('access_orders') && (
+                                        <TouchableOpacity onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders' })}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: theme.colors.secondaryContainer, borderRadius: 12 }}>
+                                                <Icon source="package-variant-closed" size={20} color={theme.colors.onSecondaryContainer} />
+                                                <Text variant="bodyMedium" style={{ marginLeft: 12, flex: 1, color: theme.colors.onSecondaryContainer, fontWeight: '600' }}>Review Orders</Text>
+                                                <Icon source="chevron-right" size={20} color={theme.colors.onSecondaryContainer} />
+                                            </View>
+                                        </TouchableOpacity>
+                                    )}
+                                    {hasPermission('manage_wallet') && (
+                                        <TouchableOpacity onPress={() => navigation.navigate('Wallet')}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: theme.colors.errorContainer, borderRadius: 12 }}>
+                                                <Icon source="wallet-outline" size={20} color={theme.colors.onErrorContainer} />
+                                                <Text variant="bodyMedium" style={{ marginLeft: 12, flex: 1, color: theme.colors.onErrorContainer, fontWeight: '600' }}>Approve Expenses</Text>
+                                                <Icon source="chevron-right" size={20} color={theme.colors.onErrorContainer} />
+                                            </View>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             </Surface>
                         </View>
@@ -359,7 +378,7 @@ const HomeScreen = ({ navigation }) => {
                         <>
                             <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8 }}>Apps</Text>
                             <View style={styles.menuGrid}>
-                                {menuItems.map((item) => (
+                                {visibleMenuItems.map((item) => (
                                     <TouchableOpacity
                                         key={item.id}
                                         onPress={() => navigation.navigate(item.screen)}

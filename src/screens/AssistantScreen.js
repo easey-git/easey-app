@@ -4,12 +4,15 @@ import { Text, IconButton, useTheme, ActivityIndicator, Avatar, Appbar } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useHeaderHeight } from '@react-navigation/elements';
+import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://easey-app.vercel.app/api/assistant';
 const STORAGE_KEY = 'easey_chat_history_v1';
 
 export default function AssistantScreen({ navigation }) {
     const theme = useTheme();
+    const { permissions, role, user } = useAuth();
+    const isAdmin = role === 'admin';
     const headerHeight = useHeaderHeight();
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
@@ -85,9 +88,15 @@ export default function AssistantScreen({ navigation }) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+            // Get Secure ID Token
+            const token = await user.getIdToken();
+
             const response = await fetch(API_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     prompt: userText,
                     history: historyPayload

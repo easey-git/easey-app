@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
-import { Text, useTheme, Appbar, FAB, Surface, Dialog, Portal, TextInput, IconButton, Snackbar, Button } from 'react-native-paper';
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Text, useTheme, FAB, Surface, Dialog, Portal, TextInput, IconButton, Snackbar, Button } from 'react-native-paper';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useAuth } from '../context/AuthContext';
 import * as Clipboard from 'expo-clipboard';
+import { CRMLayout } from '../components/CRMLayout';
 
 const NotesScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { user } = useAuth();
     const [notes, setNotes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -23,7 +26,14 @@ const NotesScreen = ({ navigation }) => {
 
     // Fetch Notes
     useEffect(() => {
-        const q = query(collection(db, 'notes'));
+        if (!user) return;
+
+        // Filter notes by current user's ID
+        const q = query(
+            collection(db, 'notes'),
+            where('userId', '==', user.uid)
+        );
+
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const notesList = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -41,7 +51,7 @@ const NotesScreen = ({ navigation }) => {
             setLoading(false);
         });
         return () => unsubscribe();
-    }, []);
+    }, [user]);
 
     const handleSave = async () => {
         if (!currentNote.title.trim() && !currentNote.body.trim()) {
@@ -58,6 +68,7 @@ const NotesScreen = ({ navigation }) => {
                 showSnackbar('Note updated');
             } else {
                 await addDoc(collection(db, 'notes'), {
+                    userId: user.uid, // Determine ownership
                     title: currentNote.title,
                     body: currentNote.body,
                     createdAt: serverTimestamp(),
@@ -151,20 +162,15 @@ const NotesScreen = ({ navigation }) => {
 
     if (loading) {
         return (
-            <View style={[styles.container, { backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
         );
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0 }}>
-                <Appbar.BackAction onPress={() => navigation.goBack()} />
-                <Appbar.Content title="Notes" titleStyle={{ fontWeight: 'bold' }} />
-            </Appbar.Header>
-
-            <View style={{ padding: 16 }}>
+        <CRMLayout title="Notes" navigation={navigation}>
+            <View style={{ marginBottom: 16 }}>
                 <TextInput
                     mode="outlined"
                     placeholder="Search notes..."
@@ -177,19 +183,18 @@ const NotesScreen = ({ navigation }) => {
             </View>
 
             {filteredNotes.length === 0 ? (
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', opacity: 0.5 }}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', opacity: 0.5, minHeight: 300 }}>
                     <IconButton icon="book-off-outline" size={64} iconColor={theme.colors.onSurfaceVariant} />
                     <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>No notes found</Text>
                 </View>
             ) : (
-                <FlatList
-                    data={filteredNotes}
-                    renderItem={renderItem}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={{ padding: 16, paddingTop: 0 }}
-                    numColumns={1}
-                    ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-                />
+                <View>
+                    {filteredNotes.map((item) => (
+                        <View key={item.id} style={{ marginBottom: 12 }}>
+                            {renderItem({ item })}
+                        </View>
+                    ))}
+                </View>
             )}
 
             <FAB
@@ -246,14 +251,11 @@ const NotesScreen = ({ navigation }) => {
             >
                 {snackbarMessage}
             </Snackbar>
-        </View>
+        </CRMLayout>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
     card: {
         borderRadius: 12,
         padding: 16,
@@ -271,7 +273,7 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        margin: 16,
+        margin: 24, // Matches HomeScreen FAB position
         right: 0,
         bottom: 0,
         borderRadius: 16,

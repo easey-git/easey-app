@@ -1,8 +1,92 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // --- HELPER FUNCTIONS ---
+    
+    // Check if user is an Admin
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Check if user has a specific permission
+    // Grants access if user is Admin OR has the permission string in their 'permissions' array
+    function hasPermission(permission) {
+      return isAdmin() || (
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        permission in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions
+      );
+    }
+    
+    // --- COLLECTION RULES ---
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // Allow update if Admin OR (Self AND not changing role/permissions)
+      allow update: if request.auth != null && (
+        isAdmin() || 
+        (request.auth.uid == userId && 
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions']))
+      );
+      allow delete: if isAdmin(); 
+
+      match /{document=**} {
+        allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      }
+    }
+
+    // 2. Wallet & Finance
+    match /wallet_transactions/{document=**} {
+      allow read: if hasPermission('access_wallet');
+      allow write: if hasPermission('manage_wallet');
+    }
+    
+    match /wallet_stats/{document=**} {
+      allow read: if hasPermission('access_wallet');
+      allow write: if false; // Only updated by server-side functions
+    }
+
+    // 3. Orders & Checkouts (Database)
+    match /orders/{document=**} {
+      allow read: if hasPermission('access_orders');
+      allow write: if hasPermission('manage_users'); // Verifying orders, etc.
+    }
+    
+    match /checkouts/{document=**} {
+      allow read: if hasPermission('access_orders');
+      allow write: if false; // Generally updated by webhook/server
+    }
+
+    // 4. WhatsApp
+    match /whatsapp_messages/{document=**} {
+      allow read: if hasPermission('access_whatsapp');
+      allow create: if hasPermission('access_whatsapp'); // Sending messages
+      allow update, delete: if isAdmin();
+    }
+
+    // 5. Campaigns
+    match /campaigns/{document=**} {
+      allow read: if hasPermission('access_campaigns');
+      allow write: if hasPermission('manage_campaigns');
+    }
+    
+    // 6. Notes (Personal + Shared if implemented)
+    match /notes/{noteId} {
+      allow read: if request.auth != null && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+    
+    // 7. Push Tokens (System)
+    match /push_tokens/{document=**} {
+      allow read, write: if request.auth != null; // Needed for notifications to work for logged in users
+    }
+
+    // Fallback: Default Deny for everything else
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false; 
     }
   }
 }

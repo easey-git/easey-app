@@ -8,18 +8,30 @@ export const Sidebar = ({ onClose }) => {
     const theme = useTheme();
     const route = useRoute();
     const navigation = useNavigation();
-    const { logout, user } = useAuth();
+    const { logout, user, role, hasPermission } = useAuth();
+
+    // Helper to get display name
+    const getDisplayName = () => {
+        if (user?.displayName) return user.displayName;
+        if (user?.email) return user.email.split('@')[0];
+        return 'User';
+    };
+
+    const displayName = getDisplayName();
+    const displayRole = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
 
     const menuItems = [
-        { label: 'Dashboard', icon: 'view-dashboard', route: 'Home' },
-        { label: 'Orders', icon: 'package-variant', route: 'DatabaseManager' },
-        { label: 'Analytics', icon: 'chart-bar', route: 'Stats' },
-        { label: 'Wallet', icon: 'wallet-outline', route: 'Wallet' },
-        { label: 'WhatsApp', icon: 'whatsapp', route: 'WhatsAppManager' },
-        { label: 'Campaigns', icon: 'bullhorn', route: 'Campaigns' },
-        { label: 'Notes', icon: 'notebook', route: 'Notes' },
-        { label: 'Settings', icon: 'cog', route: 'Settings' },
+        { label: 'Dashboard', icon: 'view-dashboard', route: 'Home' }, // Always visible
+        { label: 'Orders', icon: 'package-variant', route: 'DatabaseManager', permission: 'access_orders' },
+        { label: 'Analytics', icon: 'chart-bar', route: 'Stats', permission: 'access_analytics' },
+        { label: 'Wallet', icon: 'wallet-outline', route: 'Wallet', permission: 'access_wallet' },
+        { label: 'WhatsApp', icon: 'whatsapp', route: 'WhatsAppManager', permission: 'access_whatsapp' },
+        { label: 'Campaigns', icon: 'bullhorn', route: 'Campaigns', permission: 'access_campaigns' },
+        { label: 'Notes', icon: 'notebook', route: 'Notes' }, // Always visible
+        { label: 'Settings', icon: 'cog', route: 'Settings' }, // Always visible
     ];
+
+    const visibleMenuItems = menuItems.filter(item => !item.permission || hasPermission(item.permission));
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.surface, borderRightColor: theme.colors.outlineVariant }]}>
@@ -35,7 +47,7 @@ export const Sidebar = ({ onClose }) => {
             {/* Navigation Items */}
             <ScrollView style={styles.content}>
                 <Drawer.Section showDivider={false}>
-                    {menuItems.map((item, index) => {
+                    {visibleMenuItems.map((item, index) => {
                         const isActive = route.name === item.route;
                         return (
                             <Drawer.Item
@@ -61,12 +73,12 @@ export const Sidebar = ({ onClose }) => {
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Avatar.Text
                             size={32}
-                            label={user?.email?.substring(0, 2).toUpperCase() || 'AD'}
+                            label={displayName.substring(0, 2).toUpperCase()}
                             style={{ backgroundColor: theme.colors.primaryContainer }}
                             color={theme.colors.onPrimaryContainer}
                         />
                         <View style={{ marginLeft: 12 }}>
-                            <Text variant="labelLarge" style={{ color: theme.colors.onSurface }}>Admin</Text>
+                            <Text variant="labelLarge" style={{ color: theme.colors.onSurface }}>{displayRole}</Text>
                             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Logout</Text>
                         </View>
                     </View>
