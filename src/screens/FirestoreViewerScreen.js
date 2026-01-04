@@ -223,6 +223,36 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         try {
             // Remove ID from data to avoid overwriting it
             const { id, ...dataToUpdate } = editedDoc;
+
+            // Calculate changed fields
+            const changedFields = [];
+            Object.keys(dataToUpdate).forEach(key => {
+                // Ignore metadata
+                if (key === 'updatedAt' || key === 'adminEdited' || key === 'adminModifiedFields') return;
+
+                const originalValue = selectedDoc[key];
+                const newValue = dataToUpdate[key];
+
+                // Simple equality check
+                if (originalValue != newValue) { // Loose equality to handle number/string diffs if input type changed
+                    changedFields.push(key);
+                }
+            });
+
+            // Mark as edited by admin
+            dataToUpdate.adminEdited = true;
+            dataToUpdate.updatedAt = new Date();
+
+            if (changedFields.length > 0) {
+                dataToUpdate.adminModifiedFields = changedFields;
+            } else if (selectedDoc.adminModifiedFields) {
+                // Keep existing modification log if nothing new changed (or clear it? usually we want to persist "this was modified")
+                // Let's keep it in dataToUpdate implicitly if we didn't remove it, but specific logic:
+                // If we edited but detected no real changes, maybe we shouldn't update timestamp? 
+                // But let's stick to user request: track changes.
+                // If strictly no changes, changedFields is empty.
+            }
+
             await updateDoc(doc(db, selectedCollection, id), dataToUpdate);
             setIsEditing(false);
             fetchDocuments();

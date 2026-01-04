@@ -272,6 +272,19 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 numberOfLines={2}
                             />
                         </View>
+                        {/* Edit/Change Indicator */}
+                        {(item.adminEdited || item.verificationStatus === 'address_change_requested') && (
+                            <View style={{ marginTop: 4 }}>
+                                <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold' }}>
+                                    {item.verificationStatus === 'address_change_requested'
+                                        ? '⚠️ ADDRESS CHANGE REQUESTED'
+                                        : item.adminModifiedFields && item.adminModifiedFields.length > 0
+                                            ? `⚠️ MODIFIED: ${item.adminModifiedFields.join(', ').toUpperCase()}`
+                                            : '⚠️ MODIFIED BY ADMIN'
+                                    }
+                                </Text>
+                            </View>
+                        )}
                         {item.totalPrice && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                                 <Icon source="cash" size={14} color={theme.colors.primary} />
