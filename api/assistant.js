@@ -7,7 +7,7 @@ const cors = require('cors')({ origin: true });
 // ---------------------------------------------------------
 const ALLOWED_COLLECTIONS = ['orders', 'checkouts'];
 const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 100; // Prevent excessive queries
+const MAX_LIMIT = 500; // Increased to 500 for better monthly stats
 
 // ---------------------------------------------------------
 // INITIALIZATION
@@ -82,7 +82,20 @@ const queryFirestore = async ({ collection, filters, limit, orderBy }) => {
         // Apply filters
         if (filters && Array.isArray(filters)) {
             filters.forEach(([field, op, val]) => {
-                ref = ref.where(field, op, val);
+                let queryVal = val;
+
+                // Auto-convert ISO date strings to Date objects for timestamp fields
+                if (['createdAt', 'updatedAt'].includes(field) && typeof val === 'string') {
+                    // Check if it looks like a date (starts with YYYY-MM-DD)
+                    if (/^\d{4}-\d{2}-\d{2}/.test(val)) {
+                        const date = new Date(val);
+                        if (!isNaN(date.getTime())) {
+                            queryVal = date;
+                        }
+                    }
+                }
+
+                ref = ref.where(field, op, queryVal);
             });
         }
 
