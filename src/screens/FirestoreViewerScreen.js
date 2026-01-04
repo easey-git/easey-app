@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
-import { collection, getDocsFromServer, deleteDoc, updateDoc, doc, limit, query, writeBatch } from 'firebase/firestore';
+import { collection, getDocsFromServer, deleteDoc, updateDoc, doc, limit, query, writeBatch, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import DocItem from '../components/DocItem';
 import { CRMLayout } from '../components/CRMLayout';
@@ -15,8 +15,46 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         return <AccessDenied title="Database Restricted" message="You need permission to access the database." />;
     }
 
-    const [collections, setCollections] = useState(['orders', 'checkouts', 'push_tokens', 'whatsapp_messages', 'wallet_transactions', 'dashboard']);
-    const [selectedCollection, setSelectedCollection] = useState(route.params?.collection || 'orders');
+    const getAllowedCollections = useCallback(() => {
+        const allowed = [];
+        if (hasPermission('access_orders')) {
+            allowed.push('orders', 'checkouts');
+        }
+        if (hasPermission('access_whatsapp')) {
+            allowed.push('whatsapp_messages');
+        }
+        if (hasPermission('access_wallet')) {
+            allowed.push('wallet_transactions');
+        }
+        // Restrict push_tokens
+        if (hasPermission('manage_users')) {
+            allowed.push('push_tokens');
+        }
+        return allowed;
+    }, [hasPermission]);
+
+    const [collections, setCollections] = useState(getAllowedCollections());
+    const [selectedCollection, setSelectedCollection] = useState(() => {
+        const allowed = getAllowedCollections();
+        const paramCollection = route.params?.collection;
+        return allowed.includes(paramCollection) ? paramCollection : allowed[0];
+    });
+
+    // Add Filter State
+    const [filter, setFilter] = useState(route.params?.filter || null);
+
+    useEffect(() => {
+        const allowed = getAllowedCollections();
+        setCollections(allowed);
+        if (!allowed.includes(selectedCollection)) {
+            setSelectedCollection(allowed[0]);
+        }
+        // Clear filter if switching collections, unless it's the initial mount
+        if (selectedCollection !== route.params?.collection) {
+            setFilter(null);
+        }
+    }, [getAllowedCollections, selectedCollection]); // Added selectedCollection dependency
+
     const [documents, setDocuments] = useState([]);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [editedDoc, setEditedDoc] = useState(null);
@@ -26,6 +64,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [searchQuery, setSearchQuery] = useState('');
     const [searchVisible, setSearchVisible] = useState(false);
+
+    // ... (filteredDocuments memo remains same)
 
     const filteredDocuments = React.useMemo(() => {
         if (!searchQuery) return documents;
@@ -39,13 +79,13 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         );
     }, [documents, searchQuery]);
 
-    // Confirmation Dialog State
+    // ... (Dialog States remain same)
     const [confirmVisible, setConfirmVisible] = useState(false);
     const [confirmTitle, setConfirmTitle] = useState('');
     const [confirmMessage, setConfirmMessage] = useState('');
-    const [pendingAction, setPendingAction] = useState(null); // { type: 'bulk' | 'single', id?: string }
+    const [pendingAction, setPendingAction] = useState(null);
 
-    // Snackbar State
+    // ... (Snackbar State remains same)
     const [snackbarVisible, setSnackbarVisible] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarColor, setSnackbarColor] = useState('#333');
@@ -60,18 +100,23 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
     useEffect(() => {
         fetchDocuments();
-        setSelectedItems(new Set()); // Clear selection on collection change
-    }, [selectedCollection]);
+        setSelectedItems(new Set());
+    }, [selectedCollection, filter]); // Re-fetch when filter changes
 
     const fetchDocuments = async () => {
         setLoading(true);
         try {
-            const q = query(collection(db, selectedCollection), limit(100));
+            let constraints = [limit(100)];
+            if (filter) {
+                constraints.unshift(where(filter.field, "==", filter.value));
+            }
+            const q = query(collection(db, selectedCollection), ...constraints);
+
             // Force fetch from server to avoid stale cache issues
             const snapshot = await getDocsFromServer(q);
             const docs = snapshot.docs.map(doc => ({
                 id: doc.id,
-                ref: doc.ref, // Store the reference directly
+                ref: doc.ref,
                 ...doc.data()
             }));
             setDocuments(docs);
@@ -360,6 +405,19 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                         right={<TextInput.Icon icon="close" onPress={() => { setSearchQuery(''); setSearchVisible(false); }} />}
                         style={{ backgroundColor: theme.colors.surface }}
                     />
+                </View>
+            )}
+
+            {filter && (
+                <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+                    <Chip
+                        icon="filter-remove"
+                        onClose={() => setFilter(null)}
+                        mode="outlined"
+                        style={{ alignSelf: 'flex-start' }}
+                    >
+                        Filtering by {filter.value.toUpperCase()}
+                    </Chip>
                 </View>
             )}
 

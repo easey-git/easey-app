@@ -5,66 +5,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
-export const NotesCard = () => {
+export const NotesCard = ({ style }) => {
     const theme = useTheme();
     const { user } = useAuth();
     const [note, setNote] = useState('');
     const [status, setStatus] = useState('Loading...');
     const isFirstLoad = useRef(true);
 
-    // Load note on mount
-    useEffect(() => {
-        if (!user) return;
-
-        const loadNote = async () => {
-            try {
-                // User-specific notes path
-                const docRef = doc(db, 'users', user.uid, 'dashboard', 'notes');
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    setNote(docSnap.data().content || '');
-                } else {
-                    setNote('');
-                }
-                setStatus('Ready');
-            } catch (e) {
-                console.error("Failed to load notes", e);
-                setStatus('Error loading');
-            } finally {
-                // Small delay to prevent auto-save from triggering immediately after load
-                setTimeout(() => {
-                    isFirstLoad.current = false;
-                }, 500);
-            }
-        };
-        loadNote();
-    }, [user]);
-
-    // Auto-save logic
-    useEffect(() => {
-        if (isFirstLoad.current || !user) return;
-
-        setStatus('Typing...');
-        const handler = setTimeout(async () => {
-            setStatus('Saving...');
-            try {
-                // User-specific notes path
-                await setDoc(doc(db, 'users', user.uid, 'dashboard', 'notes'), {
-                    content: note,
-                    updatedAt: serverTimestamp()
-                }, { merge: true });
-                setStatus('Saved');
-            } catch (e) {
-                console.error("Failed to save note", e);
-                setStatus('Error saving');
-            }
-        }, 1500); // Save after 1.5s of inactivity
-
-        return () => clearTimeout(handler);
-    }, [note]);
+    // ... (rest of useEffects)
 
     return (
-        <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+        <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }, style]} elevation={0}>
             <View style={styles.header}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <IconButton icon="notebook" size={20} style={{ margin: 0, marginRight: 8 }} />
@@ -85,7 +36,7 @@ export const NotesCard = () => {
                 placeholderTextColor={theme.colors.outline}
                 style={{
                     backgroundColor: 'transparent',
-                    minHeight: 120,
+                    flex: 1, // Allow input to grow
                     fontSize: 14,
                     paddingHorizontal: 0
                 }}

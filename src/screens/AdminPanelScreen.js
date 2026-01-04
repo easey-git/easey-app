@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Text, useTheme, Avatar, Surface, IconButton, ActivityIndicator, Chip, Divider, Button, Portal, Dialog, Switch } from 'react-native-paper';
-import { collection, getDocs, query, orderBy, doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CRMLayout } from '../components/CRMLayout';
 
@@ -15,10 +15,12 @@ const AdminPanelScreen = ({ navigation }) => {
         const q = query(collection(db, 'users'));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const userList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const userList = snapshot.docs
+                .map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }))
+                .filter(user => user.email); // Only show users with an email
             setUsers(userList);
             setLoading(false);
         }, (error) => {
@@ -80,6 +82,28 @@ const AdminPanelScreen = ({ navigation }) => {
         }
     };
 
+    const cleanupInvalidUsers = async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, "users"));
+            const deletePromises = [];
+            querySnapshot.forEach((docSnapshot) => {
+                const data = docSnapshot.data();
+                if (!data.email) {
+                    deletePromises.push(deleteDoc(docSnapshot.ref));
+                }
+            });
+            await Promise.all(deletePromises);
+            if (deletePromises.length > 0) {
+                alert(`Cleaned up ${deletePromises.length} invalid users.`);
+            } else {
+                alert("No invalid users found.");
+            }
+        } catch (error) {
+            console.error("Error cleaning users:", error);
+            alert("Failed to cleanup users.");
+        }
+    };
+
     const renderItem = ({ item }) => (
         <Surface style={[styles.userCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={0}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -91,11 +115,13 @@ const AdminPanelScreen = ({ navigation }) => {
                 />
                 <View style={{ marginLeft: 16, flex: 1 }}>
                     <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                        {item.displayName || "Unknown User"}
-                    </Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                         {item.email}
                     </Text>
+                    {item.displayName && item.displayName !== item.email && item.displayName !== 'User' && (
+                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                            {item.displayName}
+                        </Text>
+                    )}
                     <View style={{ flexDirection: 'row', marginTop: 12, alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                         <View style={{
                             borderRadius: 8,
@@ -129,7 +155,7 @@ const AdminPanelScreen = ({ navigation }) => {
     );
 
     return (
-        <CRMLayout title="Admin Panel" navigation={navigation}>
+        <CRMLayout title="Admin Panel" navigation={navigation} actions={<IconButton icon="broom" onPress={cleanupInvalidUsers} />}>
             <View style={{ flex: 1 }}>
                 <View style={{ paddingVertical: 16 }}>
                     <Text variant="headlineSmall" style={{ fontWeight: 'bold', paddingHorizontal: 16 }}>User Management</Text>

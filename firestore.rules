@@ -51,7 +51,7 @@ service cloud.firestore {
     // 3. Orders & Checkouts (Database)
     match /orders/{document=**} {
       allow read: if hasPermission('access_orders');
-      allow write: if hasPermission('manage_users'); // Verifying orders, etc.
+      allow write: if hasPermission('manage_orders'); // Verifying orders, etc.
     }
     
     match /checkouts/{document=**} {

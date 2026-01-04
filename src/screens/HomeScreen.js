@@ -241,26 +241,36 @@ const HomeScreen = ({ navigation }) => {
                         </Surface>
 
                         {/* Work Queue: Pending */}
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.errorContainer, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text variant="labelMedium" style={{ color: theme.colors.onErrorContainer }}>Pending</Text>
-                                <Icon source="clock-alert-outline" size={16} color={theme.colors.onErrorContainer} />
-                            </View>
-                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
-                                {workQueue.pending}
-                            </Text>
-                        </Surface>
+                        <TouchableOpacity
+                            style={{ width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }}
+                            onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'pending' } })}
+                        >
+                            <Surface style={[styles.statCard, { backgroundColor: theme.colors.errorContainer, width: '100%' }]} elevation={0}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Text variant="labelMedium" style={{ color: theme.colors.onErrorContainer }}>Pending</Text>
+                                    <Icon source="clock-alert-outline" size={16} color={theme.colors.onErrorContainer} />
+                                </View>
+                                <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                                    {workQueue.pending}
+                                </Text>
+                            </Surface>
+                        </TouchableOpacity>
 
                         {/* Work Queue: Confirmed */}
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.secondaryContainer, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text variant="labelMedium" style={{ color: theme.colors.onSecondaryContainer }}>Confirmed</Text>
-                                <Icon source="check-circle-outline" size={16} color={theme.colors.onSecondaryContainer} />
-                            </View>
-                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
-                                {workQueue.confirmed}
-                            </Text>
-                        </Surface>
+                        <TouchableOpacity
+                            style={{ width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }}
+                            onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'confirmed' } })}
+                        >
+                            <Surface style={[styles.statCard, { backgroundColor: theme.colors.secondaryContainer, width: '100%' }]} elevation={0}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Text variant="labelMedium" style={{ color: theme.colors.onSecondaryContainer }}>Confirmed</Text>
+                                    <Icon source="check-circle-outline" size={16} color={theme.colors.onSecondaryContainer} />
+                                </View>
+                                <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                                    {workQueue.confirmed}
+                                </Text>
+                            </Surface>
+                        </TouchableOpacity>
 
                         <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Active Carts</Text>
@@ -282,97 +292,72 @@ const HomeScreen = ({ navigation }) => {
             </View>
 
             {/* Split Content for Desktop */}
-            <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: isDesktop ? 24 : 16 }}>
+            <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: isDesktop ? 24 : 16, alignItems: 'stretch' }}>
                 {/* Main Work Area (Notes) */}
                 <View style={isDesktop ? { flex: 2 } : { width: '100%' }}>
-                    <NotesCard />
+                    <NotesCard style={{ flex: 1, marginBottom: 0 }} />
                 </View>
 
                 {/* Sidebar / Widgets Area */}
                 <View style={isDesktop ? { flex: 1 } : { width: '100%' }}>
                     {/* On Desktop, show System Status. On Mobile, show App Navigation Grid */}
                     {isDesktop ? (
-                        <View style={{ gap: 24 }}>
+                        <View style={{ flex: 1 }}>
                             {/* System Status Widget */}
-                            {hasPermission('access_analytics') && (
-                                <Surface style={{ padding: 24, borderRadius: 16, backgroundColor: theme.colors.surfaceVariant }} elevation={0}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>System Status</Text>
+                            <Surface style={{ padding: 24, borderRadius: 16, backgroundColor: theme.colors.surfaceVariant, flex: 1 }} elevation={0}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>System Status</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.outline, marginRight: 8 }}>
+                                            {refreshing ? 'Checking...' : 'Live'}
+                                        </Text>
+                                        <IconButton icon="refresh" size={18} onPress={onRefresh} style={{ margin: 0 }} />
+                                    </View>
+                                </View>
+                                <Divider style={{ marginBottom: 16 }} />
+                                <View style={{ gap: 20 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.outline, marginRight: 8 }}>
-                                                {refreshing ? 'Checking...' : 'Live'}
-                                            </Text>
-                                            <IconButton icon="refresh" size={18} onPress={onRefresh} style={{ margin: 0 }} />
+                                            <Icon source={connectionStatus.firestore ? "database-check" : "database-off"} size={22} color={connectionStatus.firestore ? "#4ade80" : theme.colors.error} />
+                                            <View style={{ marginLeft: 12 }}>
+                                                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Database</Text>
+                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Firestore Cloud</Text>
+                                            </View>
                                         </View>
+                                        <Text variant="labelSmall" style={{ color: connectionStatus.firestore ? "#4ade80" : theme.colors.error, fontWeight: 'bold' }}>
+                                            {connectionStatus.firestore ? "Active" : "Down"}
+                                        </Text>
                                     </View>
-                                    <Divider style={{ marginBottom: 16 }} />
-                                    <View style={{ gap: 20 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                <Icon source={connectionStatus.firestore ? "database-check" : "database-off"} size={22} color={connectionStatus.firestore ? "#4ade80" : theme.colors.error} />
-                                                <View style={{ marginLeft: 12 }}>
-                                                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Database</Text>
-                                                    <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Firestore Cloud</Text>
-                                                </View>
-                                            </View>
-                                            <Text variant="labelSmall" style={{ color: connectionStatus.firestore ? "#4ade80" : theme.colors.error, fontWeight: 'bold' }}>
-                                                {connectionStatus.firestore ? "Active" : "Down"}
-                                            </Text>
-                                        </View>
 
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                <Icon source="truck-delivery" size={22} color={connectionStatus.shiprocket ? "#4ade80" : "#fbbf24"} />
-                                                <View style={{ marginLeft: 12 }}>
-                                                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Logistics</Text>
-                                                    <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shiprocket API</Text>
-                                                </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source="truck-delivery" size={22} color={connectionStatus.shiprocket ? "#4ade80" : "#fbbf24"} />
+                                            <View style={{ marginLeft: 12 }}>
+                                                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Logistics</Text>
+                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shiprocket API</Text>
                                             </View>
-                                            <Text variant="labelSmall" style={{ color: connectionStatus.shiprocket ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
-                                                {connectionStatus.shiprocket ? "Connected" : "Pending"}
-                                            </Text>
                                         </View>
-
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                <Icon source="store" size={22} color={connectionStatus.shopify ? "#4ade80" : "#fbbf24"} />
-                                                <View style={{ marginLeft: 12 }}>
-                                                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Storefront</Text>
-                                                    <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shopify Webhooks</Text>
-                                                </View>
-                                            </View>
-                                            <Text variant="labelSmall" style={{ color: connectionStatus.shopify ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
-                                                {connectionStatus.shopify ? "Synced" : "Waiting"}
-                                            </Text>
-                                        </View>
+                                        <Text variant="labelSmall" style={{ color: connectionStatus.shiprocket ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
+                                            {connectionStatus.shiprocket ? "Connected" : "Pending"}
+                                        </Text>
                                     </View>
-                                </Surface>
-                            )}
 
-                            {/* Pending Actions Widget (New) */}
-                            <Surface style={{ padding: 24, borderRadius: 16, backgroundColor: theme.colors.surface }} elevation={1}>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16 }}>Quick Actions</Text>
-                                <View style={{ gap: 12 }}>
-                                    {hasPermission('access_orders') && (
-                                        <TouchableOpacity onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders' })}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: theme.colors.secondaryContainer, borderRadius: 12 }}>
-                                                <Icon source="package-variant-closed" size={20} color={theme.colors.onSecondaryContainer} />
-                                                <Text variant="bodyMedium" style={{ marginLeft: 12, flex: 1, color: theme.colors.onSecondaryContainer, fontWeight: '600' }}>Review Orders</Text>
-                                                <Icon source="chevron-right" size={20} color={theme.colors.onSecondaryContainer} />
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source="store" size={22} color={connectionStatus.shopify ? "#4ade80" : "#fbbf24"} />
+                                            <View style={{ marginLeft: 12 }}>
+                                                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Storefront</Text>
+                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shopify Webhooks</Text>
                                             </View>
-                                        </TouchableOpacity>
-                                    )}
-                                    {hasPermission('manage_wallet') && (
-                                        <TouchableOpacity onPress={() => navigation.navigate('Wallet')}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: theme.colors.errorContainer, borderRadius: 12 }}>
-                                                <Icon source="wallet-outline" size={20} color={theme.colors.onErrorContainer} />
-                                                <Text variant="bodyMedium" style={{ marginLeft: 12, flex: 1, color: theme.colors.onErrorContainer, fontWeight: '600' }}>Approve Expenses</Text>
-                                                <Icon source="chevron-right" size={20} color={theme.colors.onErrorContainer} />
-                                            </View>
-                                        </TouchableOpacity>
-                                    )}
+                                        </View>
+                                        <Text variant="labelSmall" style={{ color: connectionStatus.shopify ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
+                                            {connectionStatus.shopify ? "Synced" : "Waiting"}
+                                        </Text>
+                                    </View>
                                 </View>
                             </Surface>
+
+
                         </View>
                     ) : (
                         <>
