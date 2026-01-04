@@ -4,7 +4,7 @@ import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divid
 import { LineChart } from 'react-native-gifted-charts';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { getCachedActiveVisitors } from '../services/ga4Service';
+import { getCachedDetailedVisitors } from '../services/ga4Service';
 import { useSound } from '../context/SoundContext';
 
 const StatsScreen = ({ navigation }) => {
@@ -15,7 +15,7 @@ const StatsScreen = ({ navigation }) => {
     const [todaysSales, setTodaysSales] = useState(0);
     const [activeCarts, setActiveCarts] = useState(0);
     const [abandonedCarts, setAbandonedCarts] = useState(0);
-    const [activeVisitors, setActiveVisitors] = useState(0); // New state for active visitors
+    const [activeVisitorsData, setActiveVisitorsData] = useState({ activeVisitors: 0, details: [] }); // New state for active visitors
     const [recentActivity, setRecentActivity] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState(null);
@@ -208,8 +208,8 @@ const StatsScreen = ({ navigation }) => {
     useEffect(() => {
         const fetchGA4Visitors = async () => {
             try {
-                const visitors = await getCachedActiveVisitors();
-                setActiveVisitors(visitors);
+                const data = await getCachedDetailedVisitors();
+                setActiveVisitorsData(data);
             } catch (error) {
                 console.error('Error fetching GA4 visitors:', error);
                 // Keep previous value on error
@@ -283,10 +283,21 @@ const StatsScreen = ({ navigation }) => {
                     {/* Active Visitors Card */}
                     <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
                         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE VISITORS</Text>
-                        <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeVisitors}</Text>
+                        <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeVisitorsData.activeVisitors}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Icon source="clock-outline" size={16} color="#f59e0b" />
-                            <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Last 5 min</Text>
+                            {activeVisitorsData.details?.length > 0 ? (
+                                <>
+                                    <Icon source="map-marker" size={14} color="#f59e0b" />
+                                    <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: 'bold', marginLeft: 4 }} numberOfLines={1}>
+                                        {activeVisitorsData.details[0].city}
+                                    </Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Icon source="clock-outline" size={16} color="#f59e0b" />
+                                    <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Live</Text>
+                                </>
+                            )}
                         </View>
                     </Surface>
 

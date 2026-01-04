@@ -3,6 +3,7 @@ const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 /**
  * GA4 Active Visitors API
  * Fetches real-time active visitors from Google Analytics 4
+ * Returns total count and detailed breakdown by location and device
  */
 
 module.exports = async (req, res) => {
@@ -36,11 +37,10 @@ module.exports = async (req, res) => {
 
         // Support both credential formats:
         // 1. New format: Single GA4_CREDENTIALS JSON
-        // 2. Legacy format: Individual environment variables (your current setup)
+        // 2. Legacy format: Individual environment variables
         let credentialsJson;
 
         if (process.env.GA4_CREDENTIALS) {
-            // New format: Parse single JSON credential
             try {
                 credentialsJson = JSON.parse(process.env.GA4_CREDENTIALS);
             } catch (parseError) {
@@ -51,7 +51,6 @@ module.exports = async (req, res) => {
                 });
             }
         } else if (process.env.GA4_PRIVATE_KEY && process.env.GA4_CLIENT_EMAIL) {
-            // Legacy format: Build credentials from individual env vars
             credentialsJson = {
                 type: 'service_account',
                 project_id: process.env.GA4_PROJECT_ID,
@@ -77,21 +76,47 @@ module.exports = async (req, res) => {
             credentials: credentialsJson
         });
 
-        // Run realtime report
+        // Run realtime report with dimensions
         const [response] = await analyticsDataClient.runRealtimeReport({
             property: `properties/${propertyId}`,
+            dimensions: [
+                { name: 'city' },
+                { name: 'country' },
+                { name: 'deviceCategory' }
+            ],
             metrics: [
-                {
-                    name: 'activeUsers',
-                },
+                { name: 'activeUsers' },
             ],
         });
 
-        // Extract active visitors count
-        const activeVisitors = response.rows?.[0]?.metricValues?.[0]?.value || '0';
+        // Process rows to calculate total and get breakdown
+        let totalActive = 0;
+        const details = [];
+
+        if (response.rows) {
+            response.rows.forEach(row => {
+                const city = row.dimensionValues[0].value;
+                const country = row.dimensionValues[1].value;
+                const device = row.dimensionValues[2].value;
+                const count = parseInt(row.metricValues[0].value, 10);
+
+                totalActive += count;
+
+                details.push({
+                    city,
+                    country,
+                    device,
+                    count
+                });
+            });
+        }
+
+        // Sort details by count desc
+        details.sort((a, b) => b.count - a.count);
 
         return res.status(200).json({
-            activeVisitors: parseInt(activeVisitors, 10),
+            activeVisitors: totalActive,
+            details: details,
             timestamp: new Date().toISOString()
         });
 

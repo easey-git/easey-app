@@ -40,8 +40,8 @@ module.exports = async (req, res) => {
         const today = new Date();
         const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
-        // Meta Graph API endpoint
-        const url = `https://graph.facebook.com/v18.0/act_${adAccountId}/campaigns`;
+        // Meta Graph API endpoint (Updated to v21.0)
+        const url = `https://graph.facebook.com/v21.0/act_${adAccountId}/campaigns`;
 
         // Fields to fetch
         const fields = [
@@ -64,7 +64,7 @@ module.exports = async (req, res) => {
             '}'
         ].join(',');
 
-        // Make API request
+        // Make API request field
         const response = await axios.get(url, {
             params: {
                 access_token: accessToken,
@@ -168,11 +168,12 @@ module.exports = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Meta Campaigns API Error:', error.response?.data || error.message);
+        console.error('Meta Campaigns API Error Details:', JSON.stringify(error.response?.data || error.message, null, 2));
 
         // Return graceful error response
         return res.status(500).json({
             error: error.response?.data?.error?.message || error.message || 'Failed to fetch campaign data',
+            details: error.response?.data || null,
             campaigns: [],
             summary: { spend: 0, roas: 0, purchases: 0, cpm: 0 },
             timestamp: new Date().toISOString()
