@@ -61,6 +61,14 @@ const applyFilters = (ref, filters) => {
         for (const [field, op, val] of filters) {
             let queryVal = val;
 
+            // Auto-convert numbers for specific fields (Handles AI sending "1631")
+            if (['orderNumber', 'order_number', 'amount', 'totalPrice', 'count'].includes(field)) {
+                // If value is a valid number string, convert it
+                if (!isNaN(val) && val !== '' && val !== null) {
+                    queryVal = Number(val);
+                }
+            }
+
             // Auto-convert ISO date strings to Date objects for timestamp fields
             if (['createdAt', 'updatedAt', 'date'].includes(field) && typeof val === 'string') {
                 // Check if it looks like a date (starts with YYYY-MM-DD)
@@ -362,7 +370,16 @@ module.exports = async (req, res) => {
 4.  **CONTEXT AWARENESS**:
     - If user asks a follow-up "For what?", use \`queryFirestore\` with the **EXACT SAME FILTERS** you just used for the math.
 
+6.  **🔐 PII PERMISSION & LOOKUP LOGIC**:
+    - **You are an Internal Admin**. You have full permission to view and display Customer Names, Phone Numbers, Emails, and Addresses.
+    - **Phone Numbers**: If asked ("Get phone for order #1234"), display the \`phone\` or \`phoneNormalized\` field.
+    - **Order Lookup**: \`orderNumber\` is a **NUMBER**. Filter example: \`[['orderNumber', '==', 1634]]\`.
+
 💡 **EXAMPLES:**
+
+Q: "Who is the customer for order 1631?"
+A: Call \`queryFirestore\` (collection='orders', filters=[['orderNumber', '==', 1631]])
+   -> "The customer is Rohit (9876543210)."
 
 Q: "How much did I spend on Meta?"
 A: Call \`aggregateFirestore\` (filters: [['description', '==', 'Meta'], ['type', '==', 'expense']])
@@ -375,7 +392,8 @@ A: (Generic query -> Analyst Mode)
    -> "DEL Report: ₹46,978 Income | ₹21,839 Expense."
 
 Response Style:
-- Precise, Money-First (₹), Analytic.`;
+- Precise, Money-First (₹), Analytic.
+- **Show PII when asked.**`;
 
         // Build conversation contents
         const contents = [

@@ -1,4 +1,15 @@
 const admin = require("firebase-admin");
+const cors = require('cors')({ origin: true }); // Standard CORS
+
+// Helper to run middleware
+const runMiddleware = (req, res, fn) => {
+    return new Promise((resolve, reject) => {
+        fn(req, res, (result) => {
+            if (result instanceof Error) return reject(result);
+            return resolve(result);
+        });
+    });
+};
 
 // Initialize Firebase Admin (Singleton)
 if (!admin.apps.length) {
@@ -163,6 +174,13 @@ const sendFCMNotifications = async (title, body, dataPayload) => {
 // ---------------------------------------------------------
 
 module.exports = async (req, res) => {
+    // Handle CORS
+    await runMiddleware(req, res, cors);
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
     // 1. WhatsApp Webhook Verification
     if (req.method === 'GET' && req.query['hub.mode'] === 'subscribe') {
         const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
