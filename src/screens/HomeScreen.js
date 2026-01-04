@@ -20,6 +20,7 @@ const HomeScreen = ({ navigation }) => {
         aov: 0,
         activeCarts: 0
     });
+    const [workQueue, setWorkQueue] = useState({ pending: 0, confirmed: 0 });
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState({
@@ -28,8 +29,28 @@ const HomeScreen = ({ navigation }) => {
         shopify: false
     });
 
-    const cardWidth = isDesktop ? '23%' : '48%';
     const menuCardWidth = isDesktop ? '23%' : '48%';
+
+    // Listener for Action Items (Pending/Confirmed Orders)
+    useEffect(() => {
+        const workQuery = query(
+            collection(db, "orders"),
+            where("cod_status", "in", ["pending", "confirmed"])
+        );
+
+        const unsubscribe = onSnapshot(workQuery, (snapshot) => {
+            let pending = 0;
+            let confirmed = 0;
+            snapshot.forEach(doc => {
+                const s = doc.data().cod_status;
+                if (s === 'pending') pending++;
+                if (s === 'confirmed') confirmed++;
+            });
+            setWorkQueue({ pending, confirmed });
+        });
+
+        return () => unsubscribe();
+    }, []);
 
     // Check webhook health
     useEffect(() => {
@@ -195,45 +216,67 @@ const HomeScreen = ({ navigation }) => {
             </View>
 
             {/* Stats Grid */}
-            <View style={styles.statsGrid}>
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+            <View style={[styles.statsGrid, { gap: isDesktop ? 20 : 12 }]}>
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
                     <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Total Sales</Text>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
                         ₹{stats.sales.toLocaleString('en-IN')}
                     </Text>
                 </Surface>
 
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
                     <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Orders</Text>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
                         {stats.orders}
                     </Text>
                 </Surface>
 
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>AOV</Text>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                        ₹{stats.aov.toLocaleString('en-IN')}
+                {/* Work Queue: Pending */}
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.errorContainer, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onErrorContainer }}>Pending</Text>
+                        <Icon source="clock-alert-outline" size={16} color={theme.colors.onErrorContainer} />
+                    </View>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                        {workQueue.pending}
                     </Text>
                 </Surface>
 
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                {/* Work Queue: Confirmed */}
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.secondaryContainer, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSecondaryContainer }}>Confirmed</Text>
+                        <Icon source="check-circle-outline" size={16} color={theme.colors.onSecondaryContainer} />
+                    </View>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                        {workQueue.confirmed}
+                    </Text>
+                </Surface>
+
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
                     <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Active Carts</Text>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
                         {stats.activeCarts}
+                    </Text>
+                </Surface>
+
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: isDesktop ? undefined : '48%', flex: isDesktop ? 1 : undefined }]} elevation={0}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>AOV</Text>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
+                        ₹{Math.round(stats.aov).toLocaleString('en-IN')}
                     </Text>
                 </Surface>
             </View>
 
             {/* Split Content for Desktop */}
-            <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 24 }}>
+            <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: isDesktop ? 24 : 16 }}>
                 {/* Main Work Area (Notes) */}
-                <View style={{ flex: 2 }}>
+                <View style={isDesktop ? { flex: 2 } : { width: '100%' }}>
                     <NotesCard />
                 </View>
 
                 {/* Sidebar / Widgets Area */}
-                <View style={{ flex: 1 }}>
+                <View style={isDesktop ? { flex: 1 } : { width: '100%' }}>
                     {/* On Desktop, show System Status. On Mobile, show App Navigation Grid */}
                     {isDesktop ? (
                         <View style={{ gap: 24 }}>
@@ -341,7 +384,6 @@ const HomeScreen = ({ navigation }) => {
             {/* AI Assistant FAB */}
             <FAB
                 icon="auto-fix"
-                label={isDesktop ? "Ask Easey" : undefined}
                 style={[styles.fab, { backgroundColor: theme.colors.primary }]}
                 color={theme.colors.onPrimary}
                 onPress={() => navigation.navigate('Assistant')}
@@ -354,7 +396,6 @@ const styles = StyleSheet.create({
     statsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12, // consistent gap
         marginBottom: 32,
     },
     statCard: {
