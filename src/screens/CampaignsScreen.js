@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Modal, TouchableOpacity } from 'react-native';
-import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Menu, Button, Divider, IconButton } from 'react-native-paper';
+import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Menu, Button, Divider, IconButton, Portal } from 'react-native-paper';
+import { CRMLayout } from '../components/CRMLayout';
 
 /**
  * CampaignsScreen - Real-time Today's Campaign Performance
@@ -150,13 +151,12 @@ const CampaignsScreen = ({ navigation }) => {
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <Appbar.Header style={{ backgroundColor: theme.colors.background }}>
-                <Appbar.BackAction onPress={() => navigation.goBack()} />
-                <Appbar.Content title="Campaigns - Today" />
-                <Appbar.Action icon="refresh" onPress={onRefresh} />
-            </Appbar.Header>
-
+        <CRMLayout
+            title="Campaigns - Today"
+            navigation={navigation}
+            scrollable={false}
+            actions={<Appbar.Action icon="refresh" onPress={onRefresh} />}
+        >
             <ScrollView
                 contentContainerStyle={styles.content}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
@@ -347,7 +347,7 @@ const CampaignsScreen = ({ navigation }) => {
 
             </ScrollView>
 
-            {/* Campaign Detail Modal */}
+            {/* Campaign Detail Modal - Using Standard Modal per original request, could be converted to Portal */}
             <Modal
                 visible={detailModalVisible}
                 animationType="slide"
@@ -448,7 +448,7 @@ const CampaignsScreen = ({ navigation }) => {
                     </Surface>
                 </View>
             </Modal>
-        </View>
+        </CRMLayout>
     );
 };
 

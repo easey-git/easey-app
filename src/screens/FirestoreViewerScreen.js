@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
-import { collection, getDocs, getDocsFromServer, getDoc, deleteDoc, updateDoc, doc, limit, query, writeBatch } from 'firebase/firestore';
+import { collection, getDocsFromServer, deleteDoc, updateDoc, doc, limit, query, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import DocItem from '../components/DocItem';
+import { CRMLayout } from '../components/CRMLayout';
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
     const [collections, setCollections] = useState(['orders', 'checkouts', 'push_tokens', 'whatsapp_messages', 'wallet_transactions', 'dashboard']);
@@ -308,37 +309,39 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection]);
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
-                <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
-                <Appbar.Content title="Firebase" titleStyle={{ fontWeight: 'bold', fontSize: 20 }} />
-
-                {/* Select All Checkbox */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
-                    <Text variant="labelSmall" style={{ marginRight: 4 }}>All</Text>
-                    <Checkbox
-                        status={documents.length > 0 && selectedItems.size === documents.length ? 'checked' : 'unchecked'}
-                        onPress={() => {
-                            if (selectedItems.size === documents.length) {
-                                setSelectedItems(new Set());
-                            } else {
-                                const allIds = new Set(documents.map(d => d.id));
-                                setSelectedItems(allIds);
-                            }
-                        }}
-                    />
-                </View>
-
-                {selectedItems.size > 0 ? (
-                    <Button textColor={theme.colors.error} onPress={handleBulkDelete}>Delete ({selectedItems.size})</Button>
-                ) : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <IconButton icon="magnify" onPress={() => setSearchVisible(!searchVisible)} />
-                        <Appbar.Action icon="refresh" onPress={fetchDocuments} />
+        <CRMLayout
+            title="Firebase"
+            navigation={navigation}
+            scrollable={false}
+            actions={
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    {/* Select All Checkbox */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
+                        <Checkbox
+                            status={documents.length > 0 && selectedItems.size === documents.length ? 'checked' : 'unchecked'}
+                            onPress={() => {
+                                if (selectedItems.size === documents.length) {
+                                    setSelectedItems(new Set());
+                                } else {
+                                    const allIds = new Set(documents.map(d => d.id));
+                                    setSelectedItems(allIds);
+                                }
+                            }}
+                        />
+                        <Text variant="labelSmall">All</Text>
                     </View>
-                )}
-            </Appbar.Header>
 
+                    {selectedItems.size > 0 ? (
+                        <Button textColor={theme.colors.error} onPress={handleBulkDelete}>Delete ({selectedItems.size})</Button>
+                    ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <IconButton icon="magnify" onPress={() => setSearchVisible(!searchVisible)} />
+                            <Appbar.Action icon="refresh" onPress={fetchDocuments} />
+                        </View>
+                    )}
+                </View>
+            }
+        >
             {searchVisible && (
                 <View style={{ padding: 16, paddingBottom: 0 }}>
                     <TextInput
@@ -461,7 +464,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             >
                 <Text style={{ color: theme.colors.inverseOnSurface }}>{snackbarMessage}</Text>
             </Snackbar>
-        </View>
+        </CRMLayout>
     );
 };
 

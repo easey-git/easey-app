@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Animated, Easing } from 'react-native';
-import { Text, Surface, ActivityIndicator, Icon, IconButton, Appbar, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog } from 'react-native-paper';
+import { View, ScrollView, StyleSheet, Dimensions, RefreshControl } from 'react-native';
+import { Text, Surface, ActivityIndicator, Icon, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog } from 'react-native-paper';
 import { LineChart } from 'react-native-gifted-charts';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getCachedDetailedVisitors } from '../services/ga4Service';
 import { useSound } from '../context/SoundContext';
+import { CRMLayout } from '../components/CRMLayout';
 
 const StatsScreen = ({ navigation }) => {
     const theme = useTheme();
@@ -15,13 +16,11 @@ const StatsScreen = ({ navigation }) => {
     const [todaysSales, setTodaysSales] = useState(0);
     const [activeCarts, setActiveCarts] = useState(0);
     const [abandonedCarts, setAbandonedCarts] = useState(0);
-    const [activeVisitorsData, setActiveVisitorsData] = useState({ activeVisitors: 0, details: [] }); // New state for active visitors
+    const [activeVisitorsData, setActiveVisitorsData] = useState({ activeVisitors: 0, details: [] });
     const [recentActivity, setRecentActivity] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
-
-
 
     // Refs for sound logic
     const lastMaxTimestampRef = React.useRef(0);
@@ -129,17 +128,11 @@ const StatsScreen = ({ navigation }) => {
                 const now = new Date();
                 const diffMinutes = Math.abs(now.getTime() - updatedAt.getTime()) / (1000 * 60);
 
-                // Logic based on user provided JSONs
-                // Active: INIT, PHONE_RECEIVED
-                // Converted/Not Active: ORDER_PLACED, PAYMENT_INITIATED
-                // Abandoned: Explicitly abandoned or old (> 5 mins)
-
                 const isOrdered = rawStage === 'ORDER_PLACED' || rawStage === 'PAYMENT_INITIATED' || rawStage === 'COMPLETED' || !!data.orderId;
-                // Only mark as abandoned if NOT ordered AND (explicitly abandoned OR timed out)
                 const isAbandoned = !isOrdered && (rawStage === 'CHECKOUT_ABANDONED' || data.eventType === 'ABANDONED' || diffMinutes > 10);
 
                 if (isOrdered) {
-                    // Converted - do not count as active or abandoned
+                    // Converted
                 } else if (isAbandoned) {
                     abandoned++;
                 } else {
@@ -165,8 +158,6 @@ const StatsScreen = ({ navigation }) => {
 
             setActiveCarts(active);
             setAbandonedCarts(abandoned);
-            // Keep Firebase-calculated visitors as fallback
-            // setActiveVisitors(activeVisitorIds.size); 
 
             // Find the latest timestamp in the current activities
             const currentMaxTimestamp = activities.length > 0
@@ -190,7 +181,7 @@ const StatsScreen = ({ navigation }) => {
             processDocs(currentDocs);
         });
 
-        // Re-process every 30 seconds to update time-based status (Active -> Abandoned -> Vanished)
+        // Re-process every 30 seconds to update time-based status
         const intervalId = setInterval(() => {
             if (currentDocs.length > 0) {
                 processDocs(currentDocs);
@@ -212,27 +203,18 @@ const StatsScreen = ({ navigation }) => {
                 setActiveVisitorsData(data);
             } catch (error) {
                 console.error('Error fetching GA4 visitors:', error);
-                // Keep previous value on error
             }
         };
 
-        // Fetch immediately on mount
         fetchGA4Visitors();
-
-        // Refresh every 30 seconds (cached on service side)
         const ga4Interval = setInterval(fetchGA4Visitors, 30000);
-
-        return () => {
-            clearInterval(ga4Interval);
-        };
+        return () => clearInterval(ga4Interval);
     }, []);
 
     const onRefresh = React.useCallback(() => {
         setRefreshing(true);
         setTimeout(() => setRefreshing(false), 1000);
     }, []);
-
-
 
     if (loading) {
         return (
@@ -243,248 +225,237 @@ const StatsScreen = ({ navigation }) => {
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
-                <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
-                <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }} />
-            </Appbar.Header>
-
+        <CRMLayout title="Analytics" navigation={navigation} scrollable={true}>
+            {/* Key Metrics - Horizontal Scrollable Cards */}
             <ScrollView
-                style={styles.content}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.metricsScrollContent}
+                style={styles.metricsScroll}
             >
-                {/* Key Metrics - Horizontal Scrollable Cards (Shopify-style) */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.metricsScrollContent}
-                    style={styles.metricsScroll}
-                >
-                    {/* Total Revenue Card */}
-                    <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>TODAY'S REVENUE</Text>
-                        <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>₹{todaysSales.toLocaleString()}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Icon source="chart-line" size={16} color={theme.colors.primary} />
-                            <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Since Midnight</Text>
-                        </View>
-                    </Surface>
-
-                    {/* Active Carts Card */}
-                    <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE CARTS</Text>
-                        <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeCarts}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
-                            <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>Live Now</Text>
-                        </View>
-                    </Surface>
-
-                    {/* Active Visitors Card */}
-                    <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE VISITORS</Text>
-                        <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeVisitorsData.activeVisitors}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            {activeVisitorsData.details?.length > 0 ? (
-                                <>
-                                    <Icon source="map-marker" size={14} color="#f59e0b" />
-                                    <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: 'bold', marginLeft: 4 }} numberOfLines={1}>
-                                        {activeVisitorsData.details[0].city}
-                                    </Text>
-                                </>
-                            ) : (
-                                <>
-                                    <Icon source="clock-outline" size={16} color="#f59e0b" />
-                                    <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Live</Text>
-                                </>
-                            )}
-                        </View>
-                    </Surface>
-
-                    {/* Abandoned Carts Card */}
-                    <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant, marginRight: 16 }]} elevation={1}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ABANDONED</Text>
-                        <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{abandonedCarts}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Icon source="cart-off" size={16} color={theme.colors.error} />
-                            <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Lost</Text>
-                        </View>
-                    </Surface>
-                </ScrollView>
-
-                {/* Chart Section */}
-                <Surface style={[styles.chartSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16 }}>
-                        <View>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Sales History</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                                <Icon source="timeline-text" size={14} color={theme.colors.onSurfaceVariant} />
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>
-                                    Last 100 orders
-                                </Text>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
-                                    • 2-hour intervals
-                                </Text>
-                            </View>
-                        </View>
+                {/* Total Revenue Card */}
+                <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>TODAY'S REVENUE</Text>
+                    <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>₹{todaysSales.toLocaleString()}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <Icon source="chart-line" size={16} color={theme.colors.primary} />
+                        <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Since Midnight</Text>
                     </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
-                        <LineChart
-                            data={(chartData.datasets[0]?.data || [0]).map((value, index) => ({
-                                value: value,
-                                label: chartData.labels?.[index] || '',
-                                fullLabel: chartData.fullLabels?.[index] || '', // Pass full label for tooltip
-                                orderCount: chartData.datasets[0]?.orderCounts?.[index] || 0, // Embed order count
-                                labelTextStyle: { color: theme.colors.onSurfaceVariant, fontSize: 10 },
-                            }))}
-                            height={200}
-                            width={Math.max(screenWidth - 40, chartData.labels.length * 60)} // Wider for scrolling
-                            scrollable={true}
-                            curved
-                            areaChart
-                            animateOnDataChange={false} // Disable animation to prevent crash with dynamic data
-                            color={theme.colors.primary}
-                            thickness={3}
-                            startFillColor={theme.colors.primary}
-                            endFillColor={theme.colors.surface}
-                            startOpacity={0.3}
-                            endOpacity={0.05}
-                            spacing={45}
-                            backgroundColor={theme.colors.surface}
-                            hideDataPoints={false}
-                            dataPointsHeight={8}
-                            dataPointsWidth={8}
-                            dataPointsColor={theme.colors.primary}
-                            dataPointsRadius={4}
-                            textColor={theme.colors.onSurface}
-                            textFontSize={11}
-                            textShiftY={-8}
-                            textShiftX={-10}
-                            yAxisColor={theme.colors.outlineVariant}
-                            xAxisColor={theme.colors.outlineVariant}
-                            yAxisTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                            xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                            rulesType="solid"
-                            rulesColor={theme.colors.outlineVariant}
-                            rulesThickness={0.5}
-                            showVerticalLines={false}
-                            verticalLinesColor={theme.colors.outlineVariant}
-                            yAxisThickness={1}
-                            xAxisThickness={1}
-                            initialSpacing={10}
-                            endSpacing={20}
-                            noOfSections={4}
-                            maxValue={Math.max(...chartData.datasets[0].data) * 1.2}
-                            yAxisLabelPrefix="₹"
-                            formatYLabel={(value) => {
-                                if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-                                return value.toString();
-                            }}
-                            pointerConfig={{
-                                pointerStripHeight: 180,
-                                pointerStripColor: theme.colors.primary,
-                                pointerStripWidth: 2,
-                                pointerColor: theme.colors.primary,
-                                radius: 6,
-                                pointerLabelWidth: 100,
-                                pointerLabelHeight: 90,
-                                activatePointersOnLongPress: false,
-                                autoAdjustPointerLabelPosition: true,
-                                pointerLabelComponent: items => {
-                                    const point = items[0];
-                                    const orderCount = point.orderCount || 0;
-                                    const fullLabel = point.fullLabel || point.label || '';
-                                    // Split "18 Dec 2pm" into "18 Dec" and "2pm"
-                                    const parts = fullLabel.split(' ');
-                                    const datePart = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : fullLabel;
-                                    const timePart = parts.length >= 3 ? parts[2] : '';
-
-                                    return (
-                                        <View
-                                            style={{
-                                                height: 100,
-                                                width: 110,
-                                                justifyContent: 'center',
-                                                backgroundColor: theme.colors.primaryContainer,
-                                                borderRadius: 12,
-                                                padding: 12,
-                                                borderWidth: 1.5,
-                                                borderColor: theme.colors.primary,
-                                            }}>
-                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
-                                                {datePart}
-                                            </Text>
-                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 11, textAlign: 'center', marginTop: 2, opacity: 0.8 }}>
-                                                {timePart}
-                                            </Text>
-                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 6 }}>
-                                                ₹{Math.round(items[0].value).toLocaleString()}
-                                            </Text>
-                                            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 11, textAlign: 'center', marginTop: 4, opacity: 0.9 }}>
-                                                {orderCount} {orderCount === 1 ? 'Order' : 'Orders'}
-                                            </Text>
-                                        </View>
-                                    );
-                                },
-                            }}
-                        />
-                    </ScrollView>
                 </Surface>
 
-                {/* Recent Activity List */}
-                <View style={[styles.listSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 }}>
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Live Feed</Text>
-                        <Button
-                            mode="text"
-                            compact
-                            onPress={() => navigation.navigate('DatabaseManager', { collection: 'checkouts' })}
-                            textColor={theme.colors.primary}
-                        >
-                            History
-                        </Button>
+                {/* Active Carts Card */}
+                <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE CARTS</Text>
+                    <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeCarts}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
+                        <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>Live Now</Text>
                     </View>
-                    <Divider />
-                    {recentActivity.map((item) => (
-                        <React.Fragment key={item.id}>
-                            <List.Item
-                                title={item.customerName || item.first_name || item.phone || item.phone_number || 'Visitor'}
-                                titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }}
-                                description={() => {
-                                    const displayItems = item.items || item.line_items || [];
-                                    return (
-                                        <View>
-                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                                {displayItems.length > 0 ? displayItems[0].name || displayItems[0].title : 'Browsing'}
-                                            </Text>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                                <Chip
-                                                    mode="flat"
-                                                    compact
-                                                    style={{ backgroundColor: item.status === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer, height: 20, borderRadius: 4, paddingHorizontal: 0 }}
-                                                    textStyle={{ fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 8, color: item.status === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer, fontWeight: 'bold' }}
-                                                >
-                                                    {item.status || 'Active'}
-                                                </Chip>
-                                                <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
-                                                    • {item.jsDate ? item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    );
-                                }}
-                                left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />}
-                                right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.total_price || item.amount || 0}</Text>}
-                                onPress={() => {
-                                    setSelectedDoc(item);
-                                    setModalVisible(true);
-                                }}
-                            />
-                            <Divider />
-                        </React.Fragment>
-                    ))}
+                </Surface>
+
+                {/* Active Visitors Card */}
+                <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE VISITORS</Text>
+                    <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeVisitorsData.activeVisitors}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        {activeVisitorsData.details?.length > 0 ? (
+                            <>
+                                <Icon source="map-marker" size={14} color="#f59e0b" />
+                                <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: 'bold', marginLeft: 4 }} numberOfLines={1}>
+                                    {activeVisitorsData.details[0].city}
+                                </Text>
+                            </>
+                        ) : (
+                            <>
+                                <Icon source="clock-outline" size={16} color="#f59e0b" />
+                                <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Live</Text>
+                            </>
+                        )}
+                    </View>
+                </Surface>
+
+                {/* Abandoned Carts Card */}
+                <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant, marginRight: 16 }]} elevation={1}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ABANDONED</Text>
+                    <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{abandonedCarts}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <Icon source="cart-off" size={16} color={theme.colors.error} />
+                        <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Lost</Text>
+                    </View>
+                </Surface>
+            </ScrollView>
+
+            {/* Chart Section */}
+            <Surface style={[styles.chartSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16 }}>
+                    <View>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Sales History</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                            <Icon source="timeline-text" size={14} color={theme.colors.onSurfaceVariant} />
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>
+                                Last 100 orders
+                            </Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
+                                • 2-hour intervals
+                            </Text>
+                        </View>
+                    </View>
                 </View>
-            </ScrollView >
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
+                    <LineChart
+                        data={(chartData.datasets[0]?.data || [0]).map((value, index) => ({
+                            value: value,
+                            label: chartData.labels?.[index] || '',
+                            fullLabel: chartData.fullLabels?.[index] || '',
+                            orderCount: chartData.datasets[0]?.orderCounts?.[index] || 0,
+                            labelTextStyle: { color: theme.colors.onSurfaceVariant, fontSize: 10 },
+                        }))}
+                        height={200}
+                        width={Math.max(screenWidth - 40, chartData.labels.length * 60)}
+                        scrollable={true}
+                        curved
+                        areaChart
+                        animateOnDataChange={false}
+                        color={theme.colors.primary}
+                        thickness={3}
+                        startFillColor={theme.colors.primary}
+                        endFillColor={theme.colors.surface}
+                        startOpacity={0.3}
+                        endOpacity={0.05}
+                        spacing={45}
+                        backgroundColor={theme.colors.surface}
+                        hideDataPoints={false}
+                        dataPointsHeight={8}
+                        dataPointsWidth={8}
+                        dataPointsColor={theme.colors.primary}
+                        dataPointsRadius={4}
+                        textColor={theme.colors.onSurface}
+                        textFontSize={11}
+                        textShiftY={-8}
+                        textShiftX={-10}
+                        yAxisColor={theme.colors.outlineVariant}
+                        xAxisColor={theme.colors.outlineVariant}
+                        yAxisTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                        xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                        rulesType="solid"
+                        rulesColor={theme.colors.outlineVariant}
+                        rulesThickness={0.5}
+                        showVerticalLines={false}
+                        verticalLinesColor={theme.colors.outlineVariant}
+                        yAxisThickness={1}
+                        xAxisThickness={1}
+                        initialSpacing={10}
+                        endSpacing={20}
+                        noOfSections={4}
+                        maxValue={Math.max(...chartData.datasets[0].data) * 1.2}
+                        yAxisLabelPrefix="₹"
+                        formatYLabel={(value) => {
+                            if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+                            return value.toString();
+                        }}
+                        pointerConfig={{
+                            pointerStripHeight: 180,
+                            pointerStripColor: theme.colors.primary,
+                            pointerStripWidth: 2,
+                            pointerColor: theme.colors.primary,
+                            radius: 6,
+                            pointerLabelWidth: 100,
+                            pointerLabelHeight: 90,
+                            activatePointersOnLongPress: false,
+                            autoAdjustPointerLabelPosition: true,
+                            pointerLabelComponent: items => {
+                                const point = items[0];
+                                const orderCount = point.orderCount || 0;
+                                const fullLabel = point.fullLabel || point.label || '';
+                                const parts = fullLabel.split(' ');
+                                const datePart = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : fullLabel;
+                                const timePart = parts.length >= 3 ? parts[2] : '';
+
+                                return (
+                                    <View
+                                        style={{
+                                            height: 100,
+                                            width: 110,
+                                            justifyContent: 'center',
+                                            backgroundColor: theme.colors.primaryContainer,
+                                            borderRadius: 12,
+                                            padding: 12,
+                                            borderWidth: 1.5,
+                                            borderColor: theme.colors.primary,
+                                        }}>
+                                        <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
+                                            {datePart}
+                                        </Text>
+                                        <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 11, textAlign: 'center', marginTop: 2, opacity: 0.8 }}>
+                                            {timePart}
+                                        </Text>
+                                        <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 6 }}>
+                                            ₹{Math.round(items[0].value).toLocaleString()}
+                                        </Text>
+                                        <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 11, textAlign: 'center', marginTop: 4, opacity: 0.9 }}>
+                                            {orderCount} {orderCount === 1 ? 'Order' : 'Orders'}
+                                        </Text>
+                                    </View>
+                                );
+                            },
+                        }}
+                    />
+                </ScrollView>
+            </Surface>
+
+            {/* Recent Activity List */}
+            <View style={[styles.listSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 }}>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Live Feed</Text>
+                    <Button
+                        mode="text"
+                        compact
+                        onPress={() => navigation.navigate('DatabaseManager', { collection: 'checkouts' })}
+                        textColor={theme.colors.primary}
+                    >
+                        History
+                    </Button>
+                </View>
+                <Divider />
+                {recentActivity.map((item) => (
+                    <React.Fragment key={item.id}>
+                        <List.Item
+                            title={item.customerName || item.first_name || item.phone || item.phone_number || 'Visitor'}
+                            titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }}
+                            description={() => {
+                                const displayItems = item.items || item.line_items || [];
+                                return (
+                                    <View>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                            {displayItems.length > 0 ? displayItems[0].name || displayItems[0].title : 'Browsing'}
+                                        </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                            <Chip
+                                                mode="flat"
+                                                compact
+                                                style={{ backgroundColor: item.status === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer, height: 20, borderRadius: 4, paddingHorizontal: 0 }}
+                                                textStyle={{ fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 8, color: item.status === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer, fontWeight: 'bold' }}
+                                            >
+                                                {item.status || 'Active'}
+                                            </Chip>
+                                            <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
+                                                • {item.jsDate ? item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                );
+                            }}
+                            left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />}
+                            right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.total_price || item.amount || 0}</Text>}
+                            onPress={() => {
+                                setSelectedDoc(item);
+                                setModalVisible(true);
+                            }}
+                        />
+                        <Divider />
+                    </React.Fragment>
+                ))}
+            </View>
 
             {/* Document Details Dialog */}
             <Portal>
@@ -606,8 +577,7 @@ const StatsScreen = ({ navigation }) => {
                 </Dialog>
             </Portal>
 
-
-        </View >
+        </CRMLayout>
     );
 };
 
@@ -619,7 +589,7 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
     },
     metricsScrollContent: {
-        paddingHorizontal: 16,
+        paddingHorizontal: 24, // Matches list padding
         gap: 12,
     },
     metricsRow: {
@@ -628,7 +598,7 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     metricCard: {
-        width: Dimensions.get('window').width * 0.42, // Fixed width for horizontal scroll
+        width: Dimensions.get('window').width * 0.42,
         minWidth: 160,
         padding: 16,
         borderRadius: 8,

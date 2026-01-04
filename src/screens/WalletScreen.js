@@ -7,6 +7,7 @@ import { WalletService } from '../services/walletService';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
 import { PieChart } from 'react-native-chart-kit';
 import * as Haptics from 'expo-haptics';
+import { CRMLayout } from '../components/CRMLayout';
 
 const EXPENSE_CATEGORIES = ['Business', 'Share', 'Split', 'Misc'];
 const INCOME_CATEGORIES = ['Remittance', 'Fund', 'Share', 'Investment', 'Misc'];
@@ -117,17 +118,15 @@ const WalletScreen = ({ navigation }) => {
                 const data = doc.data();
                 setAllTimeStats(data);
             } else {
-                // If missing, we might want to trigger a recalculate (one off) or just show 0
                 setAllTimeStats({ balance: 0, income: 0, expense: 0, categoryBreakdown: { income: {}, expense: {} } });
             }
         });
         return () => unsubscribe();
     }, [timeRange]);
 
-    // 5. Auto-Migration Logic (Side Effect - Safer here than in useMemo)
+    // 5. Auto-Migration Logic
     useEffect(() => {
         if (timeRange === 'all' && allTimeStats) {
-            // If we have categories (old stats) but NO descriptions (new stats), trigger an update.
             if (allTimeStats.categoryBreakdown && !allTimeStats.descriptionBreakdown) {
                 WalletService.recalculateAllStats();
             }
@@ -140,50 +139,23 @@ const WalletScreen = ({ navigation }) => {
 
         // CASE 1: All Time (Server Stats Doc)
         if (timeRange === 'all') {
-
-
             if (allTimeStats && allTimeStats.descriptionBreakdown) {
                 const descs = allTimeStats.descriptionBreakdown;
-
-                // Income
-                if (descs.income) {
-                    Object.keys(descs.income).forEach(key => {
-                        incomeItemTotals[key] = descs.income[key];
-                    });
-                }
-                // Expense
-                if (descs.expense) {
-                    Object.keys(descs.expense).forEach(key => {
-                        expenseItemTotals[key] = descs.expense[key];
-                    });
-                }
+                if (descs.income) Object.keys(descs.income).forEach(key => incomeItemTotals[key] = descs.income[key]);
+                if (descs.expense) Object.keys(descs.expense).forEach(key => expenseItemTotals[key] = descs.expense[key]);
             }
             // Fallback to Category
             else if (allTimeStats && allTimeStats.categoryBreakdown) {
                 const cats = allTimeStats.categoryBreakdown;
-
-                // Income
-                if (cats.income) {
-                    Object.keys(cats.income).forEach(key => {
-                        incomeItemTotals[key] = cats.income[key];
-                    });
-                }
-                // Expense
-                if (cats.expense) {
-                    Object.keys(cats.expense).forEach(key => {
-                        expenseItemTotals[key] = cats.expense[key];
-                    });
-                }
+                if (cats.income) Object.keys(cats.income).forEach(key => incomeItemTotals[key] = cats.income[key]);
+                if (cats.expense) Object.keys(cats.expense).forEach(key => expenseItemTotals[key] = cats.expense[key]);
             }
         }
         // CASE 2: Week/Month (Client Aggregation of downloaded docs)
-        // OR Fallback if server stats missing for some reason
         else {
             chartTransactions.forEach(t => {
                 const amt = parseFloat(t.amount);
-                // Switch recent stats to use Description (User Request)
                 const key = t.description || 'Unknown';
-
                 if (t.type === 'income') {
                     incomeItemTotals[key] = (incomeItemTotals[key] || 0) + amt;
                 } else {
@@ -192,7 +164,6 @@ const WalletScreen = ({ navigation }) => {
             });
         }
 
-        // Helper
         const formatItemData = (totals) => {
             const sorted = Object.keys(totals).map(key => ({ name: key, amount: totals[key] })).sort((a, b) => b.amount - a.amount);
             let final = sorted;
@@ -227,7 +198,6 @@ const WalletScreen = ({ navigation }) => {
             setStatsLoading(true);
 
             try {
-                // CASE 1: All Time (Use Server Stats Doc)
                 if (timeRange === 'all') {
                     if (allTimeStats) {
                         if (isActive) {
@@ -238,15 +208,10 @@ const WalletScreen = ({ navigation }) => {
                             });
                             setStatsLoading(false);
                         }
-                    } else {
-                        // Wait for listener to populate allTimeStats
-                        // Do NOT setStatsLoading(false) yet.
                     }
                     return;
                 }
 
-                // CASE 2: Week/Month (Use Aggregation Query - Fast for small subsets)
-                // Calculate start date based on filter
                 let startDate = new Date();
                 let hasDateFilter = false;
 
@@ -258,7 +223,6 @@ const WalletScreen = ({ navigation }) => {
                     hasDateFilter = true;
                 }
 
-                // Construct queries for aggregation
                 const coll = collection(db, "wallet_transactions");
                 const incomeConstraints = [where("type", "==", "income")];
                 const expenseConstraints = [where("type", "==", "expense")];
@@ -268,7 +232,6 @@ const WalletScreen = ({ navigation }) => {
                     expenseConstraints.push(where("date", ">=", startDate));
                 }
 
-                // 1. Fetch Global Totals
                 const incomeQuery = query(coll, ...incomeConstraints);
                 const expenseQuery = query(coll, ...expenseConstraints);
 
@@ -287,12 +250,12 @@ const WalletScreen = ({ navigation }) => {
                         balance: totalIncome - totalExpense
                     });
 
-                    setStatsLoading(false); // Only finish loading here for Aggregation path
+                    setStatsLoading(false);
                 }
 
             } catch (error) {
                 console.error("Stats Aggregation Failed:", error);
-                if (isActive) setStatsLoading(false); // Error fallback
+                if (isActive) setStatsLoading(false);
             }
         };
 
@@ -306,7 +269,6 @@ const WalletScreen = ({ navigation }) => {
 
     // 5. Chart Data Fetcher
     useEffect(() => {
-        // If 'all', we use 'allTimeStats' and DO NOT fetch chart list
         if (timeRange === 'all') {
             setChartTransactions([]);
             return;
@@ -325,7 +287,6 @@ const WalletScreen = ({ navigation }) => {
                     queryConstraints.push(where("date", ">=", startDate));
                 }
 
-                // Fetch items for analytics (Limited history is fine for week/month)
                 const q = query(collection(db, "wallet_transactions"), ...queryConstraints);
 
                 const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -346,12 +307,6 @@ const WalletScreen = ({ navigation }) => {
     useEffect(() => {
         setDataLoading(true);
 
-        // 1. Setup List Query (Paginated/Limited for UI performance, but we start with a reasonable batch)
-        // Note: For "Millions" of records, we cannot load all into memory. 
-        // We will load the most recent 500 for the UI list to stay snappy.
-        // The "Stats" below will handle the "All Time" math correctly server-side.
-
-        // Calculate start date based on filter
         let startDate = new Date();
         let queryConstraints = [orderBy("date", "desc")];
 
@@ -362,10 +317,7 @@ const WalletScreen = ({ navigation }) => {
             startDate.setMonth(startDate.getMonth() - 1);
             queryConstraints.push(where("date", ">=", startDate));
         }
-        // 'all' time -> no start date filter
 
-        // Limit list to prevent JS heap crash on mobile
-        // Industry Standard: Pagination
         const listQuery = query(collection(db, "wallet_transactions"), ...queryConstraints, limit(displayLimit));
 
         const unsubscribe = onSnapshot(listQuery, (snapshot) => {
@@ -374,10 +326,6 @@ const WalletScreen = ({ navigation }) => {
                 list.push({ id: doc.id, ...doc.data() });
             });
             setTransactions(list);
-
-            // Note: For millions of transactions, we rely on the server-side "wallet_stats" for totals.
-            // The list view is paginated to standard limits (50-1000) for performance.
-
             setDataLoading(false);
         }, (error) => {
             console.error("Error fetching transactions: ", error);
@@ -388,7 +336,6 @@ const WalletScreen = ({ navigation }) => {
         return () => unsubscribe();
     }, [timeRange, showSnackbar, displayLimit]);
 
-    // Update default category when type changes
     useEffect(() => {
         if (type === 'income') {
             setCategory(INCOME_CATEGORIES[0]);
@@ -421,7 +368,6 @@ const WalletScreen = ({ navigation }) => {
             setVisible(false);
             setAmount('');
             setDescription('');
-            // Reset to defaults
             const defaultType = 'expense';
             setType(defaultType);
             setCategory(EXPENSE_CATEGORIES[0]);
@@ -440,12 +386,6 @@ const WalletScreen = ({ navigation }) => {
 
     const handleDelete = useCallback(async (id) => {
         try {
-            // Need to fetch doc data first to reverse stats, OR pass it in. 
-            // Ideally we pass the whole item to handleDelete. 
-            // For now, let's fetch it quickly if needed, but 'confirmDelete' has the ID. 
-            // We'll update confirmDelete to pass the whole object.
-
-            // Fallback: Read doc
             const docRef = doc(db, "wallet_transactions", id);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
@@ -482,17 +422,16 @@ const WalletScreen = ({ navigation }) => {
             );
         }
     }, [handleDelete]);
+
     const filteredTransactions = useMemo(() => {
         return transactions.filter(t => {
             const matchesType = filterType === 'all' || t.type === filterType;
             const query = searchQuery.toLowerCase();
 
-            // Format date for search matching (e.g. "1/1/2026", "Jan 1, 2026")
             const dateObj = t.date?.toDate ? t.date.toDate() : new Date();
             const dateString = dateObj.toLocaleDateString().toLowerCase();
             const dateStringFull = dateObj.toLocaleDateString(undefined, { dateStyle: 'long' }).toLowerCase();
 
-            // Intelligence: Relative Dates (Today, Yesterday)
             const today = new Date();
             const yesterday = new Date(today);
             yesterday.setDate(yesterday.getDate() - 1);
@@ -503,10 +442,10 @@ const WalletScreen = ({ navigation }) => {
                 (t.description && t.description.toLowerCase().includes(query)) ||
                 (t.category && t.category.toLowerCase().includes(query)) ||
                 (t.amount && t.amount.toString().includes(query)) ||
-                (t.type && t.type.toLowerCase().includes(query)) || // Match "Income"/"Expense"
+                (t.type && t.type.toLowerCase().includes(query)) ||
                 (dateString.includes(query)) ||
                 (dateStringFull.includes(query)) ||
-                (dateObj.toDateString().toLowerCase().includes(query)) || // Robust Match (e.g. "Thu", "Jan", "2026")
+                (dateObj.toDateString().toLowerCase().includes(query)) ||
                 (query === 'today' && isToday) ||
                 (query === 'yesterday' && isYesterday);
 
@@ -519,7 +458,6 @@ const WalletScreen = ({ navigation }) => {
             const dateObj = t.date?.toDate ? t.date.toDate() : new Date();
             const dateKey = dateObj.toDateString();
 
-            // Nice Header Text
             const today = new Date();
             const yesterday = new Date(today);
             yesterday.setDate(yesterday.getDate() - 1);
@@ -538,7 +476,7 @@ const WalletScreen = ({ navigation }) => {
         return Object.values(groups);
     }, [filteredTransactions]);
 
-    const renderTransaction = ({ item }) => (
+    const renderTransactionItem = useCallback(({ item }) => (
         <TouchableOpacity onLongPress={() => confirmDelete(item.id)} delayLongPress={500}>
             <View style={styles.transactionRow}>
                 <View style={styles.iconContainer}>
@@ -550,31 +488,167 @@ const WalletScreen = ({ navigation }) => {
                         />
                     </Surface>
                 </View>
-                <View style={{ flex: 1, marginLeft: 16 }}>
+                <View style={{ flex: 1, marginLeft: 16, marginRight: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                        <Text variant="bodyLarge" style={{ fontWeight: '600', color: theme.colors.onSurface, marginRight: 8 }}>{item.description}</Text>
-                        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>•  {item.category}</Text>
+                        <Text variant="bodyLarge" style={{ fontWeight: '600', color: theme.colors.onSurface, flex: 1 }} numberOfLines={1}>
+                            {item.description}
+                        </Text>
                     </View>
-                    <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                        {item.date?.toDate ? item.date.toDate().toLocaleDateString() + ' • ' + item.date.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text variant="bodySmall" style={{ color: theme.colors.outline, marginRight: 6 }}>{item.category}</Text>
+                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                            • {item.date?.toDate ? item.date.toDate().toLocaleDateString() + ' • ' + item.date.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                        </Text>
+                    </View>
                 </View>
                 <Text
                     variant="titleMedium"
                     style={{
                         fontWeight: 'bold',
                         color: item.type === 'income' ? theme.colors.primary : theme.colors.error,
-                        flex: 0.4,
-                        textAlign: 'right'
+                        textAlign: 'right',
+                        minWidth: 80
                     }}
-                    adjustsFontSizeToFit
                     numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
                 >
                     {item.type === 'income' ? '+' : '-'}₹{Math.abs(item.amount).toLocaleString('en-IN')}
                 </Text>
             </View>
         </TouchableOpacity>
-    );
+    ), [theme, confirmDelete]);
+
+    const ListHeader = useMemo(() => (
+        <View style={{ paddingBottom: 16 }}>
+            <View style={{ marginBottom: 16 }}>
+                <SegmentedButtons
+                    value={timeRange}
+                    onValueChange={setTimeRange}
+                    buttons={[
+                        { value: 'week', label: '7 Days' },
+                        { value: 'month', label: '30 Days' },
+                        { value: 'all', label: 'All Time' },
+                    ]}
+                    style={{ marginBottom: 0 }}
+                />
+            </View>
+
+            <Surface style={[styles.balanceCard, { backgroundColor: theme.colors.surface }]} elevation={2}>
+                <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>NET WORTH</Text>
+                {statsLoading ? (
+                    <View style={{ height: 50, justifyContent: 'center', alignItems: 'flex-start' }}>
+                        <ActivityIndicator size="small" />
+                    </View>
+                ) : (
+                    <Text
+                        variant="displayMedium"
+                        style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4, marginBottom: 24 }}
+                        adjustsFontSizeToFit
+                        numberOfLines={1}
+                        minimumFontScale={0.5}
+                    >
+                        ₹{globalStats.balance.toLocaleString('en-IN')}
+                    </Text>
+                )}
+
+                <View style={styles.statsRow}>
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                        <View style={[styles.statIcon, { backgroundColor: theme.colors.primaryContainer }]}>
+                            <Icon source="arrow-down-left" color={theme.colors.primary} size={20} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Income</Text>
+                            {statsLoading ? (
+                                <ActivityIndicator size="small" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
+                            ) : (
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
+                                    ₹{globalStats.income.toLocaleString('en-IN')}
+                                </Text>
+                            )}
+                        </View>
+                    </View>
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                        <View style={[styles.statIcon, { backgroundColor: theme.colors.errorContainer }]}>
+                            <Icon source="arrow-up-right" color={theme.colors.error} size={20} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Expense</Text>
+                            {statsLoading ? (
+                                <ActivityIndicator size="small" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
+                            ) : (
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
+                                    ₹{globalStats.expense.toLocaleString('en-IN')}
+                                </Text>
+                            )}
+                        </View>
+                    </View>
+                </View>
+            </Surface>
+
+            {
+                ((filterType === 'all') && ((globalStats?.income || 0) > 0 || (globalStats?.expense || 0) > 0)) && (
+                    <StatChart title="Cash Flow (All Time Accurate)" data={[
+                        {
+                            name: 'Income',
+                            amount: globalStats.income || 0,
+                            color: theme.colors.primary,
+                            legendFontColor: theme.colors.onSurfaceVariant,
+                            legendFontSize: 12
+                        },
+                        {
+                            name: 'Expense',
+                            amount: globalStats.expense || 0,
+                            color: theme.colors.error,
+                            legendFontColor: theme.colors.onSurfaceVariant,
+                            legendFontSize: 12
+                        }
+                    ].sort((a, b) => b.amount - a.amount)} theme={theme} />
+                )
+            }
+
+            {
+                (filterType === 'expense' && itemStats.expenseItemsChart.length > 0) && (
+                    <StatChart title={timeRange === 'all' ? "All Time Expenses" : "Top Recent Expenses"} data={itemStats.expenseItemsChart} theme={theme} />
+                )
+            }
+
+            {
+                (filterType === 'income' && itemStats.incomeItemsChart.length > 0) && (
+                    <StatChart title={timeRange === 'all' ? "All Time Income" : "Top Recent Income"} data={itemStats.incomeItemsChart} theme={theme} />
+                )
+            }
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 }}>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>Transactions</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <Chip selected={filterType === 'all'} onPress={() => setFilterType('all')} showSelectedOverlay compact>All</Chip>
+                    <Chip selected={filterType === 'expense'} onPress={() => setFilterType('expense')} showSelectedOverlay compact>Exp</Chip>
+                    <Chip selected={filterType === 'income'} onPress={() => setFilterType('income')} showSelectedOverlay compact>Inc</Chip>
+                </View>
+            </View>
+
+            <Searchbar
+                placeholder="Search transactions"
+                onChangeText={setSearchQuery}
+                value={searchQuery}
+                style={{ marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 16, height: 46 }}
+                inputStyle={{ minHeight: 0, alignSelf: 'center' }}
+                iconColor={theme.colors.onSurfaceVariant}
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+                elevation={0}
+            />
+
+            {
+                filteredTransactions.length === 0 && (
+                    <View style={{ alignItems: 'center', padding: 40, opacity: 0.5 }}>
+                        <Icon source="wallet-outline" size={64} color={theme.colors.onSurfaceVariant} />
+                        <Text variant="bodyLarge" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>No transactions found</Text>
+                    </View>
+                )
+            }
+        </View >
+    ), [timeRange, globalStats, itemStats, theme, filterType, searchQuery, filteredTransactions.length, statsLoading]);
 
     const renderModalContent = () => (
         <>
@@ -635,197 +709,13 @@ const WalletScreen = ({ navigation }) => {
         </>
     );
 
-    const renderTransactionItem = useCallback(({ item }) => (
-        <TouchableOpacity onLongPress={() => confirmDelete(item.id)} delayLongPress={500}>
-            <View style={styles.transactionRow}>
-                <View style={styles.iconContainer}>
-                    <Surface style={[styles.iconSurface, { backgroundColor: item.type === 'income' ? theme.colors.primaryContainer : theme.colors.errorContainer }]} elevation={0}>
-                        <Icon
-                            source={item.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}
-                            color={item.type === 'income' ? theme.colors.primary : theme.colors.error}
-                            size={20}
-                        />
-                    </Surface>
-                </View>
-                <View style={{ flex: 1, marginLeft: 16, marginRight: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                        <Text variant="bodyLarge" style={{ fontWeight: '600', color: theme.colors.onSurface, flex: 1 }} numberOfLines={1}>
-                            {item.description}
-                        </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text variant="bodySmall" style={{ color: theme.colors.outline, marginRight: 6 }}>{item.category}</Text>
-                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                            • {item.date?.toDate ? item.date.toDate().toLocaleDateString() + ' • ' + item.date.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
-                        </Text>
-                    </View>
-                </View>
-                <Text
-                    variant="titleMedium"
-                    style={{
-                        fontWeight: 'bold',
-                        color: item.type === 'income' ? theme.colors.primary : theme.colors.error,
-                        textAlign: 'right',
-                        minWidth: 80
-                    }}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.7}
-                >
-                    {item.type === 'income' ? '+' : '-'}₹{Math.abs(item.amount).toLocaleString('en-IN')}
-                </Text>
-            </View>
-        </TouchableOpacity>
-    ), [theme, confirmDelete]);
-
-    const ListHeader = useMemo(() => (
-        <View style={{ paddingBottom: 16 }}>
-            {/* Time Filter */}
-            <View style={{ marginBottom: 16 }}>
-                <SegmentedButtons
-                    value={timeRange}
-                    onValueChange={setTimeRange}
-                    buttons={[
-                        { value: 'week', label: '7 Days' },
-                        { value: 'month', label: '30 Days' },
-                        { value: 'all', label: 'All Time' },
-                    ]}
-                    style={{ marginBottom: 0 }}
-                />
-            </View>
-
-            {/* Balance Overview */}
-            {/* Balance Overview */}
-            <Surface style={[styles.balanceCard, { backgroundColor: theme.colors.surface }]} elevation={2}>
-                <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>NET WORTH</Text>
-                {statsLoading ? (
-                    <View style={{ height: 50, justifyContent: 'center', alignItems: 'flex-start' }}>
-                        <ActivityIndicator size="small" />
-                    </View>
-                ) : (
-                    <Text
-                        variant="displayMedium"
-                        style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4, marginBottom: 24 }}
-                        adjustsFontSizeToFit
-                        numberOfLines={1}
-                        minimumFontScale={0.5}
-                    >
-                        ₹{globalStats.balance.toLocaleString('en-IN')}
-                    </Text>
-                )}
-
-                <View style={styles.statsRow}>
-                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                        <View style={[styles.statIcon, { backgroundColor: theme.colors.primaryContainer }]}>
-                            <Icon source="arrow-down-left" color={theme.colors.primary} size={20} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Income</Text>
-                            {statsLoading ? (
-                                <ActivityIndicator size="small" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
-                            ) : (
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
-                                    ₹{globalStats.income.toLocaleString('en-IN')}
-                                </Text>
-                            )}
-                        </View>
-                    </View>
-                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                        <View style={[styles.statIcon, { backgroundColor: theme.colors.errorContainer }]}>
-                            <Icon source="arrow-up-right" color={theme.colors.error} size={20} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Expense</Text>
-                            {statsLoading ? (
-                                <ActivityIndicator size="small" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
-                            ) : (
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
-                                    ₹{globalStats.expense.toLocaleString('en-IN')}
-                                </Text>
-                            )}
-                        </View>
-                    </View>
-                </View>
-            </Surface>
-
-            {/* Visual Analytics - Pie Chart (Visible Data) */}
-            {
-                ((filterType === 'all') && ((globalStats?.income || 0) > 0 || (globalStats?.expense || 0) > 0)) && (
-                    <StatChart title="Cash Flow (All Time Accurate)" data={[
-                        {
-                            name: 'Income',
-                            amount: globalStats.income || 0, // Use Exact Server Total
-                            color: theme.colors.primary,
-                            legendFontColor: theme.colors.onSurfaceVariant,
-                            legendFontSize: 12
-                        },
-                        {
-                            name: 'Expense',
-                            amount: globalStats.expense || 0, // Use Exact Server Total
-                            color: theme.colors.error,
-                            legendFontColor: theme.colors.onSurfaceVariant,
-                            legendFontSize: 12
-                        }
-                    ].sort((a, b) => b.amount - a.amount)} theme={theme} />
-                )
-            }
-
-
-
-            {
-                // Item breakdown for Expense
-                (filterType === 'expense' && itemStats.expenseItemsChart.length > 0) && (
-                    <StatChart title={timeRange === 'all' ? "All Time Expenses" : "Top Recent Expenses"} data={itemStats.expenseItemsChart} theme={theme} />
-                )
-            }
-
-
-
-            {
-                (filterType === 'income' && itemStats.incomeItemsChart.length > 0) && (
-                    <StatChart title={timeRange === 'all' ? "All Time Income" : "Top Recent Income"} data={itemStats.incomeItemsChart} theme={theme} />
-                )
-            }
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 }}>
-                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>Transactions</Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Chip selected={filterType === 'all'} onPress={() => setFilterType('all')} showSelectedOverlay compact>All</Chip>
-                    <Chip selected={filterType === 'expense'} onPress={() => setFilterType('expense')} showSelectedOverlay compact>Exp</Chip>
-                    <Chip selected={filterType === 'income'} onPress={() => setFilterType('income')} showSelectedOverlay compact>Inc</Chip>
-                </View>
-            </View>
-
-            <Searchbar
-                placeholder="Search transactions"
-                onChangeText={setSearchQuery}
-                value={searchQuery}
-                style={{ marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 16, height: 46 }}
-                inputStyle={{ minHeight: 0, alignSelf: 'center' }}
-                iconColor={theme.colors.onSurfaceVariant}
-                placeholderTextColor={theme.colors.onSurfaceVariant}
-                elevation={0}
-            />
-
-            {
-                filteredTransactions.length === 0 && (
-                    <View style={{ alignItems: 'center', padding: 40, opacity: 0.5 }}>
-                        <Icon source="wallet-outline" size={64} color={theme.colors.onSurfaceVariant} />
-                        <Text variant="bodyLarge" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>No transactions found</Text>
-                    </View>
-                )
-            }
-        </View >
-    ), [timeRange, globalStats, itemStats, theme, filterType, searchQuery, filteredTransactions.length]);
-
     return (
-        <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-            <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0 }}>
-                <Appbar.BackAction onPress={() => navigation.goBack()} />
-                <Appbar.Content title="Wallet" titleStyle={{ fontWeight: 'bold' }} />
-                <Appbar.Action icon="plus" onPress={() => setVisible(true)} />
-            </Appbar.Header>
-
+        <CRMLayout
+            title="Wallet"
+            navigation={navigation}
+            scrollable={false}
+            actions={<Appbar.Action icon="plus" onPress={() => setVisible(true)} />}
+        >
             {dataLoading ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" />
@@ -892,7 +782,7 @@ const WalletScreen = ({ navigation }) => {
             >
                 <Text style={{ color: theme.colors.inverseOnSurface }}>{snackbarMessage}</Text>
             </Snackbar>
-        </View>
+        </CRMLayout>
     );
 };
 

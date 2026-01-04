@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Image, TouchableOpacity, useWindowDimensions } from 'react-native';
-import { Text, useTheme, Card, Avatar, Button, Appbar, SegmentedButtons, Surface, Icon, FAB } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { Text, useTheme, Surface, Icon, FAB, SegmentedButtons, Avatar, IconButton, Divider } from 'react-native-paper';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { NotesCard } from '../components/NotesCard';
 import { useSound } from '../context/SoundContext';
-import { ResponsiveContainer } from '../components/ResponsiveContainer';
+import { CRMLayout } from '../components/CRMLayout';
 
 const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
     const { width } = useWindowDimensions();
-    const isDesktop = width >= 768;
+    const isDesktop = width >= 1024;
     const { playSound } = useSound();
     const prevOrdersRef = React.useRef(0);
     const [timeRange, setTimeRange] = useState('today');
@@ -23,20 +23,18 @@ const HomeScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState({
-        firestore: true, // Always true if we can query
+        firestore: true,
         shiprocket: false,
         shopify: false
     });
 
-    // Dynamic Card Widths
-    const cardWidth = isDesktop ? '23.5%' : '48%';
-    const menuCardWidth = isDesktop ? '23.5%' : '48%';
+    const cardWidth = isDesktop ? '23%' : '48%';
+    const menuCardWidth = isDesktop ? '23%' : '48%';
 
     // Check webhook health
     useEffect(() => {
         const checkWebhookHealth = async () => {
             try {
-                // Check if we have recent Shiprocket data (last 24 hours)
                 const shiprocketQuery = query(
                     collection(db, "checkouts"),
                     where("updatedAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))),
@@ -47,7 +45,6 @@ const HomeScreen = ({ navigation }) => {
                 const shiprocketSnapshot = await getDocs(shiprocketQuery);
                 setConnectionStatus(prev => ({ ...prev, shiprocket: !shiprocketSnapshot.empty }));
 
-                // Check if we have recent Shopify orders (last 24 hours)
                 const shopifyQuery = query(
                     collection(db, "orders"),
                     where("createdAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))),
@@ -63,14 +60,13 @@ const HomeScreen = ({ navigation }) => {
         };
 
         checkWebhookHealth();
-        // Re-check every 5 minutes
         const interval = setInterval(checkWebhookHealth, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, []);
 
     const getStartDate = (range) => {
         const now = new Date();
-        now.setHours(0, 0, 0, 0); // Start of today
+        now.setHours(0, 0, 0, 0);
 
         if (range === 'today') return now;
 
@@ -89,7 +85,6 @@ const HomeScreen = ({ navigation }) => {
         const startDate = getStartDate(timeRange);
         const startTimestamp = Timestamp.fromDate(startDate);
 
-        // 1. Orders Query
         const ordersQuery = query(
             collection(db, "orders"),
             where("createdAt", ">=", startTimestamp),
@@ -112,20 +107,17 @@ const HomeScreen = ({ navigation }) => {
                 aov: totalOrders > 0 ? Math.round(totalSales / totalOrders) : 0
             }));
 
-            // Play sound if new order detected
             if (!loading && totalOrders > prevOrdersRef.current && prevOrdersRef.current > 0) {
                 playSound('ORDER_PLACED');
             }
             prevOrdersRef.current = totalOrders;
 
             setLoading(false);
-            // Update Shopify status if we got data
             if (snapshot.size > 0) {
                 setConnectionStatus(prev => ({ ...prev, shopify: true }));
             }
         });
 
-        // 2. Active Carts Query (Last 24h)
         const cartsQuery = query(
             collection(db, "checkouts"),
             where("updatedAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))),
@@ -153,7 +145,6 @@ const HomeScreen = ({ navigation }) => {
                 ...prev,
                 activeCarts: activeCount
             }));
-            // Update Shiprocket status if we got data
             if (snapshot.size > 0) {
                 setConnectionStatus(prev => ({ ...prev, shiprocket: true }));
             }
@@ -177,224 +168,196 @@ const HomeScreen = ({ navigation }) => {
     }, [fetchStats]);
 
     const menuItems = [
-        {
-            id: 1,
-            title: 'Orders',
-            subtitle: 'Manage Orders',
-            icon: 'package-variant',
-            screen: 'DatabaseManager', // Fixed Name
-        },
-        {
-            id: 2,
-            title: 'Analytics',
-            subtitle: 'Sales Trends',
-            icon: 'chart-bar',
-            screen: 'Stats',
-        },
-        {
-            id: 3,
-            title: 'Settings',
-            subtitle: 'App Configuration',
-            icon: 'cog',
-            screen: 'Settings',
-        },
-        {
-            id: 8,
-            title: 'Wallet',
-            subtitle: 'Expenses & Income',
-            icon: 'wallet-outline',
-            screen: 'Wallet',
-        },
-        {
-            id: 4,
-            title: 'Firebase',
-            subtitle: 'Raw Data',
-            icon: 'database',
-            screen: 'DatabaseManager',
-        },
-        {
-            id: 5,
-            title: 'WhatsApp',
-            subtitle: 'Automations',
-            icon: 'whatsapp',
-            screen: 'WhatsAppManager',
-        },
-        {
-            id: 6,
-            title: 'Campaigns',
-            subtitle: 'Ad Manager',
-            icon: 'bullhorn',
-            screen: 'Campaigns',
-        },
-        {
-            id: 7,
-            title: 'Notes',
-            subtitle: 'Write Stuff',
-            icon: 'notebook',
-            screen: 'Notes',
-        },
+        { id: 1, title: 'Orders', subtitle: 'Manage Orders', icon: 'package-variant', screen: 'DatabaseManager' },
+        { id: 2, title: 'Analytics', subtitle: 'Sales Trends', icon: 'chart-bar', screen: 'Stats' },
+        { id: 3, title: 'Settings', subtitle: 'App Configuration', icon: 'cog', screen: 'Settings' },
+        { id: 8, title: 'Wallet', subtitle: 'Expenses & Income', icon: 'wallet-outline', screen: 'Wallet' },
+        { id: 4, title: 'Firebase', subtitle: 'Raw Data', icon: 'database', screen: 'DatabaseManager' },
+        { id: 5, title: 'WhatsApp', subtitle: 'Automations', icon: 'whatsapp', screen: 'WhatsAppManager' },
+        { id: 6, title: 'Campaigns', subtitle: 'Ad Manager', icon: 'bullhorn', screen: 'Campaigns' },
+        { id: 7, title: 'Notes', subtitle: 'Write Stuff', icon: 'notebook', screen: 'Notes' },
     ];
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <ResponsiveContainer>
-                <Appbar.Header style={{ backgroundColor: theme.colors.background, elevation: 0, height: 70, paddingHorizontal: 0 }}>
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', marginLeft: isDesktop ? 0 : -20 }}>
-                        <Image
-                            source={theme.dark ? require('../../logo/easey-white.png') : require('../../logo/easey-dark.png')}
-                            style={{ width: 180, height: 60 }}
-                            resizeMode="contain"
-                        />
-                    </View>
+        <CRMLayout title="Overview" navigation={navigation} scrollable={true}>
+            {/* Header Controls */}
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 24 }}>
+                <SegmentedButtons
+                    value={timeRange}
+                    onValueChange={setTimeRange}
+                    buttons={[
+                        { value: 'today', label: 'Today' },
+                        { value: 'week', label: '7 Days' },
+                        { value: 'month', label: '30 Days' },
+                    ]}
+                    style={{ backgroundColor: theme.colors.elevation.level1, borderRadius: 20, minWidth: isDesktop ? 300 : '100%' }}
+                />
+            </View>
 
-                </Appbar.Header>
+            {/* Stats Grid */}
+            <View style={styles.statsGrid}>
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Total Sales</Text>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                        ₹{stats.sales.toLocaleString('en-IN')}
+                    </Text>
+                </Surface>
 
-                <ScrollView
-                    contentContainerStyle={styles.content}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* Date Filter - Minimalist */}
-                    <View style={{ marginBottom: 24, width: isDesktop ? '50%' : '100%', alignSelf: isDesktop ? 'flex-start' : 'auto' }}>
-                        <SegmentedButtons
-                            value={timeRange}
-                            onValueChange={setTimeRange}
-                            buttons={[
-                                { value: 'today', label: 'Today' },
-                                { value: 'week', label: '7 Days' },
-                                { value: 'month', label: '30 Days' },
-                            ]}
-                            style={{ backgroundColor: theme.colors.elevation.level1, borderRadius: 20 }}
-                        />
-                    </View>
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Orders</Text>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                        {stats.orders}
+                    </Text>
+                </Surface>
 
-                    {/* Stats Grid - Clean */}
-                    <View style={styles.statsGrid}>
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
-                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Total Sales</Text>
-                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                                ₹{stats.sales.toLocaleString('en-IN')}
-                            </Text>
-                        </Surface>
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>AOV</Text>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                        ₹{stats.aov.toLocaleString('en-IN')}
+                    </Text>
+                </Surface>
 
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
-                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Orders</Text>
-                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                                {stats.orders}
-                            </Text>
-                        </Surface>
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Active Carts</Text>
+                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                        {stats.activeCarts}
+                    </Text>
+                </Surface>
+            </View>
 
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
-                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>AOV</Text>
-                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                                ₹{stats.aov.toLocaleString('en-IN')}
-                            </Text>
-                        </Surface>
-
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, width: cardWidth }]} elevation={0}>
-                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Active Carts</Text>
-                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                                {stats.activeCarts}
-                            </Text>
-                        </Surface>
-                    </View>
-
-                    {/* NoteBook Section */}
+            {/* Split Content for Desktop */}
+            <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 24 }}>
+                {/* Main Work Area (Notes) */}
+                <View style={{ flex: 2 }}>
                     <NotesCard />
+                </View>
 
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8, color: theme.colors.onBackground }}>Quick Actions</Text>
-
-                    <View style={styles.menuGrid}>
-                        {menuItems.map((item) => (
-                            <TouchableOpacity
-                                key={item.id}
-                                onPress={() => navigation.navigate(item.screen)}
-                                activeOpacity={0.7}
-                                style={[styles.menuCard, { width: menuCardWidth }]}
-                            >
-                                <Surface
-                                    style={{ backgroundColor: theme.colors.surfaceVariant, borderRadius: 16, overflow: 'hidden' }}
-                                    elevation={0}
-                                >
-                                    <View style={{ alignItems: 'center', padding: 20 }}>
-                                        <Avatar.Icon
-                                            size={48}
-                                            icon={item.icon}
-                                            style={{ backgroundColor: 'transparent', marginBottom: 12 }}
-                                            color={theme.colors.onSurfaceVariant}
-                                        />
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>{item.title}</Text>
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, opacity: 0.7 }}>{item.subtitle}</Text>
+                {/* Sidebar / Widgets Area */}
+                <View style={{ flex: 1 }}>
+                    {/* On Desktop, show System Status. On Mobile, show App Navigation Grid */}
+                    {isDesktop ? (
+                        <View style={{ gap: 24 }}>
+                            {/* System Status Widget */}
+                            <Surface style={{ padding: 24, borderRadius: 16, backgroundColor: theme.colors.surfaceVariant }} elevation={0}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>System Status</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.outline, marginRight: 8 }}>
+                                            {refreshing ? 'Checking...' : 'Live'}
+                                        </Text>
+                                        <IconButton icon="refresh" size={18} onPress={onRefresh} style={{ margin: 0 }} />
                                     </View>
-                                </Surface>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                                </View>
+                                <Divider style={{ marginBottom: 16 }} />
+                                <View style={{ gap: 20 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source={connectionStatus.firestore ? "database-check" : "database-off"} size={22} color={connectionStatus.firestore ? "#4ade80" : theme.colors.error} />
+                                            <View style={{ marginLeft: 12 }}>
+                                                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Database</Text>
+                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Firestore Cloud</Text>
+                                            </View>
+                                        </View>
+                                        <Text variant="labelSmall" style={{ color: connectionStatus.firestore ? "#4ade80" : theme.colors.error, fontWeight: 'bold' }}>
+                                            {connectionStatus.firestore ? "Active" : "Down"}
+                                        </Text>
+                                    </View>
 
-                    {/* Connection Status Indicators */}
-                    <View style={{ marginTop: 32, gap: 8, flexDirection: isDesktop ? 'row' : 'column', justifyContent: isDesktop ? 'space-between' : 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
-                            <Icon
-                                source={connectionStatus.firestore ? "check-circle" : "alert-circle"}
-                                size={16}
-                                color={connectionStatus.firestore ? "#4ade80" : theme.colors.error}
-                            />
-                            <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
-                                Firestore {connectionStatus.firestore ? "Connected" : "Disconnected"}
-                            </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source="truck-delivery" size={22} color={connectionStatus.shiprocket ? "#4ade80" : "#fbbf24"} />
+                                            <View style={{ marginLeft: 12 }}>
+                                                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Logistics</Text>
+                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shiprocket API</Text>
+                                            </View>
+                                        </View>
+                                        <Text variant="labelSmall" style={{ color: connectionStatus.shiprocket ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
+                                            {connectionStatus.shiprocket ? "Connected" : "Pending"}
+                                        </Text>
+                                    </View>
+
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source="store" size={22} color={connectionStatus.shopify ? "#4ade80" : "#fbbf24"} />
+                                            <View style={{ marginLeft: 12 }}>
+                                                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Storefront</Text>
+                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Shopify Webhooks</Text>
+                                            </View>
+                                        </View>
+                                        <Text variant="labelSmall" style={{ color: connectionStatus.shopify ? "#4ade80" : "#fbbf24", fontWeight: 'bold' }}>
+                                            {connectionStatus.shopify ? "Synced" : "Waiting"}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </Surface>
+
+                            {/* Pending Actions Widget (New) */}
+                            <Surface style={{ padding: 24, borderRadius: 16, backgroundColor: theme.colors.surface }} elevation={1}>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16 }}>Quick Actions</Text>
+                                <View style={{ gap: 12 }}>
+                                    <TouchableOpacity onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders' })}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: theme.colors.secondaryContainer, borderRadius: 12 }}>
+                                            <Icon source="package-variant-closed" size={20} color={theme.colors.onSecondaryContainer} />
+                                            <Text variant="bodyMedium" style={{ marginLeft: 12, flex: 1, color: theme.colors.onSecondaryContainer, fontWeight: '600' }}>Review Orders</Text>
+                                            <Icon source="chevron-right" size={20} color={theme.colors.onSecondaryContainer} />
+                                        </View>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => navigation.navigate('Wallet')}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: theme.colors.errorContainer, borderRadius: 12 }}>
+                                            <Icon source="wallet-outline" size={20} color={theme.colors.onErrorContainer} />
+                                            <Text variant="bodyMedium" style={{ marginLeft: 12, flex: 1, color: theme.colors.onErrorContainer, fontWeight: '600' }}>Approve Expenses</Text>
+                                            <Icon source="chevron-right" size={20} color={theme.colors.onErrorContainer} />
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+                            </Surface>
                         </View>
+                    ) : (
+                        <>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, marginTop: 8 }}>Apps</Text>
+                            <View style={styles.menuGrid}>
+                                {menuItems.map((item) => (
+                                    <TouchableOpacity
+                                        key={item.id}
+                                        onPress={() => navigation.navigate(item.screen)}
+                                        activeOpacity={0.7}
+                                        style={[styles.menuCard, { width: menuCardWidth }]}
+                                    >
+                                        <Surface style={{ backgroundColor: theme.colors.surfaceVariant, borderRadius: 16, overflow: 'hidden' }} elevation={0}>
+                                            <View style={{ alignItems: 'center', padding: 20 }}>
+                                                <Avatar.Icon size={48} icon={item.icon} style={{ backgroundColor: 'transparent', marginBottom: 12 }} color={theme.colors.onSurfaceVariant} />
+                                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>{item.title}</Text>
+                                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, opacity: 0.7 }}>{item.subtitle}</Text>
+                                            </View>
+                                        </Surface>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </>
+                    )}
+                </View>
+            </View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
-                            <Icon
-                                source={connectionStatus.shiprocket ? "check-circle" : "alert-circle"}
-                                size={16}
-                                color={connectionStatus.shiprocket ? "#4ade80" : "#fbbf24"}
-                            />
-                            <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
-                                Shiprocket {connectionStatus.shiprocket ? "Active" : "No Data (24h)"}
-                            </Text>
-                        </View>
-
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
-                            <Icon
-                                source={connectionStatus.shopify ? "check-circle" : "alert-circle"}
-                                size={16}
-                                color={connectionStatus.shopify ? "#4ade80" : "#fbbf24"}
-                            />
-                            <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.onBackground }}>
-                                Shopify {connectionStatus.shopify ? "Active" : "No Data (24h)"}
-                            </Text>
-                        </View>
-                    </View>
-                </ScrollView>
-            </ResponsiveContainer>
-
+            {/* AI Assistant FAB */}
             <FAB
-                icon="auto-fix" // Magical spark icon for AI
+                icon="auto-fix"
+                label={isDesktop ? "Ask Easey" : undefined}
                 style={[styles.fab, { backgroundColor: theme.colors.primary }]}
                 color={theme.colors.onPrimary}
                 onPress={() => navigation.navigate('Assistant')}
             />
-        </View >
+        </CRMLayout>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    content: {
-        padding: 16,
-        paddingBottom: 32,
-    },
     statsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12,
+        gap: 12, // consistent gap
         marginBottom: 32,
     },
     statCard: {
-        // Width is now dynamic
         padding: 20,
         borderRadius: 16,
     },
@@ -404,13 +367,12 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     menuCard: {
-        // Width is now dynamic
         borderRadius: 16,
         overflow: 'hidden',
     },
     fab: {
         position: 'absolute',
-        margin: 16,
+        margin: 24,
         right: 0,
         bottom: 0,
         borderRadius: 16,
