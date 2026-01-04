@@ -9,13 +9,15 @@ export const ANDROID_CHANNEL_ID = 'easey_default_v1'; // Must match app.json met
 const ANDROID_CHANNEL_NAME = 'Default Notification';
 
 // --- Configuration ---
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-    }),
-});
+if (Platform.OS !== 'web') {
+    Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+        }),
+    });
+}
 
 const getMessaging = () => {
     if (Platform.OS === 'web' || Constants.appOwnership === 'expo') {

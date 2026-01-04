@@ -1,8 +1,9 @@
+import './src/ignoreWarnings';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider as PaperProvider, adaptNavigationTheme, MD3DarkTheme, MD3LightTheme, Text, Button, Surface } from 'react-native-paper';
-import { StatusBar, ActivityIndicator, View, AppState } from 'react-native';
+import { StatusBar, ActivityIndicator, View, AppState, LogBox } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as LocalAuthentication from 'expo-local-authentication';
 import HomeScreen from './src/screens/HomeScreen';
@@ -238,6 +239,9 @@ function Main() {
     'MaterialCommunityIcons': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
   });
 
+
+
+
   useEffect(() => {
     if (user) {
       // Only attempt push notifications if on a physical device to avoid Expo Go warnings
@@ -255,6 +259,9 @@ function Main() {
   }
 
   const activeTheme = isThemeDark ? CombinedDarkTheme : CombinedLightTheme;
+
+
+
 
   return (
     <PaperProvider theme={activeTheme}>

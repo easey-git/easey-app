@@ -479,66 +479,82 @@ module.exports = async (req, res) => {
 
                 await orderRef.set(orderData, { merge: true });
 
-                // 2. Cleanup Carts (Batch Delete)
+                // 2. Parallelize Side Effects (Cleanup, WhatsApp, FCM)
+                // This prevents independent tasks from blocking each other
+                const tasks = [];
+
+                // Task A: Cleanup Carts
                 if (phoneNormalized || data.email) {
-                    const batch = db.batch();
-                    const checkoutsRef = db.collection("checkouts");
-                    let queryRefs = [];
+                    tasks.push((async () => {
+                        try {
+                            const batch = db.batch();
+                            const checkoutsRef = db.collection("checkouts");
+                            let queryRefs = [];
 
-                    if (data.checkout_token) queryRefs.push(checkoutsRef.where("shopifyCartToken", "==", data.checkout_token));
-                    if (data.email) queryRefs.push(checkoutsRef.where("email", "==", data.email));
-                    if (phoneNormalized) queryRefs.push(checkoutsRef.where("phoneNormalized", "==", phoneNormalized));
+                            if (data.checkout_token) queryRefs.push(checkoutsRef.where("shopifyCartToken", "==", data.checkout_token));
+                            if (data.email) queryRefs.push(checkoutsRef.where("email", "==", data.email));
+                            if (phoneNormalized) queryRefs.push(checkoutsRef.where("phoneNormalized", "==", phoneNormalized));
 
-                    const snapshots = await Promise.all(queryRefs.map(q => q.get()));
-                    const docsToDelete = new Set();
-                    snapshots.forEach(snap => snap.docs.forEach(doc => docsToDelete.add(doc.ref.path)));
+                            const snapshots = await Promise.all(queryRefs.map(q => q.get()));
+                            const docsToDelete = new Set();
+                            snapshots.forEach(snap => snap.docs.forEach(doc => docsToDelete.add(doc.ref.path)));
 
-                    docsToDelete.forEach(path => batch.delete(db.doc(path)));
-                    if (docsToDelete.size > 0) await batch.commit();
-                }
-
-                // 3. Send COD Confirmation (Transaction for Duplicate Protection)
-                if (orderData.status === 'COD' && phoneNormalized) {
-                    let messagePayload = null;
-
-                    await db.runTransaction(async (t) => {
-                        const freshDoc = await t.get(orderRef);
-                        if (freshDoc.exists && freshDoc.data().whatsappSent) {
-                            console.warn(`Duplicate Order Webhook for ${orderData.orderNumber}. Skipping WhatsApp.`);
-                            return;
+                            docsToDelete.forEach(path => batch.delete(db.doc(path)));
+                            if (docsToDelete.size > 0) await batch.commit();
+                        } catch (err) {
+                            console.error('[Cleanup] Error:', err.message);
                         }
-
-                        t.update(orderRef, { whatsappSent: true });
-
-                        const itemName = orderData.items[0]?.name || 'Your Order';
-                        messagePayload = {
-                            to: phoneNormalized,
-                            template: CONSTANTS.TEMPLATES.COD_CONFIRMATION,
-                            components: [
-                                {
-                                    type: 'body',
-                                    parameters: [
-                                        { type: 'text', text: orderData.customerName || 'Customer' },
-                                        { type: 'text', text: String(orderData.orderNumber || '') },
-                                        { type: 'text', text: itemName },
-                                        { type: 'text', text: String(orderData.totalPrice || '0') }
-                                    ]
-                                }
-                            ]
-                        };
-                    });
-
-                    if (messagePayload) {
-                        await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
-                    }
+                    })());
                 }
 
-                // 4. Send Push Notification
-                await sendFCMNotifications(
+                // Task B: Send COD Confirmation
+                if (orderData.status === 'COD' && phoneNormalized) {
+                    tasks.push((async () => {
+                        try {
+                            let messagePayload = null;
+                            await db.runTransaction(async (t) => {
+                                const freshDoc = await t.get(orderRef);
+                                if (freshDoc.exists && freshDoc.data().whatsappSent) {
+                                    return; // Already sent
+                                }
+                                t.update(orderRef, { whatsappSent: true });
+
+                                const itemName = orderData.items[0]?.name || 'Your Order';
+                                messagePayload = {
+                                    to: phoneNormalized,
+                                    template: CONSTANTS.TEMPLATES.COD_CONFIRMATION,
+                                    components: [
+                                        {
+                                            type: 'body',
+                                            parameters: [
+                                                { type: 'text', text: orderData.customerName || 'Customer' },
+                                                { type: 'text', text: String(orderData.orderNumber || '') },
+                                                { type: 'text', text: itemName },
+                                                { type: 'text', text: String(orderData.totalPrice || '0') }
+                                            ]
+                                        }
+                                    ]
+                                };
+                            });
+
+                            if (messagePayload) {
+                                await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
+                            }
+                        } catch (err) {
+                            console.error('[WhatsApp] Error:', err.message);
+                        }
+                    })());
+                }
+
+                // Task C: Send Push Notification
+                tasks.push(sendFCMNotifications(
                     'New Order Received! 💰',
                     `Order #${data.order_number} from ${orderData.customerName} - ₹${data.total_price}`,
                     { orderId, type: 'new_order' }
-                );
+                ));
+
+                // Wait for all side effects to complete (non-blocking for individual tasks)
+                await Promise.allSettled(tasks);
 
                 return res.status(200).json({ success: true });
             }

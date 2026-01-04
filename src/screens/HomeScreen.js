@@ -242,7 +242,8 @@ const HomeScreen = ({ navigation }) => {
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', marginLeft: isDesktop ? 0 : -20 }}>
                         <Image
                             source={theme.dark ? require('../../logo/easey-white.png') : require('../../logo/easey-dark.png')}
-                            style={{ width: 180, height: 60, resizeMode: 'contain' }}
+                            style={{ width: 180, height: 60 }}
+                            resizeMode="contain"
                         />
                     </View>
 

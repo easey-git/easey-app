@@ -1,4 +1,15 @@
 const { BetaAnalyticsDataClient } = require('@google-analytics/data');
+const cors = require('cors')({ origin: true });
+
+// Helper to run middleware
+const runMiddleware = (req, res, fn) => {
+    return new Promise((resolve, reject) => {
+        fn(req, res, (result) => {
+            if (result instanceof Error) return reject(result);
+            return resolve(result);
+        });
+    });
+};
 
 /**
  * GA4 Active Visitors API
@@ -7,11 +18,8 @@ const { BetaAnalyticsDataClient } = require('@google-analytics/data');
  */
 
 module.exports = async (req, res) => {
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Cache-Control, Pragma');
+    // Handle CORS
+    await runMiddleware(req, res, cors);
 
     // Handle OPTIONS request
     if (req.method === 'OPTIONS') {
@@ -89,7 +97,7 @@ module.exports = async (req, res) => {
             ],
         });
 
-        // Process rows to calculate total and get breakdown
+        // Process rows to calculate total and get breakdown (Standard 30-min Window)
         let totalActive = 0;
         const details = [];
 

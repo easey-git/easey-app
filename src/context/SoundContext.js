@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { Audio } from 'expo-av';
+// import { Audio } from 'expo-av'; // Deprecated and unused
+
 
 const SoundContext = createContext();
 
@@ -8,22 +9,8 @@ export const useSound = () => useContext(SoundContext);
 export const SoundProvider = ({ children }) => {
     const [soundEnabled, setSoundEnabled] = useState(true);
 
-    useEffect(() => {
-        const configureAudio = async () => {
-            try {
-                await Audio.setAudioModeAsync({
-                    allowsRecordingIOS: false,
-                    staysActiveInBackground: true,
-                    playsInSilentModeIOS: true,
-                    shouldDuckAndroid: true,
-                    playThroughEarpieceAndroid: false,
-                });
-            } catch (error) {
+    // Audio configuration removed as sound is disabled
 
-            }
-        };
-        configureAudio();
-    }, []);
 
     // Sound playback disabled - using system notification sounds
     const soundMap = {};

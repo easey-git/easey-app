@@ -1,4 +1,15 @@
 const axios = require('axios');
+const cors = require('cors')({ origin: true });
+
+// Helper to run middleware
+const runMiddleware = (req, res, fn) => {
+    return new Promise((resolve, reject) => {
+        fn(req, res, (result) => {
+            if (result instanceof Error) return reject(result);
+            return resolve(result);
+        });
+    });
+};
 
 /**
  * Campaigns API - Fetches today's campaign performance from Meta (Facebook/Instagram)
@@ -6,11 +17,8 @@ const axios = require('axios');
  */
 
 module.exports = async (req, res) => {
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Cache-Control, Pragma');
+    // Handle CORS
+    await runMiddleware(req, res, cors);
 
     // Handle OPTIONS request
     if (req.method === 'OPTIONS') {
