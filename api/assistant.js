@@ -119,9 +119,7 @@ const aggregateFirestore = async ({ collection, filters, aggregationType, field 
             if (!field) return `Error: 'field' parameter is required for ${aggregationType}.`;
 
             // Check for known string fields to prevent valid errors
-            if (collection === 'orders' && field === 'totalPrice') {
-                return "Error: 'orders.totalPrice' is stored as a STRING string in database. Server-side aggregation is impossible. Please use queryFirestore to fetch records and sum them manually (limit applies).";
-            }
+            // if (collection === 'orders' && field === 'totalPrice') { ... } REMOVED strictly to allow number calculation
 
             const aggField = aggregationType === 'sum'
                 ? admin.firestore.AggregateField.sum(field)
