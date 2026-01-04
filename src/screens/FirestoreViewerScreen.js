@@ -395,6 +395,25 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     };
 
+    const handleVoiceNoteAttach = async (item) => {
+        // Placeholder for voice note recording
+        showSnackbar("Voice note recording - implement recorder");
+        // When implemented, update Firestore:
+        // await updateDoc(item.ref, { voiceNoteUrl: recordedAudioUrl });
+        // setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: recordedAudioUrl } : d));
+    };
+
+    const handleVoiceNoteDelete = async (item) => {
+        try {
+            await updateDoc(item.ref, { voiceNoteUrl: null });
+            setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: null } : d));
+            showSnackbar("Voice note deleted");
+        } catch (error) {
+            console.error("Error deleting voice note:", error);
+            showSnackbar("Failed to delete voice note", true);
+        }
+    };
+
     const renderDocItem = useCallback(({ item }) => {
         const isSelected = selectedItems.has(item.id);
         return (
@@ -406,6 +425,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 onPress={showDocDetails}
                 onToggle={toggleSelection}
                 onCodToggle={handleCodToggle}
+                onVoiceNoteAttach={handleVoiceNoteAttach}
+                onVoiceNoteDelete={handleVoiceNoteDelete}
             />
         );
     }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection]);
@@ -523,8 +544,66 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     <Dialog.ScrollArea style={{ paddingHorizontal: 0 }}>
                         <ScrollView>
                             <View style={{ paddingHorizontal: 24 }}>
+                                {/* Voice Note Section - Only for Orders */}
+                                {selectedCollection === 'orders' && (
+                                    <Surface style={{ padding: 12, borderRadius: 8, backgroundColor: theme.colors.surfaceVariant, marginBottom: 16 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                            <Text variant="labelMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant }}>
+                                                Voice Note
+                                            </Text>
+                                            {editedDoc?.voiceNoteUrl && (
+                                                <IconButton
+                                                    icon="delete"
+                                                    size={18}
+                                                    iconColor={theme.colors.error}
+                                                    onPress={async () => {
+                                                        try {
+                                                            await updateDoc(doc(db, selectedCollection, editedDoc.id), { voiceNoteUrl: null });
+                                                            setEditedDoc(prev => ({ ...prev, voiceNoteUrl: null }));
+                                                            setSelectedDoc(prev => ({ ...prev, voiceNoteUrl: null }));
+                                                            showSnackbar("Voice note deleted");
+                                                            fetchDocuments();
+                                                        } catch (error) {
+                                                            showSnackbar("Failed to delete voice note", true);
+                                                        }
+                                                    }}
+                                                />
+                                            )}
+                                        </View>
+                                        {editedDoc?.voiceNoteUrl ? (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <Icon source="microphone" size={20} color={theme.colors.primary} />
+                                                <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant }}>
+                                                    Voice note attached
+                                                </Text>
+                                                <Button
+                                                    mode="outlined"
+                                                    compact
+                                                    onPress={() => {
+                                                        // Open voice note URL (you can implement audio player here)
+                                                        showSnackbar("Voice note playback - implement audio player");
+                                                    }}
+                                                >
+                                                    Play
+                                                </Button>
+                                            </View>
+                                        ) : (
+                                            <Button
+                                                mode="outlined"
+                                                icon="microphone"
+                                                compact
+                                                onPress={() => {
+                                                    showSnackbar("Voice note recording - implement recorder");
+                                                }}
+                                            >
+                                                Attach Voice Note
+                                            </Button>
+                                        )}
+                                    </Surface>
+                                )}
+
                                 {editedDoc && Object.entries(editedDoc).map(([key, value]) => (
-                                    key !== 'id' && (
+                                    key !== 'id' && key !== 'voiceNoteUrl' && (
                                         <RenderField key={key} label={key} value={value} />
                                     )
                                 ))}
@@ -533,25 +612,54 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     </Dialog.ScrollArea>
 
                     <Dialog.Actions>
-                        <IconButton
-                            icon={isEditing ? "close" : "pencil"}
-                            onPress={() => setIsEditing(!isEditing)}
-                            size={20}
-                        />
-                        {isEditing ? (
-                            <Button mode="contained" onPress={handleSave}>
-                                Save Changes
-                            </Button>
-                        ) : (
-                            <Button
-                                mode="outlined"
-                                textColor={theme.colors.error}
-                                onPress={() => handleDelete(selectedDoc.id)}
-                            >
-                                Delete
-                            </Button>
-                        )}
-                        <Button onPress={() => setVisible(false)}>Close</Button>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <IconButton
+                                    icon={isEditing ? "close" : "pencil"}
+                                    onPress={() => setIsEditing(!isEditing)}
+                                    size={20}
+                                />
+                                {/* Admin-only Reset Modified Button */}
+                                {hasPermission('manage_users') && editedDoc?.adminEdited && (
+                                    <Button
+                                        mode="text"
+                                        textColor={theme.colors.tertiary}
+                                        onPress={async () => {
+                                            try {
+                                                await updateDoc(doc(db, selectedCollection, editedDoc.id), {
+                                                    adminEdited: false,
+                                                    adminModifiedFields: []
+                                                });
+                                                setEditedDoc(prev => ({ ...prev, adminEdited: false, adminModifiedFields: [] }));
+                                                setSelectedDoc(prev => ({ ...prev, adminEdited: false, adminModifiedFields: [] }));
+                                                showSnackbar("Modification flags cleared");
+                                                fetchDocuments();
+                                            } catch (error) {
+                                                showSnackbar("Failed to reset: " + error.message, true);
+                                            }
+                                        }}
+                                    >
+                                        Reset Modified
+                                    </Button>
+                                )}
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                {isEditing ? (
+                                    <Button mode="contained" onPress={handleSave}>
+                                        Save Changes
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        mode="outlined"
+                                        textColor={theme.colors.error}
+                                        onPress={() => handleDelete(selectedDoc.id)}
+                                    >
+                                        Delete
+                                    </Button>
+                                )}
+                                <Button onPress={() => setVisible(false)}>Close</Button>
+                            </View>
+                        </View>
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
