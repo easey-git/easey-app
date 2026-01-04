@@ -41,7 +41,9 @@ module.exports = async (req, res) => {
         const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
         // Meta Graph API endpoint (Using v21.0 as stable version)
-        const url = `https://graph.facebook.com/v21.0/act_${adAccountId}/campaigns`;
+        // Ensure we don't double-prefix 'act_' if the env var already has it
+        const cleanAdAccountId = adAccountId.replace(/^act_/, '');
+        const url = `https://graph.facebook.com/v21.0/act_${cleanAdAccountId}/campaigns`;
 
         // Fields to fetch
         // Note: We removed 'purchases' and 'purchase_roas' direct fields as they can cause 500 errors
