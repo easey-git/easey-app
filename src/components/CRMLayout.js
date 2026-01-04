@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, useWindowDimensions, ScrollView } from 'react-native';
-import { useTheme, Appbar, IconButton, Text } from 'react-native-paper';
+import { useTheme, Appbar, IconButton, Text, Portal, Modal } from 'react-native-paper';
 import { Sidebar } from './Sidebar';
 
 export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeader = true, scrollable = true, actions }) => {
@@ -13,6 +13,29 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Desktop Sidebar - Always visible */}
             {isDesktop && <Sidebar />}
+
+            {/* Mobile Sidebar - Drawer via Portal */}
+            {!isDesktop && (
+                <Portal>
+                    <Modal
+                        visible={isMobileMenuOpen}
+                        onDismiss={() => setIsMobileMenuOpen(false)}
+                        contentContainerStyle={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 260,
+                            backgroundColor: theme.colors.surface,
+                            padding: 0,
+                            margin: 0
+                        }}
+                        style={{ justifyContent: 'flex-start' }}
+                    >
+                        <Sidebar onClose={() => setIsMobileMenuOpen(false)} />
+                    </Modal>
+                </Portal>
+            )}
 
             {/* Main Content Area */}
             <View style={styles.main}>

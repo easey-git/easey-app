@@ -322,6 +322,8 @@ module.exports = async (req, res) => {
 
                             t.update(orderRef, {
                                 verificationStatus: 'approved',
+                                // Also update core status to confirmed if needed, but keeping verificationStatus separate is safer
+                                cod_status: 'confirmed', // Keep redundant field in sync
                                 updatedAt: admin.firestore.Timestamp.now()
                             });
 
@@ -476,6 +478,8 @@ module.exports = async (req, res) => {
                 const phoneNormalized = normalizePhone(rawPhone);
 
                 // 1. Save Order (Idempotent Set)
+                const isCOD = (data.gateway?.toLowerCase().includes('cod') || data.payment_gateway_names?.some(n => n.toLowerCase().includes('cod')));
+
                 const orderData = {
                     orderId: data.id,
                     orderNumber: data.order_number,
@@ -485,7 +489,8 @@ module.exports = async (req, res) => {
                     email: data.email || null,
                     phone: rawPhone || null,
                     phoneNormalized: phoneNormalized, // CRITICAL: Save normalized phone for querying
-                    status: (data.gateway?.toLowerCase().includes('cod') || data.payment_gateway_names?.some(n => n.toLowerCase().includes('cod'))) ? "COD" : "Paid",
+                    status: isCOD ? "COD" : "Paid",
+                    cod_status: isCOD ? "pending" : "prepaid", // AUTO-ASSIGN PENDING STATUS FOR NEW COD ORDERS
                     items: data.line_items?.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })) || [],
                     address1: data.shipping_address?.address1 || "",
                     city: data.shipping_address?.city || "",

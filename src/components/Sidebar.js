@@ -4,7 +4,7 @@ import { Text, TouchableRipple, useTheme, Drawer, Avatar } from 'react-native-pa
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 
-export const Sidebar = () => {
+export const Sidebar = ({ onClose }) => {
     const theme = useTheme();
     const route = useRoute();
     const navigation = useNavigation();
@@ -43,7 +43,10 @@ export const Sidebar = () => {
                                 icon={item.icon}
                                 label={item.label}
                                 active={isActive}
-                                onPress={() => navigation.navigate(item.route)}
+                                onPress={() => {
+                                    navigation.navigate(item.route);
+                                    if (onClose) onClose();
+                                }}
                                 style={{ borderRadius: 8, marginBottom: 4 }}
                                 theme={theme}
                             />
