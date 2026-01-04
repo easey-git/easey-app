@@ -5,7 +5,7 @@ const cors = require('cors')({ origin: true });
 // ---------------------------------------------------------
 // CONSTANTS
 // ---------------------------------------------------------
-const ALLOWED_COLLECTIONS = ['orders', 'checkouts'];
+const ALLOWED_COLLECTIONS = ['orders', 'checkouts', 'wallet_transactions'];
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 500; // Increased to 500 for better monthly stats
 
@@ -62,7 +62,7 @@ const applyFilters = (ref, filters) => {
             let queryVal = val;
 
             // Auto-convert ISO date strings to Date objects for timestamp fields
-            if (['createdAt', 'updatedAt'].includes(field) && typeof val === 'string') {
+            if (['createdAt', 'updatedAt', 'date'].includes(field) && typeof val === 'string') {
                 // Check if it looks like a date (starts with YYYY-MM-DD)
                 if (/^\d{4}-\d{2}-\d{2}/.test(val)) {
                     const date = new Date(val);
@@ -309,7 +309,7 @@ module.exports = async (req, res) => {
         // ---------------------------------------------------------
         // DYNAMIC SYSTEM INSTRUCTION
         // ---------------------------------------------------------
-        const SYSTEM_INSTRUCTION = `You are an expert E-commerce Assistant. You have access to Orders and Abandoned Checkouts.
+        const SYSTEM_INSTRUCTION = `You are an expert E-commerce Assistant. You have access to Orders, Abandoned Checkouts, and Wallet Transactions.
 
 📊 **DATA SCHEMA:**
 
@@ -327,22 +327,30 @@ module.exports = async (req, res) => {
    - rtoPredict (string): "high", "low"
    - items, billing_address, etc.
 
+3. **WALLET** (Collection: "wallet_transactions")
+   - amount (number): e.g. 1500 ✅ NUMBER! Can be summed.
+   - type (string): "income" or "expense"
+   - category (string): "Business", "Food", etc.
+   - description (string): "Meta", "PayU", etc.
+   - date (timestamp): ⚠️ Use this for date filtering, NOT createdAt.
+
 🛠️ **TOOL USAGE STRATEGY:**
 
 1. **aggregateFirestore** (The "Unlimited" Tool):
-   - USE FOR: "How many?", "Total revenue?", "Average value?".
+   - USE FOR: "How many?", "Total revenue?", "Total expenses?", "Profit?".
    - ADVANTAGE: Zero limit. Calculates on server.
-
+   
 2. **queryFirestore** (The "Viewer" Tool):
-   - USE FOR: "Show me order details", "Find a person".
+   - USE FOR: "Show me recent expenses", "Find a specific transaction".
    - LIMITATION: Max 500 documents.
 
-💡 **REVENUE CALCULATION LOGIC:**
-- **Standard (Fast/Unlimited)**: Use \`aggregateFirestore\` with \`field: 'totalPrice'\`.
-  -> "Calculating total from 15,000 orders..." (Instant)
-  
-- **Fallback (If numeric field missing)**: Use \`queryFirestore\` (limit 500) and sum manually.
-  -> "Calculating from last 500 orders (data not migrated yet)..."
+💡 **WALLET INTELLIGENCE:**
+- **Filtering**: Always filter by **'type'** ('income' or 'expense') appropriately.
+- **Profit Calculation**:
+  - Response: "I will calculate total income and total expenses to find your profit."
+  - Step 1: Sum 'amount' where type == 'income'.
+  - Step 2: Sum 'amount' where type == 'expense'.
+  - Step 3: Profit = Income - Expense.
 
 🧠 **SMART EXAMPLES:**
 
@@ -350,9 +358,15 @@ Q: "Total revenue?"
 A: Call \`aggregateFirestore\` ({ collection: 'orders', aggregationType: 'sum', field: 'totalPrice' }).
    -> "Total revenue is ₹1,500,000 (from all orders)."
 
-Q: "Sales from Bangalore?"
-A: Call \`aggregateFirestore\` ({ collection: 'orders', aggregationType: 'sum', field: 'totalPrice', filters: [['city', '==', 'Bangalore']] }).
-   -> "Bangalore sales: ₹200,000."
+Q: "Total expenses?"
+A: Call \`aggregateFirestore\` ({ collection: 'wallet_transactions', aggregationType: 'sum', field: 'amount', filters: [['type', '==', 'expense']] }).
+   -> "Total expenses: ₹50,000."
+
+Q: "Profit this month?"
+A: 
+   1. Sum Income (type='income') for this month.
+   2. Sum Expense (type='expense') for this month.
+   3. Calculate difference.
 
 📅 **DATE INTELLIGENCE:**
 Current time: ${new Date().toISOString()}
@@ -366,12 +380,10 @@ Response Style:
 
         // Build conversation contents
         const contents = [
-            // Add conversation history
             ...history.map(msg => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 parts: [{ text: msg.content }]
             })),
-            // Add current prompt
             {
                 role: 'user',
                 parts: [{ text: prompt }]
@@ -391,8 +403,6 @@ Response Style:
         // Handle function calls
         if (response.functionCalls && response.functionCalls.length > 0) {
             const functionCall = response.functionCalls[0];
-
-            // Extract arguments (SDK may use 'args' or 'arguments')
             const args = functionCall.args || functionCall.arguments || {};
 
             let functionResult;
