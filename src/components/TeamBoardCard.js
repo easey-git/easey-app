@@ -61,6 +61,12 @@ export const TeamBoardCard = ({ style }) => {
         return () => clearTimeout(timeoutId);
     }, [note, user]);
 
+    // Extract username from email (part before @)
+    const getUsername = (email) => {
+        if (!email) return '';
+        return email.split('@')[0];
+    };
+
     return (
         <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }, style]} elevation={0}>
             <View style={styles.header}>
@@ -93,7 +99,7 @@ export const TeamBoardCard = ({ style }) => {
             />
             {lastEditedByRef.current && (
                 <Text variant="labelSmall" style={{ color: theme.colors.outline, marginTop: 8, alignSelf: 'flex-end', opacity: 0.7 }}>
-                    Last edit: {lastEditedByRef.current}
+                    Last edit: {getUsername(lastEditedByRef.current)}
                 </Text>
             )}
         </Surface>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'; // Cache bust 1
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Platform } from 'react-native';
-import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
+import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
 import { collection, query, where, limit, getDocs, doc, updateDoc, writeBatch, deleteField, getDocsFromServer, orderBy, startAfter, Timestamp, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -392,7 +392,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 color: selectedCollection === item ? theme.colors.onPrimaryContainer : theme.colors.onSurface,
                 fontWeight: 'bold'
             }}>
-                {item === 'dashboard' ? 'NOTES' : item.toUpperCase()}
+                {item.toUpperCase()}
             </Text>
         </TouchableOpacity>
     );
@@ -593,7 +593,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                 color: selectedCollection === item ? theme.colors.onPrimaryContainer : theme.colors.onSurface,
                                 fontWeight: 'bold'
                             }}>
-                                {item === 'dashboard' ? 'NOTES' : item.toUpperCase()}
+                                {item.toUpperCase()}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -616,63 +616,393 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 maxToRenderPerBatch={10}
                 windowSize={5}
             />
-
-            <Portal>
-                {/* ... Dialog ... */}
-                <Dialog visible={visible} onDismiss={() => setVisible(false)} style={{ maxHeight: '90%' }}>
-                    <Dialog.Title>
-                        {isEditing ? 'Edit Document' : 'Document Details'}
-                    </Dialog.Title>
-
-                    <Dialog.ScrollArea style={{ paddingHorizontal: 0 }}>
-                        <ScrollView>
-                            <View style={{ paddingHorizontal: 24 }}>
-                                {editedDoc && Object.entries(editedDoc).map(([key, value]) => {
-                                    // Hide system fields that should never be edited
-                                    const systemFields = ['id', 'createdAt', 'updatedAt', 'ref'];
-                                    if (systemFields.includes(key)) return null;
-
-                                    return <RenderField key={key} label={key} value={value} />;
-                                })}
-                            </View>
-                        </ScrollView>
-                    </Dialog.ScrollArea>
-
-                    <Dialog.Actions>
+            {/* Edit Modal - Full Screen on Mobile, Modal on Desktop */}
+            {visible && isMobile ? (
+                // Mobile: Full-screen overlay
+                <View style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: theme.colors.background,
+                    zIndex: 1000
+                }}>
+                    {/* Header */}
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: 16,
+                        borderBottomWidth: 1,
+                        borderBottomColor: theme.colors.outlineVariant,
+                        backgroundColor: theme.colors.surface
+                    }}>
+                        <Text variant="titleLarge" style={{ fontWeight: 'bold', flex: 1 }}>
+                            {isEditing ? 'Edit Order' : 'Order Details'}
+                        </Text>
                         <IconButton
-                            icon={isEditing ? "close" : "pencil"}
-                            onPress={() => setIsEditing(!isEditing)}
-                            size={20}
+                            icon="close"
+                            size={24}
+                            onPress={() => setVisible(false)}
+                            style={{ margin: 0 }}
                         />
+                    </View>
+
+                    {/* Scrollable Content */}
+                    <ScrollView
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{ padding: 16 }}
+                        showsVerticalScrollIndicator={true}
+                    >
+                        {editedDoc && Object.entries(editedDoc).map(([key, value]) => {
+                            // Hide system fields
+                            const systemFields = ['id', 'createdAt', 'updatedAt', 'ref', 'rawJson'];
+                            if (systemFields.includes(key)) return null;
+
+                            // Skip complex nested objects
+                            if (value && typeof value === 'object' && !value.seconds) return null;
+
+                            // Render timestamp
+                            if (value && typeof value === 'object' && value.seconds) {
+                                const date = new Date(value.seconds * 1000).toLocaleString();
+                                return (
+                                    <View key={key} style={{ marginBottom: 16 }}>
+                                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+                                            {key}
+                                        </Text>
+                                        <Text variant="bodyLarge">{date}</Text>
+                                    </View>
+                                );
+                            }
+
+                            // Render boolean
+                            if (typeof value === 'boolean') {
+                                return (
+                                    <View key={key} style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        marginBottom: 16,
+                                        paddingVertical: 8
+                                    }}>
+                                        <Text variant="bodyLarge">{key}</Text>
+                                        {isEditing ? (
+                                            <Switch
+                                                value={value}
+                                                onValueChange={(val) => updateField(key, val)}
+                                                color={theme.colors.primary}
+                                            />
+                                        ) : (
+                                            <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
+                                                {value ? 'Yes' : 'No'}
+                                            </Text>
+                                        )}
+                                    </View>
+                                );
+                            }
+
+                            // Full-width fields
+                            const fullWidthFields = ['address1', 'address2', 'note', 'notes'];
+                            const isFullWidth = fullWidthFields.includes(key);
+
+                            // Render string/number
+                            return (
+                                <View key={key} style={{ marginBottom: 16 }}>
+                                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+                                        {key}
+                                    </Text>
+                                    {isEditing ? (
+                                        <TextInput
+                                            mode="outlined"
+                                            value={String(value)}
+                                            onChangeText={(text) => updateField(key, text)}
+                                            style={{ backgroundColor: theme.colors.surface }}
+                                            multiline={isFullWidth}
+                                            numberOfLines={isFullWidth ? 3 : 1}
+                                        />
+                                    ) : (
+                                        <Text variant="bodyLarge" selectable>
+                                            {String(value) || '—'}
+                                        </Text>
+                                    )}
+                                </View>
+                            );
+                        })}
+                    </ScrollView>
+
+                    {/* Footer Actions */}
+                    <View style={{
+                        flexDirection: 'row',
+                        justifyContent: 'flex-end',
+                        alignItems: 'center',
+                        padding: 16,
+                        borderTopWidth: 1,
+                        borderTopColor: theme.colors.outlineVariant,
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        backgroundColor: theme.colors.surface
+                    }}>
                         {isEditing ? (
-                            <Button mode="contained" onPress={handleSave}>
-                                Save Changes
-                            </Button>
+                            <>
+                                <Button
+                                    mode="outlined"
+                                    onPress={() => {
+                                        setIsEditing(false);
+                                        setEditedDoc(JSON.parse(JSON.stringify(selectedDoc)));
+                                    }}
+                                    style={{ minWidth: 100 }}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    mode="contained"
+                                    onPress={handleSave}
+                                    icon="content-save"
+                                    style={{ minWidth: 100 }}
+                                >
+                                    Save
+                                </Button>
+                            </>
                         ) : (
                             <>
                                 {role === 'admin' && selectedDoc?.adminEdited && (
                                     <Button
-                                        mode="contained-tonal"
+                                        mode="outlined"
                                         textColor={theme.colors.error}
                                         onPress={handleResetModifications}
-                                        style={{ marginRight: 8 }}
+                                        icon="restore"
+                                        style={{ minWidth: 100 }}
                                     >
-                                        Reset Mods
+                                        Reset
                                     </Button>
                                 )}
                                 <Button
                                     mode="outlined"
                                     textColor={theme.colors.error}
                                     onPress={() => selectedDoc?.id && handleDelete(selectedDoc.id)}
+                                    icon="delete"
+                                    style={{ minWidth: 100 }}
                                 >
                                     Delete
                                 </Button>
+                                <Button
+                                    mode="contained"
+                                    onPress={() => setIsEditing(true)}
+                                    icon="pencil"
+                                    style={{ minWidth: 100 }}
+                                >
+                                    Edit
+                                </Button>
                             </>
                         )}
-                        <Button onPress={() => setVisible(false)}>Close</Button>
-                    </Dialog.Actions>
-                </Dialog>
-            </Portal>
+                    </View>
+                </View>
+            ) : visible && !isMobile ? (
+                // Desktop: Modal
+                <Portal>
+                    <Modal
+                        visible={visible}
+                        onDismiss={() => setVisible(false)}
+                        contentContainerStyle={[
+                            {
+                                backgroundColor: theme.colors.surface,
+                                borderRadius: 16,
+                                overflow: 'hidden',
+                                alignSelf: 'center',
+                                width: '90%',
+                                maxWidth: 800,
+                                maxHeight: '90%'
+                            }
+                        ]}
+                    >
+                        {/* Header */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: 24,
+                            borderBottomWidth: 1,
+                            borderBottomColor: theme.colors.outlineVariant
+                        }}>
+                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
+                                {isEditing ? 'Edit Order' : 'Order Details'}
+                            </Text>
+                            <IconButton
+                                icon="close"
+                                size={24}
+                                onPress={() => setVisible(false)}
+                                style={{ margin: 0 }}
+                            />
+                        </View>
+
+                        {/* Scrollable Content */}
+                        <ScrollView
+                            style={{ flex: 1 }}
+                            contentContainerStyle={{ padding: 24 }}
+                            showsVerticalScrollIndicator={true}
+                            nestedScrollEnabled={true}
+                        >
+                            <View style={{
+                                flexDirection: 'row',
+                                flexWrap: 'wrap',
+                                gap: 16
+                            }}>
+                                {editedDoc && Object.entries(editedDoc).map(([key, value]) => {
+                                    // Hide system fields
+                                    const systemFields = ['id', 'createdAt', 'updatedAt', 'ref', 'rawJson'];
+                                    if (systemFields.includes(key)) return null;
+
+                                    // Skip complex nested objects for simplicity
+                                    if (value && typeof value === 'object' && !value.seconds) return null;
+
+                                    // Render timestamp
+                                    if (value && typeof value === 'object' && value.seconds) {
+                                        const date = new Date(value.seconds * 1000).toLocaleString();
+                                        return (
+                                            <View key={key} style={{
+                                                marginBottom: 20,
+                                                width: 'calc(50% - 8px)',
+                                                minWidth: 250
+                                            }}>
+                                                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+                                                    {key}
+                                                </Text>
+                                                <Text variant="bodyLarge">{date}</Text>
+                                            </View>
+                                        );
+                                    }
+
+                                    // Render boolean
+                                    if (typeof value === 'boolean') {
+                                        return (
+                                            <View key={key} style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                marginBottom: 20,
+                                                paddingVertical: 8,
+                                                width: 'calc(50% - 8px)',
+                                                minWidth: 250
+                                            }}>
+                                                <Text variant="bodyLarge">{key}</Text>
+                                                {isEditing ? (
+                                                    <Switch
+                                                        value={value}
+                                                        onValueChange={(val) => updateField(key, val)}
+                                                        color={theme.colors.primary}
+                                                    />
+                                                ) : (
+                                                    <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
+                                                        {value ? 'Yes' : 'No'}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        );
+                                    }
+
+                                    // Full-width fields (address, notes)
+                                    const fullWidthFields = ['address1', 'address2', 'note', 'notes'];
+                                    const isFullWidth = fullWidthFields.includes(key);
+
+                                    // Render string/number
+                                    return (
+                                        <View key={key} style={{
+                                            marginBottom: 20,
+                                            width: isFullWidth ? '100%' : 'calc(50% - 8px)',
+                                            minWidth: isFullWidth ? '100%' : 250
+                                        }}>
+                                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+                                                {key}
+                                            </Text>
+                                            {isEditing ? (
+                                                <TextInput
+                                                    mode="outlined"
+                                                    value={String(value)}
+                                                    onChangeText={(text) => updateField(key, text)}
+                                                    style={{ backgroundColor: theme.colors.surface }}
+                                                    multiline={isFullWidth}
+                                                    numberOfLines={isFullWidth ? 3 : 1}
+                                                />
+                                            ) : (
+                                                <Text variant="bodyLarge" selectable>
+                                                    {String(value) || '—'}
+                                                </Text>
+                                            )}
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        </ScrollView>
+
+                        {/* Footer Actions */}
+                        <View style={{
+                            flexDirection: 'row',
+                            justifyContent: 'flex-end',
+                            alignItems: 'center',
+                            padding: 24,
+                            borderTopWidth: 1,
+                            borderTopColor: theme.colors.outlineVariant,
+                            gap: 8,
+                            flexWrap: 'wrap'
+                        }}>
+                            {isEditing ? (
+                                <>
+                                    <Button
+                                        mode="outlined"
+                                        onPress={() => {
+                                            setIsEditing(false);
+                                            setEditedDoc(JSON.parse(JSON.stringify(selectedDoc)));
+                                        }}
+                                        style={{ minWidth: 100 }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        mode="contained"
+                                        onPress={handleSave}
+                                        icon="content-save"
+                                        style={{ minWidth: 100 }}
+                                    >
+                                        Save
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    {role === 'admin' && selectedDoc?.adminEdited && (
+                                        <Button
+                                            mode="outlined"
+                                            textColor={theme.colors.error}
+                                            onPress={handleResetModifications}
+                                            icon="restore"
+                                            style={{ minWidth: 100 }}
+                                        >
+                                            Reset
+                                        </Button>
+                                    )}
+                                    <Button
+                                        mode="outlined"
+                                        textColor={theme.colors.error}
+                                        onPress={() => selectedDoc?.id && handleDelete(selectedDoc.id)}
+                                        icon="delete"
+                                        style={{ minWidth: 100 }}
+                                    >
+                                        Delete
+                                    </Button>
+                                    <Button
+                                        mode="contained"
+                                        onPress={() => setIsEditing(true)}
+                                        icon="pencil"
+                                        style={{ minWidth: 100 }}
+                                    >
+                                        Edit
+                                    </Button>
+                                </>
+                            )}
+                        </View>
+                    </Modal>
+                </Portal>
+            ) : null}
 
             {/* Confirmation Dialog */}
             <Portal>

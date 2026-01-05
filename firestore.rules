@@ -66,9 +66,17 @@ service cloud.firestore {
       allow read: if hasPermission('access_orders');
       allow create: if hasPermission('manage_orders');
       allow delete: if hasPermission('manage_orders'); 
-      allow update: if hasPermission('manage_orders') && (
+      // Allow update if user has access_orders permission
+      // Admins can modify anything
+      // Non-admins can update but cannot clear adminEdited or adminModifiedFields
+      allow update: if hasPermission('access_orders') && (
         isAdmin() || 
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['adminEdited', 'adminModifiedFields'])
+        (
+          // Non-admin: Cannot remove or set to false the adminEdited flag if it exists
+          (!('adminEdited' in resource.data) || request.resource.data.adminEdited == true) &&
+          // Non-admin: Cannot remove adminModifiedFields if it exists
+          (!('adminModifiedFields' in resource.data) || 'adminModifiedFields' in request.resource.data)
+        )
       );
     }
     

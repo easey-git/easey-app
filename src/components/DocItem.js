@@ -203,28 +203,6 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
         );
     }
 
-    // Special rendering for Notes / Dashboard
-    if (selectedCollection === 'dashboard') {
-        return (
-            <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
-                <TouchableOpacity onPress={() => onPress(item)} onLongPress={() => onToggle(item.id)} delayLongPress={200}>
-                    <View style={[styles.cardContent, isMobile && styles.cardContentMobile]}>
-                        <Checkbox status={isSelected ? 'checked' : 'unchecked'} onPress={() => onToggle(item.id)} />
-                        <View style={[styles.textContainer, isMobile && { marginLeft: 8 }]}>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, textTransform: 'capitalize' }}>
-                                {item.id}
-                            </Text>
-                            <Text variant="bodySmall" numberOfLines={2} style={{ color: theme.colors.onSurfaceVariant }}>
-                                {item.content || item.note || 'No Content'}
-                            </Text>
-                        </View>
-                        <IconButton icon="chevron-right" size={20} />
-                    </View>
-                </TouchableOpacity>
-            </Surface>
-        );
-    }
-
     // Default rendering (Orders, Checkouts, etc.) - LIST STYLE
     return (
         <TouchableOpacity
@@ -437,7 +415,7 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                     <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold', fontSize: 10, lineHeight: 10 }}>ADDR REQ</Text>
                                 </Chip>
                             ) : (
-                                <>
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
                                     {/* Display Specific Modified Fields */}
                                     {item.adminModifiedFields && item.adminModifiedFields.length > 0 ? (
                                         item.adminModifiedFields.map(field => {
@@ -479,7 +457,7 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                             </Text>
                                         </Chip>
                                     )}
-                                </>
+                                </View>
                             )}
 
                             {/* Admin Reset Button Inline */}
