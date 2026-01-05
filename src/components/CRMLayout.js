@@ -39,12 +39,7 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
                             <Appbar.Action icon="menu" onPress={openDrawer} />
                         )}
                         <Appbar.Content title={title} titleStyle={{ fontWeight: 'bold' }} />
-                        {actions ? actions : (
-                            <>
-                                <Appbar.Action icon="bell-outline" onPress={() => { }} />
-                                <Appbar.Action icon="magnify" onPress={() => { }} />
-                            </>
-                        )}
+                        {actions}
                     </Appbar.Header>
                 )}
 
