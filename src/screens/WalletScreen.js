@@ -131,15 +131,6 @@ const WalletScreen = ({ navigation }) => {
         return () => unsubscribe();
     }, [timeRange]);
 
-    // 5. Auto-Migration Logic
-    useEffect(() => {
-        if (timeRange === 'all' && allTimeStats) {
-            if (allTimeStats.categoryBreakdown && !allTimeStats.descriptionBreakdown) {
-                WalletService.recalculateAllStats();
-            }
-        }
-    }, [timeRange, allTimeStats]);
-
     const itemStats = useMemo(() => {
         const expenseItemTotals = {};
         const incomeItemTotals = {};

@@ -35,7 +35,7 @@ const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
     const { isDesktop, isTablet, spacing } = useResponsive();
     const { playSound } = useSound();
-    const { hasPermission } = useAuth();
+    const { hasPermission, isAdmin } = useAuth();
     const prevOrdersRef = React.useRef(0);
     const [timeRange, setTimeRange] = useState('today');
     const [stats, setStats] = useState({ sales: 0, orders: 0, aov: 0, activeCarts: 0 });
@@ -44,7 +44,7 @@ const HomeScreen = ({ navigation }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState({ firestore: true, shiprocket: false, shopify: false });
 
-    // --- DATA FETCHING LOGIC (Unchanged) ---
+    // --- DATA FETCHING LOGIC ---
     useEffect(() => {
         const workQuery = query(collection(db, "orders"), where("cod_status", "in", ["pending", "confirmed"]));
         const unsubscribe = onSnapshot(workQuery, (snapshot) => {
@@ -171,13 +171,14 @@ const HomeScreen = ({ navigation }) => {
 
             {/* Main Stats Row - 6 Columns */}
             <View style={{ flexDirection: 'row', gap: 16 }}>
-                <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>
+                {isAdmin && <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>}
                 <View style={{ flex: 1 }}><StatCard label="Orders" value={stats.orders} icon="package-variant" theme={theme} /></View>
                 <View style={{ flex: 1 }}><StatCard label="Pending" value={workQueue.pending} icon="clock-alert-outline" color={theme.colors.errorContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'pending' } })} theme={theme} /></View>
                 <View style={{ flex: 1 }}><StatCard label="Confirmed" value={workQueue.confirmed} icon="check-circle-outline" color={theme.colors.secondaryContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'confirmed' } })} theme={theme} /></View>
-                <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" theme={theme} /></View>
-                <View style={{ flex: 1 }}><StatCard label="AOV" value={`₹${stats.aov}`} icon="chart-line" theme={theme} /></View>
+                {isAdmin && <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" theme={theme} /></View>}
+                {isAdmin && <View style={{ flex: 1 }}><StatCard label="AOV" value={`₹${stats.aov}`} icon="chart-line" theme={theme} /></View>}
             </View>
+
 
             {/* Bottom Section - Aligned */}
             <View style={{ flexDirection: 'row', gap: 24, alignItems: 'stretch' }}>
@@ -188,7 +189,7 @@ const HomeScreen = ({ navigation }) => {
                     <SystemStatusWidget style={{ flex: 1 }} />
                 </View>
             </View>
-        </View>
+        </View >
     );
 
     // --- MOBILE LAYOUT ---

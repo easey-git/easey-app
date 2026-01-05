@@ -58,7 +58,7 @@ service cloud.firestore {
     
     match /wallet_stats/{document=**} {
       allow read: if hasPermission('access_wallet');
-      allow write: if false; // Only updated by server-side functions
+      allow write: if hasPermission('manage_wallet');
     }
 
     // 3. Orders & Checkouts (Database)

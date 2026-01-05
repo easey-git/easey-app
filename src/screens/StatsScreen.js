@@ -12,7 +12,7 @@ import { AccessDenied } from '../components/AccessDenied';
 
 const StatsScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { hasPermission } = useAuth();
+    const { hasPermission, isAdmin } = useAuth();
 
     if (!hasPermission('access_analytics')) {
         return <AccessDenied title="Analytics Restricted" message="You need permission to view analytics." />;
@@ -241,25 +241,30 @@ const StatsScreen = ({ navigation }) => {
                 contentContainerStyle={styles.metricsScrollContent}
                 style={styles.metricsScroll}
             >
-                {/* Total Revenue Card */}
-                <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>TODAY'S REVENUE</Text>
-                    <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>₹{todaysSales.toLocaleString()}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                        <Icon source="chart-line" size={16} color={theme.colors.primary} />
-                        <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Since Midnight</Text>
-                    </View>
-                </Surface>
+                {/* Admin Only Stats: Revenue & Active Carts */}
+                {isAdmin && (
+                    <>
+                        {/* Total Revenue Card */}
+                        <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>TODAY'S REVENUE</Text>
+                            <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>₹{todaysSales.toLocaleString()}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                <Icon source="chart-line" size={16} color={theme.colors.primary} />
+                                <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Since Midnight</Text>
+                            </View>
+                        </Surface>
 
-                {/* Active Carts Card */}
-                <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE CARTS</Text>
-                    <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeCarts}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
-                        <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>Live Now</Text>
-                    </View>
-                </Surface>
+                        {/* Active Carts Card */}
+                        <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE CARTS</Text>
+                            <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeCarts}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
+                                <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>Live Now</Text>
+                            </View>
+                        </Surface>
+                    </>
+                )}
 
                 {/* Active Visitors Card */}
                 <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
@@ -585,7 +590,7 @@ const StatsScreen = ({ navigation }) => {
                 </Dialog>
             </Portal>
 
-        </CRMLayout>
+        </CRMLayout >
     );
 };
 
