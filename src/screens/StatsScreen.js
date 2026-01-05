@@ -242,7 +242,7 @@ const StatsScreen = ({ navigation }) => {
                 style={styles.metricsScroll}
             >
                 {/* Admin Only Stats: Revenue & Active Carts */}
-                {isAdmin && (
+                {hasPermission('view_financial_stats') && (
                     <>
                         {/* Total Revenue Card */}
                         <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>

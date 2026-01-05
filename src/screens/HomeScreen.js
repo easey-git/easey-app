@@ -172,13 +172,14 @@ const HomeScreen = ({ navigation }) => {
             </View>
 
             {/* Main Stats Row - 6 Columns */}
+            {/* Main Stats Row - 6 Columns */}
             <View style={{ flexDirection: 'row', gap: 16 }}>
-                {isAdmin && <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>}
-                <View style={{ flex: 1 }}><StatCard label="Orders" value={stats.orders} icon="package-variant" theme={theme} /></View>
-                <View style={{ flex: 1 }}><StatCard label="Pending" value={workQueue.pending} icon="clock-alert-outline" color={theme.colors.errorContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'pending' } })} theme={theme} /></View>
-                <View style={{ flex: 1 }}><StatCard label="Confirmed" value={workQueue.confirmed} icon="check-circle-outline" color={theme.colors.secondaryContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'confirmed' } })} theme={theme} /></View>
-                {isAdmin && <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" theme={theme} /></View>}
-                {isAdmin && <View style={{ flex: 1 }}><StatCard label="AOV" value={`₹${stats.aov}`} icon="chart-line" theme={theme} /></View>}
+                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>}
+                {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Orders" value={stats.orders} icon="package-variant" theme={theme} /></View>}
+                {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Pending" value={workQueue.pending} icon="clock-alert-outline" color={theme.colors.errorContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'pending' } })} theme={theme} /></View>}
+                {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Confirmed" value={workQueue.confirmed} icon="check-circle-outline" color={theme.colors.secondaryContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'confirmed' } })} theme={theme} /></View>}
+                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" theme={theme} /></View>}
+                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="AOV" value={`₹${stats.aov}`} icon="chart-line" theme={theme} /></View>}
             </View>
 
 
@@ -206,18 +207,20 @@ const HomeScreen = ({ navigation }) => {
             />
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}><StatCard label="Sales" value={`₹${stats.sales}`} theme={theme} /></View>
-                <View style={{ flex: 1 }}><StatCard label="Orders" value={stats.orders} theme={theme} /></View>
+                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>}
+                {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Orders" value={stats.orders} icon="package-variant" theme={theme} /></View>}
             </View>
 
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}><StatCard label="Pending" value={workQueue.pending} color={theme.colors.errorContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'pending' } })} theme={theme} /></View>
-                <View style={{ flex: 1 }}><StatCard label="Confirmed" value={workQueue.confirmed} color={theme.colors.secondaryContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'confirmed' } })} theme={theme} /></View>
-            </View>
+            {hasPermission('view_order_stats') && (
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ flex: 1 }}><StatCard label="Pending" value={workQueue.pending} color={theme.colors.errorContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'pending' } })} theme={theme} /></View>
+                    <View style={{ flex: 1 }}><StatCard label="Confirmed" value={workQueue.confirmed} color={theme.colors.secondaryContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'confirmed' } })} theme={theme} /></View>
+                </View>
+            )}
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} theme={theme} /></View>
-                <View style={{ flex: 1 }}><StatCard label="AOV" value={`₹${stats.aov}`} theme={theme} /></View>
+                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" theme={theme} /></View>}
+                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="AOV" value={`₹${stats.aov}`} icon="chart-line" theme={theme} /></View>}
             </View>
 
             <Divider style={{ marginVertical: 8 }} />
