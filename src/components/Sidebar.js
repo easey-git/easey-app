@@ -3,10 +3,35 @@ import { View, StyleSheet, Image, ScrollView, Pressable } from 'react-native';
 import { Text, useTheme, Drawer, Avatar } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import { LAYOUT } from '../theme/layout';
+import { useNavigation } from '@react-navigation/native';
+import { useDrawer } from '../context/DrawerContext';
+import { useResponsive } from '../hooks/useResponsive';
 
-export const Sidebar = ({ onClose, activeRoute, navigation }) => {
+export const Sidebar = ({ onClose }) => {
     const theme = useTheme();
     const { logout, user, role, hasPermission } = useAuth();
+    const navigation = useNavigation();
+    const { closeDrawer } = useDrawer();
+    const { isDesktop } = useResponsive();
+
+    // Track active route manually to support Root-level rendering (MobileDrawer)
+    const [activeRoute, setActiveRoute] = React.useState('Home');
+
+    React.useEffect(() => {
+        // Initial route
+        const route = navigation.getCurrentRoute();
+        if (route) setActiveRoute(route.name);
+
+        // Listen for changes
+        const unsubscribe = navigation.addListener('state', () => {
+            const currentRoute = navigation.getCurrentRoute();
+            if (currentRoute) {
+                setActiveRoute(currentRoute.name);
+            }
+        });
+
+        return unsubscribe;
+    }, [navigation]);
 
     // Helper to get display name
     const getDisplayName = () => {
@@ -20,7 +45,7 @@ export const Sidebar = ({ onClose, activeRoute, navigation }) => {
 
     const menuItems = [
         { label: 'Dashboard', icon: 'view-dashboard', route: 'Home' }, // Always visible
-        { label: 'Orders', icon: 'package-variant', route: 'DatabaseManager', permission: 'access_orders' },
+        { label: 'Orders', icon: 'package-variant', route: 'DatabaseManager', params: { collection: 'orders' }, permission: 'access_orders' },
         { label: 'Analytics', icon: 'chart-bar', route: 'Stats', permission: 'access_analytics' },
         { label: 'Wallet', icon: 'wallet-outline', route: 'Wallet', permission: 'access_wallet' },
         { label: 'WhatsApp', icon: 'whatsapp', route: 'WhatsAppManager', permission: 'access_whatsapp' },
@@ -31,8 +56,28 @@ export const Sidebar = ({ onClose, activeRoute, navigation }) => {
 
     const visibleMenuItems = menuItems.filter(item => !item.permission || hasPermission(item.permission));
 
+    const handleNavigation = (item) => {
+        if (!isDesktop) {
+            // Mobile: Close drawer and navigate
+            closeDrawer();
+            // Small buffer to look smooth, though the global drawer persists
+            setTimeout(() => {
+                navigation.navigate(item.route, item.params);
+            }, 150);
+        } else {
+            navigation.navigate(item.route, item.params);
+        }
+    };
+
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.surface, borderRightColor: theme.colors.outlineVariant }]}>
+        <View style={[
+            styles.container,
+            {
+                backgroundColor: theme.colors.surface,
+                borderRightColor: theme.colors.outlineVariant,
+                borderRightWidth: isDesktop ? 1 : 0 // Border only on desktop
+            }
+        ]}>
             {/* Header / Logo */}
             <View style={styles.header}>
                 <Image
@@ -43,7 +88,7 @@ export const Sidebar = ({ onClose, activeRoute, navigation }) => {
             </View>
 
             {/* Navigation Items */}
-            <ScrollView style={styles.content}>
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 <Drawer.Section showDivider={false}>
                     {visibleMenuItems.map((item, index) => {
                         const isActive = activeRoute === item.route;
@@ -53,12 +98,7 @@ export const Sidebar = ({ onClose, activeRoute, navigation }) => {
                                 icon={item.icon}
                                 label={item.label}
                                 active={isActive}
-                                onPress={() => {
-                                    if (navigation) {
-                                        navigation.navigate(item.route);
-                                        if (onClose) onClose();
-                                    }
-                                }}
+                                onPress={() => handleNavigation(item)}
                                 style={{ borderRadius: 8, marginBottom: 4 }}
                                 theme={theme}
                             />

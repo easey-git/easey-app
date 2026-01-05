@@ -1,0 +1,136 @@
+import React, { useRef, useEffect, useState } from 'react';
+import { View, StyleSheet, Pressable, Animated, PanResponder, Easing, useWindowDimensions } from 'react-native';
+import { useTheme, Portal } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDrawer } from '../context/DrawerContext';
+import { Sidebar } from './Sidebar';
+import { useResponsive } from '../hooks/useResponsive';
+
+export const MobileDrawer = () => {
+    const theme = useTheme();
+    const { height } = useWindowDimensions();
+    const { isDrawerOpen, closeDrawer } = useDrawer();
+    const { isDesktop } = useResponsive();
+    const SIDEBAR_WIDTH = 280;
+
+    // Animation Values
+    const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const [isVisible, setIsVisible] = useState(false);
+
+    // If we are on desktop, force close/hide
+    useEffect(() => {
+        if (isDesktop && isDrawerOpen) {
+            closeDrawer();
+        }
+    }, [isDesktop]);
+
+    useEffect(() => {
+        if (isDrawerOpen) {
+            setIsVisible(true);
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: 0,
+                    duration: 250,
+                    useNativeDriver: true,
+                    easing: Easing.out(Easing.poly(4)),
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 250,
+                    useNativeDriver: true,
+                })
+            ]).start();
+        } else {
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: -SIDEBAR_WIDTH,
+                    duration: 250,
+                    useNativeDriver: true,
+                    easing: Easing.in(Easing.poly(4)),
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 250,
+                    useNativeDriver: true,
+                })
+            ]).start(() => setIsVisible(false));
+        }
+    }, [isDrawerOpen]);
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && gestureState.dx < 0;
+            },
+            onPanResponderMove: (_, gestureState) => {
+                const newX = Math.max(-SIDEBAR_WIDTH, Math.min(0, gestureState.dx));
+                slideAnim.setValue(newX);
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dx < -50 || gestureState.vx < -0.5) {
+                    closeDrawer();
+                } else {
+                    Animated.spring(slideAnim, {
+                        toValue: 0,
+                        useNativeDriver: true,
+                        bounciness: 4
+                    }).start();
+                }
+            }
+        })
+    ).current;
+
+    if (!isVisible) return null;
+
+    return (
+        <Portal>
+            <View style={styles.backdropContainer} pointerEvents="box-none">
+                {/* Backdrop with Fade */}
+                <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
+                    <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer} />
+                </Animated.View>
+
+                {/* Sidebar with Slide & Gestures */}
+                <Animated.View
+                    {...panResponder.panHandlers}
+                    style={[
+                        styles.mobileSidebar,
+                        {
+                            backgroundColor: theme.colors.surface,
+                            transform: [{ translateX: slideAnim }],
+                            height: height
+                        }
+                    ]}
+                >
+                    <SafeAreaView edges={['top', 'bottom', 'left']} style={{ flex: 1 }}>
+                        <Sidebar onClose={closeDrawer} />
+                    </SafeAreaView>
+                </Animated.View>
+            </View>
+        </Portal>
+    );
+};
+
+const styles = StyleSheet.create({
+    backdropContainer: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 2000, // Very high z-index to be on top of everything
+    },
+    backdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    mobileSidebar: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 280,
+        shadowColor: '#000',
+        shadowOffset: { width: 4, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 16,
+    }
+});

@@ -26,6 +26,9 @@ import { SoundProvider } from './src/context/SoundContext';
 import { registerForPushNotificationsAsync, unregisterPushNotificationsAsync } from './src/services/notificationService';
 import { AccessDenied } from './src/components/AccessDenied';
 
+import { DrawerProvider } from './src/context/DrawerContext';
+import { MobileDrawer } from './src/components/MobileDrawer';
+
 // Wrapper to protect Admin Panel route at navigation level
 const AdminPanelWrapper = (props) => {
   const { isAdmin } = useAuth();
@@ -61,7 +64,7 @@ const CombinedLightTheme = {
   },
 };
 
-function AppNavigator() {
+function AppStack() {
   const { user, loading } = useAuth();
   const { isThemeDark, biometricsEnabled, preferencesLoaded } = usePreferences();
   const [isLocked, setIsLocked] = useState(true);
@@ -88,9 +91,6 @@ function AppNavigator() {
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
       if (!hasHardware || !isEnrolled) {
-        // Fallback or just unlock if hardware became unavailable (edge case)
-        // For security, we might want to force logout, but for now let's just log
-
         setIsAuthenticating(false);
         return;
       }
@@ -99,7 +99,7 @@ function AppNavigator() {
         promptMessage: 'Unlock Easey',
         fallbackLabel: 'Use Passcode',
         cancelLabel: 'Cancel',
-        disableDeviceFallback: false, // Allow PIN/Pattern if biometrics fail
+        disableDeviceFallback: false,
       });
 
       if (result.success) {
@@ -114,7 +114,6 @@ function AppNavigator() {
 
   useEffect(() => {
     if (user && biometricsEnabled && isLocked && preferencesLoaded) {
-      // Small delay to ensure UI is ready and avoid race conditions
       const timer = setTimeout(() => {
         authenticate();
       }, 500);
@@ -128,17 +127,13 @@ function AppNavigator() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'background') {
-        // App went to background, record time
         backgroundTime.current = Date.now();
       } else if (nextAppState === 'active') {
-        // App came to foreground
         if (backgroundTime.current > 0) {
           const elapsed = Date.now() - backgroundTime.current;
-          // If more than 1 minute (60000ms) has passed, lock the app
           if (elapsed > 60000 && user && biometricsEnabled) {
             setIsLocked(true);
           }
-          // Reset background time
           backgroundTime.current = 0;
         }
       }
@@ -182,71 +177,71 @@ function AppNavigator() {
 
   return (
     <View style={{ flex: 1, backgroundColor: activeTheme.colors.background }}>
-      <NavigationContainer theme={activeTheme}>
-        <StatusBar barStyle={isThemeDark ? "light-content" : "dark-content"} backgroundColor={activeTheme.colors.background} />
-        <Stack.Navigator
-          screenOptions={{
-            headerShown: false,
-            animation: 'fade_from_bottom',
-            contentStyle: { backgroundColor: activeTheme.colors.background }
-          }}
-        >
-          {!user ? (
-            // Unauthenticated Stack
-            <Stack.Screen name="Login" component={LoginScreen} />
-          ) : (
-            // Authenticated Stack
-            <>
-              <Stack.Screen name="Home" component={HomeScreen} />
-              <Stack.Screen
-                name="DatabaseManager"
-                component={FirestoreViewerScreen}
-                options={{ title: 'Database' }}
-              />
-              <Stack.Screen
-                name="Stats"
-                component={StatsScreen}
-                options={{ title: 'Analytics' }}
-              />
-              <Stack.Screen
-                name="WhatsAppManager"
-                component={WhatsAppManagerScreen}
-                options={{ title: 'WhatsApp' }}
-              />
-              <Stack.Screen
-                name="Settings"
-                component={SettingsScreen}
-                options={{ title: 'Settings' }}
-              />
-              <Stack.Screen
-                name="AdminPanel"
-                component={AdminPanelWrapper}
-                options={{ title: 'Admin Panel' }}
-              />
-              <Stack.Screen
-                name="Campaigns"
-                component={CampaignsScreen}
-                options={{ title: 'Campaigns' }}
-              />
-              <Stack.Screen
-                name="Notes"
-                component={NotesScreen}
-                options={{ title: 'Notes' }}
-              />
-              <Stack.Screen
-                name="Wallet"
-                component={WalletScreen}
-              />
-              <Stack.Screen
-                name="Assistant"
-                component={AssistantScreen}
-                options={{ headerShown: false }}
-              />
+      <StatusBar barStyle={isThemeDark ? "light-content" : "dark-content"} backgroundColor={activeTheme.colors.background} />
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade_from_bottom',
+          contentStyle: { backgroundColor: activeTheme.colors.background }
+        }}
+      >
+        {!user ? (
+          // Unauthenticated Stack
+          <Stack.Screen name="Login" component={LoginScreen} />
+        ) : (
+          // Authenticated Stack
+          <>
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen
+              name="DatabaseManager"
+              component={FirestoreViewerScreen}
+              options={{ title: 'Database' }}
+            />
+            <Stack.Screen
+              name="Stats"
+              component={StatsScreen}
+              options={{ title: 'Analytics' }}
+            />
+            <Stack.Screen
+              name="WhatsAppManager"
+              component={WhatsAppManagerScreen}
+              options={{ title: 'WhatsApp' }}
+            />
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ title: 'Settings' }}
+            />
+            <Stack.Screen
+              name="AdminPanel"
+              component={AdminPanelWrapper}
+              options={{ title: 'Admin Panel' }}
+            />
+            <Stack.Screen
+              name="Campaigns"
+              component={CampaignsScreen}
+              options={{ title: 'Campaigns' }}
+            />
+            <Stack.Screen
+              name="Notes"
+              component={NotesScreen}
+              options={{ title: 'Notes' }}
+            />
+            <Stack.Screen
+              name="Wallet"
+              component={WalletScreen}
+            />
+            <Stack.Screen
+              name="Assistant"
+              component={AssistantScreen}
+              options={{ headerShown: false }}
+            />
 
-            </>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
+          </>
+        )}
+      </Stack.Navigator>
+      {/* Global Mobile Drawer - Persists across screens */}
+      {user && <MobileDrawer />}
     </View >
   );
 }
@@ -258,13 +253,8 @@ function Main() {
     'MaterialCommunityIcons': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
   });
 
-
-
-
   useEffect(() => {
     if (user) {
-      // Only attempt push notifications if on a physical device to avoid Expo Go warnings
-      // logic is handled inside registerForPushNotificationsAsync but we can add a guard here too
       if (notificationsEnabled) {
         registerForPushNotificationsAsync(user.uid, role).catch(err => console.error("Push registration failed:", err.message));
       } else {
@@ -279,13 +269,12 @@ function Main() {
 
   const activeTheme = isThemeDark ? CombinedDarkTheme : CombinedLightTheme;
 
-
-
-
   return (
-    <PaperProvider theme={activeTheme}>
-      <AppNavigator />
-    </PaperProvider>
+    <NavigationContainer theme={activeTheme}>
+      <PaperProvider theme={activeTheme}>
+        <AppStack />
+      </PaperProvider>
+    </NavigationContainer>
   );
 }
 
@@ -294,9 +283,11 @@ export default function App() {
     <PreferencesProvider>
       <AuthProvider>
         <SoundProvider>
-          <SafeAreaProvider>
-            <Main />
-          </SafeAreaProvider>
+          <DrawerProvider>
+            <SafeAreaProvider>
+              <Main />
+            </SafeAreaProvider>
+          </DrawerProvider>
         </SoundProvider>
       </AuthProvider>
     </PreferencesProvider>
