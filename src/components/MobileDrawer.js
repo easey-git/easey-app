@@ -11,40 +11,46 @@ export const MobileDrawer = () => {
     const { height } = useWindowDimensions();
     const { isDrawerOpen, closeDrawer } = useDrawer();
     const { isDesktop } = useResponsive();
+
+    // Width + Buffer for shadow/elevation artifacts
     const SIDEBAR_WIDTH = 280;
+    const OFF_SCREEN = -SIDEBAR_WIDTH - 40;
 
     // Animation Values
-    const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+    const slideAnim = useRef(new Animated.Value(OFF_SCREEN)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const [isVisible, setIsVisible] = useState(false);
 
-    // If we are on desktop, force close/hide
-    useEffect(() => {
-        if (isDesktop && isDrawerOpen) {
-            closeDrawer();
-        }
-    }, [isDesktop]);
+    // Mounted state for "Keep mounted while animating, unmount after"
+    // This creates the perfect "Native" feel: instant start, clean cleanup.
+    const [isMounted, setIsMounted] = React.useState(false);
+
+    // Force hide on desktop
+    if (isDesktop) return null;
 
     useEffect(() => {
         if (isDrawerOpen) {
-            setIsVisible(true);
-            Animated.parallel([
-                Animated.timing(slideAnim, {
-                    toValue: 0,
-                    duration: 250,
-                    useNativeDriver: true,
-                    easing: Easing.out(Easing.poly(4)),
-                }),
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 250,
-                    useNativeDriver: true,
-                })
-            ]).start();
+            setIsMounted(true); // Mount immediately
+            // Small timeout to ensure render happens before animation starts (Double frame)
+            requestAnimationFrame(() => {
+                Animated.parallel([
+                    Animated.timing(slideAnim, {
+                        toValue: 0,
+                        duration: 300,
+                        useNativeDriver: true,
+                        easing: Easing.out(Easing.poly(4)),
+                    }),
+                    Animated.timing(fadeAnim, {
+                        toValue: 1,
+                        duration: 300,
+                        useNativeDriver: true,
+                    })
+                ]).start();
+            });
         } else {
+            // Animate out
             Animated.parallel([
                 Animated.timing(slideAnim, {
-                    toValue: -SIDEBAR_WIDTH,
+                    toValue: OFF_SCREEN,
                     duration: 250,
                     useNativeDriver: true,
                     easing: Easing.in(Easing.poly(4)),
@@ -54,7 +60,11 @@ export const MobileDrawer = () => {
                     duration: 250,
                     useNativeDriver: true,
                 })
-            ]).start(() => setIsVisible(false));
+            ]).start(({ finished }) => {
+                if (finished) {
+                    setIsMounted(false); // Unmount after animation
+                }
+            });
         }
     }, [isDrawerOpen]);
 
@@ -64,7 +74,7 @@ export const MobileDrawer = () => {
                 return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && gestureState.dx < 0;
             },
             onPanResponderMove: (_, gestureState) => {
-                const newX = Math.max(-SIDEBAR_WIDTH, Math.min(0, gestureState.dx));
+                const newX = Math.max(OFF_SCREEN, Math.min(0, gestureState.dx));
                 slideAnim.setValue(newX);
             },
             onPanResponderRelease: (_, gestureState) => {
@@ -81,11 +91,14 @@ export const MobileDrawer = () => {
         })
     ).current;
 
-    if (!isVisible) return null;
+    if (!isMounted) return null;
 
     return (
         <Portal>
-            <View style={styles.backdropContainer} pointerEvents="box-none">
+            <View
+                style={styles.backdropContainer}
+                pointerEvents={isDrawerOpen ? 'auto' : 'none'}
+            >
                 {/* Backdrop with Fade */}
                 <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
                     <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer} />
@@ -99,7 +112,10 @@ export const MobileDrawer = () => {
                         {
                             backgroundColor: theme.colors.surface,
                             transform: [{ translateX: slideAnim }],
-                            height: height
+                            height: height,
+                            // Only apply shadow when open to prevent "bleeding" artifacts on Android
+                            elevation: isDrawerOpen ? 16 : 0,
+                            shadowOpacity: isDrawerOpen ? 0.3 : 0,
                         }
                     ]}
                 >
