@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react'; // Cache bust 1
-import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Platform } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
-import { collection, getDocsFromServer, deleteDoc, updateDoc, doc, limit, query, writeBatch, where, orderBy, deleteField } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import * as DocumentPicker from 'expo-document-picker';
+import { collection, query, where, limit, getDocs, doc, updateDoc, writeBatch, deleteField, getDocsFromServer, orderBy, startAfter, Timestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, storage } from '../config/firebase';
 import DocItem from '../components/DocItem';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
@@ -404,7 +406,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const handleCodToggle = async (item) => {
         try {
             const newStatus = item.cod_status === 'confirmed' ? 'pending' : 'confirmed';
-            await updateDoc(item.ref, { cod_status: newStatus });
+            await updateDoc(doc(db, selectedCollection, item.id), { cod_status: newStatus });
             // Local state update (optional if real-time listener is fast enough, but good for UX)
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
             showSnackbar(`Order marked as ${newStatus}`);
@@ -433,6 +435,54 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     };
 
+    const handleAttachVoice = async (item) => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*' });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setLoading(true);
+                const asset = result.assets[0];
+                const response = await fetch(asset.uri);
+                const blob = await response.blob();
+                const fileName = `voice_notes/${item.id}_${Date.now()}`;
+                const storageRef = ref(storage, fileName);
+                await uploadBytes(storageRef, blob);
+                const url = await getDownloadURL(storageRef);
+                await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: url, voiceNoteName: asset.name || 'Voice Note' });
+                setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: url, voiceNoteName: asset.name || 'Voice Note' } : d));
+                showSnackbar("Voice note attached");
+            }
+        } catch (err) {
+            console.error(err);
+            showSnackbar("Failed to upload voice note", true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeleteVoice = async (item) => {
+        if (Platform.OS === 'web') {
+            if (!confirm("Are you sure you want to delete this voice note?")) return;
+        }
+        // For native, Alert.alert should be used, but keeping it simple for now or assuming Alert works on web via polyfill (it often does)
+
+        setLoading(true);
+        try {
+            try {
+                const storageRef = ref(storage, item.voiceNoteUrl);
+                await deleteObject(storageRef);
+            } catch (e) { console.warn("Storage delete failed", e); }
+
+            await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: deleteField(), voiceNoteName: deleteField() });
+            setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: undefined, voiceNoteName: undefined } : d));
+            showSnackbar("Voice note deleted");
+        } catch (err) {
+            console.error(err);
+            showSnackbar("Failed to delete voice note", true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const renderDocItem = useCallback(({ item }) => {
         const isSelected = selectedItems.has(item.id);
         return (
@@ -446,6 +496,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 onCodToggle={handleCodToggle}
                 isAdmin={role === 'admin'}
                 onReset={handleResetItem}
+                onAttachVoice={handleAttachVoice}
+                onDeleteVoice={handleDeleteVoice}
             />
         );
     }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection, role]);

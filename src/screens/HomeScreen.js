@@ -194,7 +194,6 @@ const HomeScreen = ({ navigation }) => {
     // --- MOBILE LAYOUT ---
     const MobileLayout = () => (
         <View style={{ gap: 16 }}>
-            {/* Header Control */}
             <SegmentedButtons
                 value={timeRange}
                 onValueChange={setTimeRange}
@@ -203,7 +202,6 @@ const HomeScreen = ({ navigation }) => {
                 density="small"
             />
 
-            {/* Stats Grid - Explicit Rows for stability */}
             <View style={{ flexDirection: 'row', gap: 12 }}>
                 <View style={{ flex: 1 }}><StatCard label="Sales" value={`₹${stats.sales}`} theme={theme} /></View>
                 <View style={{ flex: 1 }}><StatCard label="Orders" value={stats.orders} theme={theme} /></View>
@@ -221,10 +219,9 @@ const HomeScreen = ({ navigation }) => {
 
             <Divider style={{ marginVertical: 8 }} />
 
-            {/* Utilities */}
             <NotesCard style={{ minHeight: 200 }} />
             <SystemStatusWidget />
-            <View style={{ height: 80 }} /> {/* Bottom padding for FAB */}
+            <View style={{ height: 80 }} />
         </View>
     );
 

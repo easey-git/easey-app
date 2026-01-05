@@ -1,6 +1,7 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useEffect, useRef } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Surface, Checkbox, Avatar, Text, IconButton, Chip, Icon } from 'react-native-paper';
+import { Surface, Checkbox, Avatar, Text, IconButton, Chip, Icon, ActivityIndicator } from 'react-native-paper';
+import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
 
 import { useResponsive } from '../hooks/useResponsive';
@@ -30,9 +31,51 @@ const CopyableText = ({ text, display, style, theme, numberOfLines = 1 }) => {
     );
 };
 
-const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset }) => {
+const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset, onAttachVoice, onDeleteVoice }) => {
     const { isMobile } = useResponsive();
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
+
+    // Voice Note Logic
+    const [sound, setSound] = useState(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [isLoadingSound, setIsLoadingSound] = useState(false);
+
+    useEffect(() => {
+        return sound ? () => { sound.unloadAsync(); } : undefined;
+    }, [sound]);
+
+    const handlePlayPause = async () => {
+        if (!item.voiceNoteUrl) return;
+        try {
+            if (sound) {
+                if (isPlaying) {
+                    await sound.pauseAsync();
+                    setIsPlaying(false);
+                } else {
+                    await sound.playAsync();
+                    setIsPlaying(true);
+                }
+            } else {
+                setIsLoadingSound(true);
+                const { sound: newSound } = await Audio.Sound.createAsync(
+                    { uri: item.voiceNoteUrl },
+                    { shouldPlay: true }
+                );
+                setSound(newSound);
+                setIsPlaying(true);
+                newSound.setOnPlaybackStatusUpdate(status => {
+                    if (status.didJustFinish) {
+                        setIsPlaying(false);
+                        newSound.setPositionAsync(0);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error("Audio Error:", error);
+        } finally {
+            setIsLoadingSound(false);
+        }
+    };
 
     // ... (Keep existing blocks for Push Tokens, WhatsApp, Wallet, Dashboard - simpler to just keep them as is or apply minor padding fixes if needed. 
     // Since the user specifically mentioned "Orders screen" (Firestore Viewer), I will focus optimization there, but general padding applies to all.)
@@ -243,6 +286,41 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 numberOfLines={null}
                             />
                         </View>
+                    </View>
+
+                    {/* Voice Note Section */}
+                    <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
+                        {item.voiceNoteUrl ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.elevation.level2, borderRadius: 20, paddingRight: 8 }}>
+                                <IconButton
+                                    icon={isPlaying ? "pause" : "play"}
+                                    mode="contained"
+                                    containerColor={theme.colors.primary}
+                                    iconColor={theme.colors.onPrimary}
+                                    size={20}
+                                    onPress={handlePlayPause}
+                                    loading={isLoadingSound}
+                                    disabled={isLoadingSound}
+                                />
+                                <Text style={{ marginLeft: 8, marginRight: 8, fontSize: 12 }}>
+                                    {item.voiceNoteName || 'Voice Note'}
+                                </Text>
+                                <IconButton
+                                    icon="delete"
+                                    size={18}
+                                    iconColor={theme.colors.error}
+                                    onPress={() => onDeleteVoice && onDeleteVoice(item)}
+                                />
+                            </View>
+                        ) : (
+                            <IconButton
+                                icon="microphone-plus" // or 'voice'
+                                mode="outlined"
+                                size={20}
+                                onPress={() => onAttachVoice && onAttachVoice(item)}
+                                style={{ margin: 0, borderColor: theme.colors.outline }}
+                            />
+                        )}
                     </View>
 
                     {/* Bottom Row: Tags (Status chips flow naturally here) */}
