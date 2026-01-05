@@ -12,7 +12,54 @@ export const NotesCard = ({ style }) => {
     const [status, setStatus] = useState('Loading...');
     const isFirstLoad = useRef(true);
 
-    // ... (rest of useEffects)
+    useEffect(() => {
+        let unsubscribe;
+        const fetchNote = async () => {
+            if (!user) return;
+            try {
+                const docRef = doc(db, 'users', user.uid, 'scratchpad', 'main');
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setNote(docSnap.data().content || '');
+                }
+                setStatus('Ready');
+            } catch (error) {
+                console.error("Error fetching note:", error);
+                setStatus('Error');
+            } finally {
+                isFirstLoad.current = false;
+            }
+        };
+
+        fetchNote();
+        return () => unsubscribe && unsubscribe();
+    }, [user]);
+
+    useEffect(() => {
+        if (isFirstLoad.current) return;
+
+        const saveNote = async () => {
+            if (!user) return;
+            setStatus('Saving...');
+            try {
+                const docRef = doc(db, 'users', user.uid, 'scratchpad', 'main');
+                await setDoc(docRef, {
+                    content: note,
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+                setStatus('Saved');
+            } catch (error) {
+                console.error("Error saving note:", error);
+                setStatus('Error');
+            }
+        };
+
+        const timeoutId = setTimeout(() => {
+            if (note !== '') saveNote();
+        }, 1000);
+
+        return () => clearTimeout(timeoutId);
+    }, [note, user]);
 
     return (
         <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }, style]} elevation={0}>

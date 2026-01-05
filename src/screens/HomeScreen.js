@@ -131,7 +131,9 @@ const HomeScreen = ({ navigation }) => {
                     <Text variant="labelSmall" style={{ color: theme.colors.outline, marginRight: 8 }}>
                         {refreshing ? '...' : 'Live'}
                     </Text>
-                    <Icon source="refresh" size={14} color={theme.colors.outline} />
+                    <TouchableOpacity onPress={onRefresh} disabled={refreshing}>
+                        <Icon source="refresh" size={18} color={refreshing ? theme.colors.outline : theme.colors.primary} />
+                    </TouchableOpacity>
                 </View>
             </View>
             <View style={{ padding: 16, gap: 12 }}>
