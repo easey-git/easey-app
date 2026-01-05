@@ -136,14 +136,7 @@ const CampaignsScreen = ({ navigation }) => {
         }
     };
 
-    const getSortLabel = () => {
-        switch (sortBy) {
-            case 'roas': return 'ROAS';
-            case 'spend': return 'Spend';
-            case 'purchases': return 'Purchases';
-            default: return 'Sort';
-        }
-    };
+
 
     const openCampaignDetails = (campaign) => {
         setSelectedCampaign(campaign);
@@ -227,28 +220,10 @@ const CampaignsScreen = ({ navigation }) => {
                 </View>
 
                 {/* Filter and Sort Controls */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 16 }}>
+                <View style={{ marginTop: 24, marginBottom: 16 }}>
                     <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>
                         Campaigns ({filteredCampaigns.length})
                     </Text>
-                    <Menu
-                        visible={sortMenuVisible}
-                        onDismiss={() => setSortMenuVisible(false)}
-                        anchor={
-                            <Button
-                                mode="outlined"
-                                icon="sort"
-                                onPress={() => setSortMenuVisible(true)}
-                                compact
-                            >
-                                {getSortLabel()}
-                            </Button>
-                        }
-                    >
-                        <Menu.Item onPress={() => { setSortBy('roas'); setSortMenuVisible(false); }} title="Sort by ROAS" leadingIcon="chart-line" />
-                        <Menu.Item onPress={() => { setSortBy('spend'); setSortMenuVisible(false); }} title="Sort by Spend" leadingIcon="cash" />
-                        <Menu.Item onPress={() => { setSortBy('purchases'); setSortMenuVisible(false); }} title="Sort by Purchases" leadingIcon="cart" />
-                    </Menu>
                 </View>
 
                 {/* Status Filter Chips */}
