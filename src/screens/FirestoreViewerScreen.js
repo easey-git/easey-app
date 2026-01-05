@@ -7,6 +7,7 @@ import DocItem from '../components/DocItem';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
+import { useResponsive } from '../hooks/useResponsive';
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
     const { hasPermission } = useAuth();
@@ -410,6 +411,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         );
     }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection]);
 
+    const { isMobile } = useResponsive();
+
     return (
         <CRMLayout
             title="Firebase"
@@ -494,7 +497,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                         </TouchableOpacity>
                     )}
                     keyExtractor={item => item}
-                    contentContainerStyle={{ paddingHorizontal: 16 }}
+                    contentContainerStyle={{ paddingHorizontal: isMobile ? 8 : 16 }}
                     showsHorizontalScrollIndicator={false}
                 />
             </View>
@@ -505,8 +508,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 data={filteredDocuments}
                 renderItem={renderDocItem}
                 keyExtractor={item => item.id}
-                contentContainerStyle={{ padding: 16 }}
-                ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+                contentContainerStyle={{ padding: 0, paddingBottom: 80 }}
+                // ItemSeparatorComponent={() => <View style={{ height: 8 }} />} /* Removed for List Look */
                 refreshing={loading}
                 onRefresh={fetchDocuments}
                 initialNumToRender={10}
