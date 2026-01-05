@@ -40,7 +40,7 @@ const AdminPanelScreen = ({ navigation }) => {
     const ROLE_PRESETS = {
         'Manager': ['view_financial_stats', 'view_order_stats', 'access_orders', 'access_wallet', 'access_campaigns', 'access_whatsapp', 'access_analytics', 'manage_orders', 'manage_wallet', 'manage_campaigns', 'manage_users'],
         'Support': ['view_order_stats', 'access_orders', 'access_whatsapp', 'manage_orders'],
-        'Analyst': ['view_financial_stats', 'view_order_stats', 'access_analytics', 'access_campaigns'],
+        'Analyst': ['view_financial_stats', 'view_order_stats', 'access_orders', 'access_analytics', 'access_campaigns'],
         'Viewer': ['view_order_stats', 'access_orders']
     };
 

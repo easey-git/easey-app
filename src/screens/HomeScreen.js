@@ -56,6 +56,8 @@ const HomeScreen = ({ navigation }) => {
                 if (s === 'confirmed') confirmed++;
             });
             setWorkQueue({ pending, confirmed });
+        }, (error) => {
+            console.log("WorkQueue Error:", error.code);
         });
         return () => unsubscribe();
     }, []);
@@ -97,6 +99,9 @@ const HomeScreen = ({ navigation }) => {
             prevOrdersRef.current = totalOrders;
             setLoading(false);
             if (snapshot.size > 0) setConnectionStatus(prev => ({ ...prev, shopify: true }));
+        }, (error) => {
+            console.log("Orders Stats Error:", error.code);
+            setLoading(false);
         });
 
         const cartsQuery = query(collection(db, "checkouts"), where("updatedAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))), orderBy("updatedAt", "desc"));
@@ -113,6 +118,8 @@ const HomeScreen = ({ navigation }) => {
             });
             setStats(prev => ({ ...prev, activeCarts: activeCount }));
             if (snapshot.size > 0) setConnectionStatus(prev => ({ ...prev, shiprocket: true }));
+        }, (error) => {
+            console.log("Carts Stats Error:", error.code);
         });
 
         return () => { unsubOrders(); unsubCarts(); };
