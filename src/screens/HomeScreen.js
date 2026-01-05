@@ -42,7 +42,7 @@ const HomeScreen = ({ navigation }) => {
     const [workQueue, setWorkQueue] = useState({ pending: 0, confirmed: 0 });
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
-    const [connectionStatus, setConnectionStatus] = useState({ firestore: true, shiprocket: false, shopify: false });
+    const [connectionStatus, setConnectionStatus] = useState({ firestore: true, shiprocket: false, shopify: false, vercel: false });
 
     // --- DATA FETCHING LOGIC ---
     useEffect(() => {
@@ -72,6 +72,11 @@ const HomeScreen = ({ navigation }) => {
                 const shopifyQuery = query(collection(db, "orders"), where("createdAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))), orderBy("createdAt", "desc"), limit(1));
                 const shopifySnapshot = await getDocs(shopifyQuery);
                 setConnectionStatus(prev => ({ ...prev, shopify: !shopifySnapshot.empty }));
+
+                // Check Vercel backend by looking for recent push_tokens (FCM notifications)
+                const vercelQuery = query(collection(db, "push_tokens"), limit(1));
+                const vercelSnapshot = await getDocs(vercelQuery);
+                setConnectionStatus(prev => ({ ...prev, vercel: !vercelSnapshot.empty }));
             } catch (error) { }
         };
         checkWebhookHealth();
@@ -146,8 +151,9 @@ const HomeScreen = ({ navigation }) => {
             <View style={{ padding: 16, gap: 12 }}>
                 {[
                     { label: 'Database', status: connectionStatus.firestore, icon: 'database' },
-                    { label: 'Logistics', status: connectionStatus.shiprocket, icon: 'truck-delivery' },
-                    { label: 'Storefront', status: connectionStatus.shopify, icon: 'store' }
+                    { label: 'Webhooks', status: connectionStatus.shiprocket, icon: 'truck-delivery' },
+                    { label: 'Storefront', status: connectionStatus.shopify, icon: 'store' },
+                    { label: 'APIs', status: connectionStatus.vercel, icon: 'cloud' }
                 ].map((item, i) => (
                     <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
