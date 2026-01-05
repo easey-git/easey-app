@@ -170,12 +170,14 @@ const HomeScreen = ({ navigation }) => {
                     <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>Dashboard</Text>
                     <Text variant="bodyMedium" style={{ color: theme.colors.outline }}>Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}</Text>
                 </View>
-                <SegmentedButtons
-                    value={timeRange}
-                    onValueChange={setTimeRange}
-                    buttons={[{ value: 'today', label: 'Today' }, { value: 'week', label: '7 Days' }, { value: 'month', label: '30 Days' }]}
-                    style={{ minWidth: 320 }}
-                />
+                {hasPermission('view_date_filters') && (
+                    <SegmentedButtons
+                        value={timeRange}
+                        onValueChange={setTimeRange}
+                        buttons={[{ value: 'today', label: 'Today' }, { value: 'week', label: '7 Days' }, { value: 'month', label: '30 Days' }]}
+                        style={{ minWidth: 320 }}
+                    />
+                )}
             </View>
 
             {/* Main Stats Row - 6 Columns */}
@@ -205,13 +207,15 @@ const HomeScreen = ({ navigation }) => {
     // --- MOBILE LAYOUT ---
     const MobileLayout = () => (
         <View style={{ gap: 16 }}>
-            <SegmentedButtons
-                value={timeRange}
-                onValueChange={setTimeRange}
-                buttons={[{ value: 'today', label: 'Today' }, { value: 'week', label: '7 Days' }, { value: 'month', label: '30 Days' }]}
-                style={{ marginBottom: 8 }}
-                density="small"
-            />
+            {hasPermission('view_date_filters') && (
+                <SegmentedButtons
+                    value={timeRange}
+                    onValueChange={setTimeRange}
+                    buttons={[{ value: 'today', label: 'Today' }, { value: 'week', label: '7 Days' }, { value: 'month', label: '30 Days' }]}
+                    style={{ marginBottom: 8 }}
+                    density="small"
+                />
+            )}
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
                 {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>}

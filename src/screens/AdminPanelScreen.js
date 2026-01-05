@@ -52,6 +52,7 @@ const AdminPanelScreen = ({ navigation }) => {
         // Dashboard
         { id: 'view_financial_stats', label: 'View Financial Stats' },
         { id: 'view_order_stats', label: 'View Order Stats' },
+        { id: 'view_date_filters', label: 'View Date Filters' },
 
         // Features
         { id: 'access_orders', label: 'Access Orders' },
@@ -93,29 +94,6 @@ const AdminPanelScreen = ({ navigation }) => {
             console.error("Error updating permissions:", error);
         }
     };
-
-    const cleanupInvalidUsers = async () => {
-        try {
-            const querySnapshot = await getDocs(collection(db, "users"));
-            const deletePromises = [];
-            querySnapshot.forEach((docSnapshot) => {
-                const data = docSnapshot.data();
-                if (!data.email) {
-                    deletePromises.push(deleteDoc(docSnapshot.ref));
-                }
-            });
-            await Promise.all(deletePromises);
-            if (deletePromises.length > 0) {
-                alert(`Cleaned up ${deletePromises.length} invalid users.`);
-            } else {
-                alert("No invalid users found.");
-            }
-        } catch (error) {
-            console.error("Error cleaning users:", error);
-            alert("Failed to cleanup users.");
-        }
-    };
-
     const renderItem = ({ item }) => (
         <Surface style={[styles.userCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={0}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -165,9 +143,8 @@ const AdminPanelScreen = ({ navigation }) => {
             </View>
         </Surface>
     );
-
     return (
-        <CRMLayout title="Admin Panel" navigation={navigation} actions={<IconButton icon="broom" onPress={cleanupInvalidUsers} />}>
+        <CRMLayout title="Admin Panel" navigation={navigation} scrollable={false}>
             <View style={{ flex: 1 }}>
                 <View style={{ paddingVertical: 16 }}>
                     <Text variant="headlineSmall" style={{ fontWeight: 'bold', paddingHorizontal: 16 }}>User Management</Text>
