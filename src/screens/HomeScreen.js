@@ -182,7 +182,7 @@ const HomeScreen = ({ navigation }) => {
             {/* Bottom Section - Aligned */}
             <View style={{ flexDirection: 'row', gap: 24, alignItems: 'stretch' }}>
                 <View style={{ flex: 2 }}>
-                    <NotesCard style={{ minHeight: 400, flex: 1, marginBottom: 0 }} />
+                    <NotesCard style={{ minHeight: 220, flex: 1, marginBottom: 0 }} />
                 </View>
                 <View style={{ flex: 1 }}>
                     <SystemStatusWidget style={{ flex: 1 }} />
