@@ -76,7 +76,7 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                     newSound.setOnPlaybackStatusUpdate(s => {
                         if (s.didJustFinish) {
                             setIsPlaying(false);
-                            newSound.setPositionAsync(0);
+                            newSound.stopAsync(); // Use stopAsync to prevent auto-replay loop if logic expects it
                         }
                     });
                 } else {
