@@ -1,3 +1,4 @@
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import './src/ignoreWarnings';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
@@ -291,7 +292,9 @@ export default function App() {
     <PreferencesProvider>
       <AuthProvider>
         <SoundProvider>
-          <Main />
+          <SafeAreaProvider>
+            <Main />
+          </SafeAreaProvider>
         </SoundProvider>
       </AuthProvider>
     </PreferencesProvider>

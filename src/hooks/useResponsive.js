@@ -9,11 +9,8 @@ export const useResponsive = () => {
     const isDesktop = width >= LAYOUT.breakpoints.tablet;
     const isWide = width >= LAYOUT.breakpoints.desktop;
 
-    // Calculate content width based on device
-    let contentWidth = '100%';
-    if (isTablet) contentWidth = LAYOUT.maxWidth.tablet;
-    if (isDesktop) contentWidth = LAYOUT.maxWidth.desktop;
-    if (isWide) contentWidth = LAYOUT.maxWidth.wide;
+    // Standardize horizontal padding (16px min on mobile, up to max width on desktop)
+    const containerPadding = isMobile ? LAYOUT.spacing.m : LAYOUT.spacing.l;
 
     return {
         // Device Flags
@@ -27,15 +24,15 @@ export const useResponsive = () => {
         height,
 
         // Calculated Layout Values
-        contentWidth,
+        contentWidth: '100%',
         containerStyle: {
             width: '100%',
-            maxWidth: isMobile ? '100%' : contentWidth,
+            paddingHorizontal: containerPadding,
             alignSelf: 'center',
-            paddingHorizontal: isMobile ? LAYOUT.spacing.m : LAYOUT.spacing.l,
+            maxWidth: isWide ? LAYOUT.maxWidth.wide : (isDesktop ? LAYOUT.maxWidth.desktop : '100%'),
         },
 
-        // Values from Grid
+        // Expose standard spacing for easy access
         spacing: LAYOUT.spacing,
     };
 };

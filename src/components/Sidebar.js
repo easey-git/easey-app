@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Image, ScrollView, Pressable } from 'react-native';
 import { Text, useTheme, Drawer, Avatar } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
+import { LAYOUT } from '../theme/layout';
 
 export const Sidebar = ({ onClose, activeRoute, navigation }) => {
     const theme = useTheme();
@@ -96,7 +97,7 @@ const styles = StyleSheet.create({
         flexDirection: 'column',
     },
     header: {
-        padding: 24,
+        padding: LAYOUT.spacing.l,
         alignItems: 'flex-start',
         justifyContent: 'center',
     },
@@ -106,14 +107,14 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
-        paddingHorizontal: 12,
+        paddingHorizontal: LAYOUT.spacing.m,
     },
     footer: {
-        padding: 16,
+        padding: LAYOUT.spacing.m,
         borderTopWidth: 1,
     },
     userCard: {
-        padding: 8,
+        padding: LAYOUT.spacing.s,
         borderRadius: 8,
     }
 });

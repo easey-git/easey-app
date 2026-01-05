@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useTheme, Appbar, Portal } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Sidebar } from './Sidebar';
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveContainer } from './ResponsiveContainer';
@@ -21,49 +22,19 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right', 'bottom']}>
             {/* Desktop Sidebar - Always visible on Desktop */}
             {isDesktop && <Sidebar activeRoute={routeName} navigation={navigation} />}
 
             {/* Mobile/Tablet Sidebar - Full-height Drawer */}
             {!isDesktop && isMobileMenuOpen && (
                 <Portal>
-                    <View style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        zIndex: 1000,
-                    }}>
-                        {/* Backdrop */}
-                        <Pressable
-                            style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                            }}
-                            onPress={() => setIsMobileMenuOpen(false)}
-                        />
-
-                        {/* Sidebar */}
-                        <View style={{
-                            position: 'absolute',
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            width: 280,
-                            backgroundColor: theme.colors.surface,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 2, height: 0 },
-                            shadowOpacity: 0.25,
-                            shadowRadius: 8,
-                            elevation: 5,
-                        }}>
-                            <Sidebar onClose={() => setIsMobileMenuOpen(false)} activeRoute={routeName} navigation={navigation} />
+                    <View style={styles.backdrop} >
+                        <Pressable style={styles.backdropPressable} onPress={() => setIsMobileMenuOpen(false)} />
+                        <View style={[styles.mobileSidebar, { backgroundColor: theme.colors.surface }]}>
+                            <SafeAreaView edges={['top', 'bottom', 'left']} style={{ flex: 1 }}>
+                                <Sidebar onClose={() => setIsMobileMenuOpen(false)} activeRoute={routeName} navigation={navigation} />
+                            </SafeAreaView>
                         </View>
                     </View>
                 </Portal>
@@ -73,7 +44,11 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
             <View style={styles.main}>
                 {/* Header */}
                 {showHeader && (
-                    <Appbar.Header style={{ backgroundColor: theme.colors.background, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, height: 64 }} mode="center-aligned">
+                    <Appbar.Header
+                        statusBarHeight={0} // Let SafeAreaView handle the top padding to avoid duplicates
+                        style={{ backgroundColor: theme.colors.background, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, height: 64 }}
+                        mode="center-aligned"
+                    >
                         {!isDesktop && (
                             <Appbar.Action icon="menu" onPress={() => setIsMobileMenuOpen(true)} />
                         )}
@@ -88,21 +63,23 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
                 )}
 
                 {/* Content */}
-                {scrollable ? (
-                    <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-                        <ResponsiveContainer>
-                            {children}
-                        </ResponsiveContainer>
-                    </ScrollView>
-                ) : (
-                    <View style={styles.fixedContent}>
-                        <ResponsiveContainer style={{ height: '100%' }}>
-                            {children}
-                        </ResponsiveContainer>
-                    </View>
-                )}
+                <View style={{ flex: 1 }}>
+                    {scrollable ? (
+                        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}>
+                            <ResponsiveContainer>
+                                {children}
+                            </ResponsiveContainer>
+                        </ScrollView>
+                    ) : (
+                        <View style={styles.fixedContent}>
+                            <ResponsiveContainer style={{ height: '100%' }}>
+                                {children}
+                            </ResponsiveContainer>
+                        </View>
+                    )}
+                </View>
             </View>
-        </View>
+        </SafeAreaView>
     );
 };
 
@@ -117,7 +94,34 @@ const styles = StyleSheet.create({
     },
     fixedContent: {
         flex: 1,
-        paddingVertical: 24,
+    },
+    backdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
+    },
+    backdropPressable: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    mobileSidebar: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 280,
+        shadowColor: '#000',
+        shadowOffset: { width: 2, height: 0 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 5,
     }
 });
 

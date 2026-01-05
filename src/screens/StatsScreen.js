@@ -594,22 +594,22 @@ const styles = StyleSheet.create({
     center: { justifyContent: 'center', alignItems: 'center' },
     content: { flex: 1 },
     metricsScroll: {
-        paddingVertical: 16,
+        paddingVertical: 8,
     },
     metricsScrollContent: {
-        paddingHorizontal: 24, // Matches list padding
-        gap: 12,
+        paddingHorizontal: 4,
+        gap: 8,
     },
     metricsRow: {
         flexDirection: 'row',
-        padding: 16,
-        gap: 16,
+        gap: 8,
     },
     metricCard: {
-        width: Dimensions.get('window').width * 0.42,
-        minWidth: 160,
-        padding: 16,
-        borderRadius: 8,
+        flex: 1,
+        minWidth: 120,
+        maxWidth: 180,
+        padding: 12,
+        borderRadius: 12,
         borderWidth: 1,
     },
     chartSection: {

@@ -14,13 +14,16 @@ export const LAYOUT = {
     },
 
     // Spacing (8-point grid)
+    // Spacing (Fixed 4pt/8pt Grid)
     spacing: {
+        xxs: 2,
         xs: 4,
         s: 8,
-        m: 16,
-        l: 24,
-        xl: 32,
-        xxl: 48,
+        m: 16,     // Standard padding
+        l: 24,     // Card padding / Section spacing
+        xl: 32,    // Major section spacing
+        xxl: 48,   // Hero spacing
+        xxxl: 64,
     },
 
     // Standard Touch Targets
