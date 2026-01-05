@@ -7,7 +7,7 @@ import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveContainer } from './ResponsiveContainer';
 import { useRoute } from '@react-navigation/native';
 
-export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeader = true, scrollable = true, actions }) => {
+export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeader = true, scrollable = true, actions, floatingButton }) => {
     const theme = useTheme();
     const { isDesktop } = useResponsive();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -78,6 +78,13 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
                         </View>
                     )}
                 </View>
+
+                {/* Floating Elements Layer */}
+                {floatingButton && (
+                    <View style={styles.floatingContainer} pointerEvents="box-none">
+                        {floatingButton}
+                    </View>
+                )}
             </View>
         </SafeAreaView>
     );
@@ -94,6 +101,14 @@ const styles = StyleSheet.create({
     },
     fixedContent: {
         flex: 1,
+    },
+    floatingContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 10,
     },
     backdrop: {
         position: 'absolute',

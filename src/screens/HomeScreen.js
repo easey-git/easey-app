@@ -123,8 +123,8 @@ const HomeScreen = ({ navigation }) => {
     const onRefresh = React.useCallback(() => { setRefreshing(true); fetchStats(); setTimeout(() => setRefreshing(false), 1000); }, [fetchStats]);
 
     // --- RENDER HELPERS ---
-    const SystemStatusWidget = () => (
-        <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, padding: 0 }]} elevation={0}>
+    const SystemStatusWidget = ({ style }) => (
+        <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, padding: 0 }, style]} elevation={0}>
             <View style={{ padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
                 <Text variant="titleSmall" style={{ fontWeight: 'bold' }}>System Status</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -169,28 +169,23 @@ const HomeScreen = ({ navigation }) => {
                 />
             </View>
 
-            {/* Top Stats Row */}
-            <View style={{ flexDirection: 'row', gap: 24 }}>
+            {/* Main Stats Row - 6 Columns */}
+            <View style={{ flexDirection: 'row', gap: 16 }}>
                 <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>
                 <View style={{ flex: 1 }}><StatCard label="Orders" value={stats.orders} icon="package-variant" theme={theme} /></View>
                 <View style={{ flex: 1 }}><StatCard label="Pending" value={workQueue.pending} icon="clock-alert-outline" color={theme.colors.errorContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'pending' } })} theme={theme} /></View>
                 <View style={{ flex: 1 }}><StatCard label="Confirmed" value={workQueue.confirmed} icon="check-circle-outline" color={theme.colors.secondaryContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'confirmed' } })} theme={theme} /></View>
-            </View>
-
-            {/* Secondary Stats Row */}
-            <View style={{ flexDirection: 'row', gap: 24 }}>
                 <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" theme={theme} /></View>
                 <View style={{ flex: 1 }}><StatCard label="AOV" value={`₹${stats.aov}`} icon="chart-line" theme={theme} /></View>
-                <View style={{ flex: 2 }} />
             </View>
 
-            {/* Bottom Section */}
-            <View style={{ flexDirection: 'row', gap: 24 }}>
+            {/* Bottom Section - Aligned */}
+            <View style={{ flexDirection: 'row', gap: 24, alignItems: 'stretch' }}>
                 <View style={{ flex: 2 }}>
-                    <NotesCard style={{ height: 400 }} />
+                    <NotesCard style={{ minHeight: 400, flex: 1, marginBottom: 0 }} />
                 </View>
                 <View style={{ flex: 1 }}>
-                    <SystemStatusWidget />
+                    <SystemStatusWidget style={{ flex: 1 }} />
                 </View>
             </View>
         </View>
@@ -234,15 +229,21 @@ const HomeScreen = ({ navigation }) => {
     );
 
     return (
-        <CRMLayout title="Overview" navigation={navigation} scrollable={true} showHeader={!isDesktop}>
+        <CRMLayout
+            title="Overview"
+            navigation={navigation}
+            scrollable={true}
+            showHeader={!isDesktop}
+            floatingButton={
+                <FAB
+                    icon="auto-fix"
+                    style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+                    color={theme.colors.onPrimary}
+                    onPress={() => navigation.navigate('Assistant')}
+                />
+            }
+        >
             {isDesktop ? <DesktopLayout /> : <MobileLayout />}
-
-            <FAB
-                icon="auto-fix"
-                style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-                color={theme.colors.onPrimary}
-                onPress={() => navigation.navigate('Assistant')}
-            />
         </CRMLayout>
     );
 };
