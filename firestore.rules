@@ -98,6 +98,11 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && (isAdmin() || resource.data.userId == request.auth.uid);
     }
     
+    // Shared Team Board
+    match /system/team_board {
+      allow read, write: if request.auth != null;
+    }
+
     // 7. Push Tokens (System)
     // Locked down: Users can only manage their own tokens.
     match /push_tokens/{token} {

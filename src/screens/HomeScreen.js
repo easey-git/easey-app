@@ -3,7 +3,7 @@ import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Text, useTheme, Surface, Icon, FAB, SegmentedButtons, IconButton, Divider } from 'react-native-paper';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { NotesCard } from '../components/NotesCard';
+import { TeamBoardCard } from '../components/TeamBoardCard';
 import { useSound } from '../context/SoundContext';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
@@ -193,7 +193,7 @@ const HomeScreen = ({ navigation }) => {
             {/* Bottom Section - Aligned */}
             <View style={{ flexDirection: 'row', gap: 24, alignItems: 'stretch' }}>
                 <View style={{ flex: 2 }}>
-                    <NotesCard style={{ minHeight: 220, flex: 1, marginBottom: 0 }} />
+                    <TeamBoardCard style={{ minHeight: 220, flex: 1, marginBottom: 0 }} />
                 </View>
                 <View style={{ flex: 1 }}>
                     <SystemStatusWidget style={{ flex: 1 }} />
@@ -232,7 +232,7 @@ const HomeScreen = ({ navigation }) => {
 
             <Divider style={{ marginVertical: 8 }} />
 
-            <NotesCard style={{ minHeight: 200 }} />
+            <TeamBoardCard style={{ minHeight: 200 }} />
             <SystemStatusWidget />
             <View style={{ height: 80 }} />
         </View>
