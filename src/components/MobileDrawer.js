@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet, Pressable, Animated, PanResponder, Easing, useWindowDimensions, Platform } from 'react-native';
 import { useTheme, Portal } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,7 +6,7 @@ import { useDrawer } from '../context/DrawerContext';
 import { Sidebar } from './Sidebar';
 import { useResponsive } from '../hooks/useResponsive';
 
-export const MobileDrawer = () => {
+export const MobileDrawer = React.memo(() => {
     const theme = useTheme();
     const { height } = useWindowDimensions();
     const { isDrawerOpen, closeDrawer } = useDrawer();
@@ -23,51 +23,40 @@ export const MobileDrawer = () => {
     // Web does not support useNativeDriver for layout properties or at all in some versions
     const useNativeDriver = Platform.OS !== 'web';
 
-    // Mounted state for "Keep mounted while animating, unmount after"
-    // This creates the perfect "Native" feel: instant start, clean cleanup.
-    const [isMounted, setIsMounted] = React.useState(false);
-
     // Force hide on desktop
     if (isDesktop) return null;
 
     useEffect(() => {
         if (isDrawerOpen) {
-            setIsMounted(true); // Mount immediately
-            // Small timeout to ensure render happens before animation starts (Double frame)
-            requestAnimationFrame(() => {
-                Animated.parallel([
-                    Animated.timing(slideAnim, {
-                        toValue: 0,
-                        duration: 300,
-                        useNativeDriver,
-                        easing: Easing.out(Easing.poly(4)),
-                    }),
-                    Animated.timing(fadeAnim, {
-                        toValue: 1,
-                        duration: 300,
-                        useNativeDriver,
-                    })
-                ]).start();
-            });
-        } else {
-            // Animate out
+            // Animate In - Standard Material Deceleration
             Animated.parallel([
                 Animated.timing(slideAnim, {
-                    toValue: OFF_SCREEN,
-                    duration: 250,
-                    useNativeDriver,
-                    easing: Easing.in(Easing.poly(4)),
-                }),
-                Animated.timing(fadeAnim, {
                     toValue: 0,
                     duration: 250,
                     useNativeDriver,
+                    easing: Easing.out(Easing.poly(5)),
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 250,
+                    useNativeDriver,
                 })
-            ]).start(({ finished }) => {
-                if (finished) {
-                    setIsMounted(false); // Unmount after animation
-                }
-            });
+            ]).start();
+        } else {
+            // Animate Out - Acceleration
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: OFF_SCREEN,
+                    duration: 200,
+                    useNativeDriver,
+                    easing: Easing.in(Easing.poly(5)),
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver,
+                })
+            ]).start();
         }
     }, [isDrawerOpen]);
 
@@ -93,8 +82,6 @@ export const MobileDrawer = () => {
             }
         })
     ).current;
-
-    if (!isMounted) return null;
 
     return (
         <Portal>
@@ -131,7 +118,7 @@ export const MobileDrawer = () => {
             </View>
         </Portal>
     );
-};
+});
 
 const styles = StyleSheet.create({
     backdropContainer: {

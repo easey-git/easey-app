@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useDrawer } from '../context/DrawerContext';
 import { useResponsive } from '../hooks/useResponsive';
 
-export const Sidebar = ({ onClose }) => {
+export const Sidebar = React.memo(({ onClose }) => {
     const theme = useTheme();
     const { logout, user, role, hasPermission } = useAuth();
     const navigation = useNavigation();
@@ -132,7 +132,7 @@ export const Sidebar = ({ onClose }) => {
             </View>
         </View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {
