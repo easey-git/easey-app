@@ -10,7 +10,7 @@ import { AccessDenied } from '../components/AccessDenied';
 import { useResponsive } from '../hooks/useResponsive';
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
-    const { hasPermission, role, loading: authLoading } = useAuth();
+    const { hasPermission, role, user, loading: authLoading } = useAuth();
     const theme = useTheme(); // Move theme hook up
 
     if (authLoading) {
@@ -414,6 +414,25 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     };
 
+    const handleResetItem = async (item) => {
+        try {
+            await updateDoc(doc(db, selectedCollection, item.id), {
+                adminEdited: false,
+                adminModifiedFields: deleteField()
+            });
+            // Update local state immediately for snappy feel
+            setDocuments(prev => prev.map(d => d.id === item.id ? {
+                ...d,
+                adminEdited: false,
+                adminModifiedFields: undefined
+            } : d));
+            showSnackbar("Modifications reset");
+        } catch (error) {
+            console.error("Error resetting item:", error);
+            showSnackbar("Failed to reset", true);
+        }
+    };
+
     const renderDocItem = useCallback(({ item }) => {
         const isSelected = selectedItems.has(item.id);
         return (
@@ -425,9 +444,11 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 onPress={showDocDetails}
                 onToggle={toggleSelection}
                 onCodToggle={handleCodToggle}
+                isAdmin={role === 'admin'}
+                onReset={handleResetItem}
             />
         );
-    }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection]);
+    }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection, role]);
 
     const { isMobile } = useResponsive();
 

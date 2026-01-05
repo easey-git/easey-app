@@ -51,12 +51,18 @@ service cloud.firestore {
     // 3. Orders & Checkouts (Database)
     match /orders/{document=**} {
       allow read: if hasPermission('access_orders');
-      allow write: if hasPermission('manage_orders'); // Verifying orders, etc.
+      allow create: if hasPermission('manage_orders');
+      allow delete: if hasPermission('manage_orders'); // Or restrict to admin?
+      allow update: if hasPermission('manage_orders') && (
+        isAdmin() || 
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['adminEdited', 'adminModifiedFields'])
+      );
     }
     
     match /checkouts/{document=**} {
       allow read: if hasPermission('access_orders');
-      allow write: if false; // Generally updated by webhook/server
+      // write is generally server-side, but if we need manual edits:
+      allow write: if isAdmin();
     }
 
     // 4. WhatsApp

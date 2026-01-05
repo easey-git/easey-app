@@ -41,16 +41,18 @@ export const AuthProvider = ({ children }) => {
                     let userPermissions = [];
 
                     // Check logic for auto-admin
-                    const isSuperAdmin = authUser.email && authUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+                    const isSuperAdmin = authUser.email && authUser.email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase();
 
                     if (userSnap.exists()) {
                         const data = userSnap.data();
                         userRole = data.role || 'user';
                         userPermissions = data.permissions || [];
+                        console.log(`[Auth] Firestore Role: ${userRole}, Email: ${authUser.email}`); // DEBUG
 
                         // If user exists but should be admin (and isn't), update them
                         if (isSuperAdmin) {
                             userRole = 'admin'; // FORCE ADMIN LOCALLY
+                            console.log("[Auth] Forcing Super Admin"); // DEBUG
                             if (data.role !== 'admin') {
                                 try {
                                     await setDoc(userRef, { role: 'admin' }, { merge: true });
@@ -64,6 +66,7 @@ export const AuthProvider = ({ children }) => {
                         if (isSuperAdmin) {
                             userRole = 'admin';
                         }
+                        console.log(`[Auth] New User. SuperAdmin? ${isSuperAdmin}`); // DEBUG
 
                         // Use email username if displayName is missing
                         const defaultName = authUser.displayName || (authUser.email ? authUser.email.split('@')[0] : 'User');
@@ -80,6 +83,7 @@ export const AuthProvider = ({ children }) => {
                     setUser(authUser);
                     setRole(userRole);
                     setPermissions(userPermissions);
+                    console.log(`[Auth] Final State - Role: ${userRole}`); // DEBUG
 
                     // Persist user session with role
                     await AsyncStorage.setItem('user', JSON.stringify({

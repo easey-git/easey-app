@@ -30,7 +30,7 @@ const CopyableText = ({ text, display, style, theme, numberOfLines = 1 }) => {
     );
 };
 
-const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle }) => {
+const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset }) => {
     const { isMobile } = useResponsive();
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
 
@@ -357,12 +357,23 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                     )}
                                 </>
                             )}
+
+                            {/* Admin Reset Button Inline */}
+                            {isAdmin && item.adminEdited && onReset && (
+                                <IconButton
+                                    icon="restore"
+                                    size={16}
+                                    iconColor={theme.colors.error}
+                                    style={{ margin: 0, width: 20, height: 20 }}
+                                    onPress={() => onReset(item)}
+                                />
+                            )}
                         </View>
                     )}
                 </View>
                 <IconButton icon="chevron-right" size={20} />
-            </View>
-        </TouchableOpacity>
+            </View >
+        </TouchableOpacity >
     );
 });
 
