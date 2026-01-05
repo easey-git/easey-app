@@ -216,14 +216,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
     const handleSave = async () => {
         try {
-            // Remove ID from data to avoid overwriting it
-            const { id, ...dataToUpdate } = editedDoc;
+            // Remove ID and metadata fields from data to avoid overwriting them
+            const { id, createdAt, updatedAt, ref, ...dataToUpdate } = editedDoc;
 
             // Calculate changed fields
             const changedFields = [];
             Object.keys(dataToUpdate).forEach(key => {
                 // Ignore metadata
-                if (key === 'updatedAt' || key === 'adminEdited' || key === 'adminModifiedFields') return;
+                if (key === 'adminEdited' || key === 'adminModifiedFields') return;
 
                 const originalValue = selectedDoc[key];
                 const newValue = dataToUpdate[key];
@@ -236,7 +236,12 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
             // Mark as edited by admin
             dataToUpdate.adminEdited = true;
-            dataToUpdate.updatedAt = new Date();
+
+            // Only update updatedAt for collections that use it for sorting (checkouts, push_tokens)
+            // For orders, we DON'T want to update it because it would affect revenue calculations
+            if (selectedCollection === 'checkouts' || selectedCollection === 'push_tokens') {
+                dataToUpdate.updatedAt = new Date();
+            }
 
             if (changedFields.length > 0) {
                 dataToUpdate.adminModifiedFields = changedFields;
@@ -622,11 +627,13 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     <Dialog.ScrollArea style={{ paddingHorizontal: 0 }}>
                         <ScrollView>
                             <View style={{ paddingHorizontal: 24 }}>
-                                {editedDoc && Object.entries(editedDoc).map(([key, value]) => (
-                                    key !== 'id' && (
-                                        <RenderField key={key} label={key} value={value} />
-                                    )
-                                ))}
+                                {editedDoc && Object.entries(editedDoc).map(([key, value]) => {
+                                    // Hide system fields that should never be edited
+                                    const systemFields = ['id', 'createdAt', 'updatedAt', 'ref'];
+                                    if (systemFields.includes(key)) return null;
+
+                                    return <RenderField key={key} label={key} value={value} />;
+                                })}
                             </View>
                         </ScrollView>
                     </Dialog.ScrollArea>
