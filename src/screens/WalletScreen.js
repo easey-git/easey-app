@@ -529,7 +529,7 @@ const WalletScreen = ({ navigation }) => {
 
     const ListHeader = useMemo(() => (
         <View style={{ paddingBottom: 16 }}>
-            <View style={{ marginBottom: 16 }}>
+            <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
                 <SegmentedButtons
                     value={timeRange}
                     onValueChange={setTimeRange}
@@ -542,7 +542,7 @@ const WalletScreen = ({ navigation }) => {
                 />
             </View>
 
-            <Surface style={[styles.balanceCard, { backgroundColor: theme.colors.surface }]} elevation={2}>
+            <View style={[styles.balanceCard, { backgroundColor: 'transparent', paddingHorizontal: 0, marginHorizontal: 16, padding: 0 }]}>
                 <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>NET WORTH</Text>
                 {statsLoading ? (
                     <View style={{ height: 50, justifyContent: 'center', alignItems: 'flex-start' }}>
@@ -550,8 +550,8 @@ const WalletScreen = ({ navigation }) => {
                     </View>
                 ) : (
                     <Text
-                        variant="displayMedium"
-                        style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4, marginBottom: 24 }}
+                        variant="displayLarge"
+                        style={{ fontWeight: '900', color: theme.colors.primary, marginTop: 4, marginBottom: 24, fontSize: 40 }}
                         adjustsFontSizeToFit
                         numberOfLines={1}
                         minimumFontScale={0.5}
@@ -561,7 +561,7 @@ const WalletScreen = ({ navigation }) => {
                 )}
 
                 <View style={styles.statsRow}>
-                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant, borderWidth: 0, borderRadius: 16 }]}>
                         <View style={[styles.statIcon, { backgroundColor: theme.colors.primaryContainer }]}>
                             <Icon source="arrow-down-left" color={theme.colors.primary} size={20} />
                         </View>
@@ -576,7 +576,7 @@ const WalletScreen = ({ navigation }) => {
                             )}
                         </View>
                     </View>
-                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant, borderWidth: 0, borderRadius: 16 }]}>
                         <View style={[styles.statIcon, { backgroundColor: theme.colors.errorContainer }]}>
                             <Icon source="arrow-up-right" color={theme.colors.error} size={20} />
                         </View>
@@ -592,11 +592,11 @@ const WalletScreen = ({ navigation }) => {
                         </View>
                     </View>
                 </View>
-            </Surface>
+            </View>
 
             {
                 ((filterType === 'all') && ((globalStats?.income || 0) > 0 || (globalStats?.expense || 0) > 0)) && (
-                    <StatChart title="Cash Flow (All Time Accurate)" data={[
+                    <StatChart title="Cash Flow" data={[
                         {
                             name: 'Income',
                             amount: globalStats.income || 0,
@@ -617,17 +617,17 @@ const WalletScreen = ({ navigation }) => {
 
             {
                 (filterType === 'expense' && itemStats.expenseItemsChart.length > 0) && (
-                    <StatChart title={timeRange === 'all' ? "All Time Expenses" : "Top Recent Expenses"} data={itemStats.expenseItemsChart} theme={theme} />
+                    <StatChart title={timeRange === 'all' ? "All Time Expenses" : "Top Expenses"} data={itemStats.expenseItemsChart} theme={theme} />
                 )
             }
 
             {
                 (filterType === 'income' && itemStats.incomeItemsChart.length > 0) && (
-                    <StatChart title={timeRange === 'all' ? "All Time Income" : "Top Recent Income"} data={itemStats.incomeItemsChart} theme={theme} />
+                    <StatChart title={timeRange === 'all' ? "All Time Income" : "Top Income"} data={itemStats.incomeItemsChart} theme={theme} />
                 )
             }
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12, paddingHorizontal: 16 }}>
                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>Transactions</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                     <Chip selected={filterType === 'all'} onPress={() => setFilterType('all')} showSelectedOverlay compact>All</Chip>
@@ -640,7 +640,7 @@ const WalletScreen = ({ navigation }) => {
                 placeholder="Search transactions"
                 onChangeText={setSearchQuery}
                 value={searchQuery}
-                style={{ marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 16, height: 46 }}
+                style={{ marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 16, height: 46, marginHorizontal: 16 }}
                 inputStyle={{ minHeight: 0, alignSelf: 'center' }}
                 iconColor={theme.colors.onSurfaceVariant}
                 placeholderTextColor={theme.colors.onSurfaceVariant}
@@ -722,6 +722,7 @@ const WalletScreen = ({ navigation }) => {
             title="Wallet"
             navigation={navigation}
             scrollable={false}
+            fullWidth={true}
             actions={<Appbar.Action icon="plus" onPress={() => setVisible(true)} />}
         >
             {dataLoading ? (
@@ -729,12 +730,12 @@ const WalletScreen = ({ navigation }) => {
                     <ActivityIndicator size="large" />
                 </View>
             ) : (
-                <ResponsiveContainer>
+                <ResponsiveContainer maxWidth="100%">
                     <SectionList
                         sections={sections}
                         renderItem={renderTransactionItem}
                         renderSectionHeader={({ section: { title } }) => (
-                            <View style={{ paddingVertical: 8, paddingHorizontal: 4, marginTop: 8, backgroundColor: theme.colors.background }}>
+                            <View style={{ paddingVertical: 8, paddingHorizontal: 16, marginTop: 8, backgroundColor: theme.colors.background }}>
                                 <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: 'bold', textTransform: 'uppercase' }}>{title}</Text>
                             </View>
                         )}
@@ -796,18 +797,20 @@ const WalletScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     content: {
-        padding: 16,
-        paddingBottom: 32,
+        padding: 0,
+        paddingBottom: 80, // More bottom padding for FAB/Scroll end
     },
     balanceCard: {
         borderRadius: 24,
         padding: 24,
         marginBottom: 16,
+        marginHorizontal: 16, // Add side margins as container is now full width
     },
     chartCard: {
         borderRadius: 24,
         padding: 20,
         marginBottom: 8,
+        marginHorizontal: 16, // Add side margins
     },
     statsRow: {
         flexDirection: 'row',
@@ -834,6 +837,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 16,
+        paddingHorizontal: 16, // Add side padding for list items
     },
     iconSurface: {
         padding: 10,

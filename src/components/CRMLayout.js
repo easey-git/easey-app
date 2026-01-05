@@ -7,10 +7,17 @@ import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveContainer } from './ResponsiveContainer';
 import { useDrawer } from '../context/DrawerContext';
 
-export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeader = true, scrollable = true, actions, floatingButton }) => {
+export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeader = true, scrollable = true, fullWidth = false, actions, floatingButton }) => {
     const theme = useTheme();
     const { isDesktop } = useResponsive();
     const { openDrawer } = useDrawer();
+
+    const containerProps = fullWidth ? {
+        maxWidth: '100%',
+        style: { paddingHorizontal: 0, height: '100%' }
+    } : {
+        style: { height: '100%' }
+    };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right', 'bottom']}>
@@ -45,13 +52,13 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
                 <View style={{ flex: 1 }}>
                     {scrollable ? (
                         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}>
-                            <ResponsiveContainer>
+                            <ResponsiveContainer {...containerProps} style={fullWidth ? { paddingHorizontal: 0 } : undefined}>
                                 {children}
                             </ResponsiveContainer>
                         </ScrollView>
                     ) : (
                         <View style={styles.fixedContent}>
-                            <ResponsiveContainer style={{ height: '100%' }}>
+                            <ResponsiveContainer {...containerProps}>
                                 {children}
                             </ResponsiveContainer>
                         </View>
