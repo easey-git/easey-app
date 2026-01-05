@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react'; // Cache bust 1
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
-import { collection, getDocsFromServer, deleteDoc, updateDoc, doc, limit, query, writeBatch, where, orderBy } from 'firebase/firestore';
+import { collection, getDocsFromServer, deleteDoc, updateDoc, doc, limit, query, writeBatch, where, orderBy, deleteField } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import DocItem from '../components/DocItem';
 import { CRMLayout } from '../components/CRMLayout';
@@ -10,7 +10,12 @@ import { AccessDenied } from '../components/AccessDenied';
 import { useResponsive } from '../hooks/useResponsive';
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
-    const { hasPermission } = useAuth();
+    const { hasPermission, role, loading: authLoading } = useAuth();
+    const theme = useTheme(); // Move theme hook up
+
+    if (authLoading) {
+        return <View style={{ flex: 1, backgroundColor: theme.colors.background }} />;
+    }
 
     if (!hasPermission('access_orders')) {
         return <AccessDenied title="Database Restricted" message="You need permission to access the database." />;
@@ -90,8 +95,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [snackbarVisible, setSnackbarVisible] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarColor, setSnackbarColor] = useState('#333');
-
-    const theme = useTheme();
 
     const showSnackbar = (message, isError = false) => {
         setSnackbarMessage(message);
@@ -261,6 +264,21 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         } catch (error) {
             console.error("Error updating:", error);
             showSnackbar("Failed to update document", true);
+        }
+    };
+
+    const handleResetModifications = async () => {
+        try {
+            await updateDoc(doc(db, selectedCollection, selectedDoc.id), {
+                adminEdited: false,
+                adminModifiedFields: deleteField()
+            });
+            setVisible(false);
+            fetchDocuments();
+            showSnackbar("Modifications reset successfully");
+        } catch (error) {
+            console.error("Error resetting modifications:", error);
+            showSnackbar("Failed to reset modifications", true);
         }
     };
 
@@ -509,7 +527,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 renderItem={renderDocItem}
                 keyExtractor={item => item.id}
                 contentContainerStyle={{ padding: 0, paddingBottom: 80 }}
-                // ItemSeparatorComponent={() => <View style={{ height: 8 }} />} /* Removed for List Look */
                 refreshing={loading}
                 onRefresh={fetchDocuments}
                 initialNumToRender={10}
@@ -518,6 +535,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             />
 
             <Portal>
+                {/* ... Dialog ... */}
                 <Dialog visible={visible} onDismiss={() => setVisible(false)} style={{ maxHeight: '90%' }}>
                     <Dialog.Title>
                         {isEditing ? 'Edit Document' : 'Document Details'}
@@ -546,13 +564,25 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                 Save Changes
                             </Button>
                         ) : (
-                            <Button
-                                mode="outlined"
-                                textColor={theme.colors.error}
-                                onPress={() => handleDelete(selectedDoc.id)}
-                            >
-                                Delete
-                            </Button>
+                            <>
+                                {role === 'admin' && selectedDoc?.adminEdited && (
+                                    <Button
+                                        mode="contained-tonal"
+                                        textColor={theme.colors.error}
+                                        onPress={handleResetModifications}
+                                        style={{ marginRight: 8 }}
+                                    >
+                                        Reset Mods
+                                    </Button>
+                                )}
+                                <Button
+                                    mode="outlined"
+                                    textColor={theme.colors.error}
+                                    onPress={() => selectedDoc?.id && handleDelete(selectedDoc.id)}
+                                >
+                                    Delete
+                                </Button>
+                            </>
                         )}
                         <Button onPress={() => setVisible(false)}>Close</Button>
                     </Dialog.Actions>

@@ -234,10 +234,14 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                         )}
                         <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 4 }}>
                             <Icon source="map-marker" size={12} color={theme.colors.onSurfaceVariant} style={{ marginTop: 2 }} />
-                            {/* Address: Removed numberOfLines to allow full expansion */}
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1, marginLeft: 4 }}>
-                                {[item.address1, item.city, item.province].filter(Boolean).join(', ') || 'No Address'}
-                            </Text>
+                            {/* Address: Copyable and full width */}
+                            <CopyableText
+                                text={[item.address1, item.city, item.province, item.zip].filter(Boolean).join(', ') || 'No Address'}
+                                display={[item.address1, item.city, item.province, item.zip].filter(Boolean).join(', ') || 'No Address'}
+                                style={{ marginLeft: 4, flex: 1 }}
+                                theme={theme}
+                                numberOfLines={null}
+                            />
                         </View>
                     </View>
 
@@ -296,16 +300,65 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 {item.cod_status === 'confirmed' ? 'CONFIRMED' : 'PENDING'}
                             </Chip>
                         )}
-
-                        {/* Admin Edit Warning */}
-                        {(item.adminEdited || item.verificationStatus === 'address_change_requested') && (
-                            <Chip mode="outlined" compact style={{ borderColor: theme.colors.error, height: 24 }}>
-                                <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold' }}>
-                                    {item.verificationStatus === 'address_change_requested' ? 'ADDR REQ' : 'MODIFIED'}
-                                </Text>
-                            </Chip>
-                        )}
                     </View>
+
+                    {/* Modification Warning (New Line) */}
+                    {(item.adminEdited || item.verificationStatus === 'address_change_requested') && (
+                        <View style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                            {item.verificationStatus === 'address_change_requested' ? (
+                                <Chip
+                                    mode="outlined"
+                                    style={{ borderColor: theme.colors.error, backgroundColor: theme.colors.errorContainer, height: 24 }}
+                                >
+                                    <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold', fontSize: 10, lineHeight: 10 }}>ADDR REQ</Text>
+                                </Chip>
+                            ) : (
+                                <>
+                                    {/* Display Specific Modified Fields */}
+                                    {item.adminModifiedFields && item.adminModifiedFields.length > 0 ? (
+                                        item.adminModifiedFields.map(field => {
+                                            // Map keys to readable labels
+                                            const labelMap = {
+                                                totalPrice: 'PRICE',
+                                                customerName: 'NAME',
+                                                phone: 'PHONE',
+                                                address1: 'ADDRESS',
+                                                status: 'STATUS',
+                                                cod_status: 'COD',
+                                                email: 'EMAIL',
+                                                city: 'CITY',
+                                                state: 'STATE',
+                                                zip: 'ZIP',
+                                                orderNumber: 'ORDER #'
+                                            };
+                                            const label = labelMap[field] || field.toUpperCase();
+                                            return (
+                                                <Chip
+                                                    key={field}
+                                                    mode="outlined"
+                                                    style={{ borderColor: theme.colors.error, backgroundColor: theme.colors.errorContainer, height: 24 }}
+                                                >
+                                                    <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold', fontSize: 10, lineHeight: 10 }}>
+                                                        {label} MODIFIED
+                                                    </Text>
+                                                </Chip>
+                                            );
+                                        })
+                                    ) : (
+                                        // Fallback if no specific fields tracked but flag is true
+                                        <Chip
+                                            mode="outlined"
+                                            style={{ borderColor: theme.colors.error, backgroundColor: theme.colors.errorContainer, height: 24 }}
+                                        >
+                                            <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold', fontSize: 10, lineHeight: 10 }}>
+                                                ORDER MODIFIED
+                                            </Text>
+                                        </Chip>
+                                    )}
+                                </>
+                            )}
+                        </View>
+                    )}
                 </View>
                 <IconButton icon="chevron-right" size={20} />
             </View>
