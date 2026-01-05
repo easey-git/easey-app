@@ -5,7 +5,6 @@ import { initializeAuth, getReactNativePersistence, browserLocalPersistence } fr
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// TODO: Replace with your Firebase config object
 const firebaseConfig = {
     apiKey: "AIzaSyCrp7A4FlGRbIkmPpzP0nxzae4u808RHBw",
     authDomain: "easey-db.firebaseapp.com",

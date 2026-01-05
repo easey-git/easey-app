@@ -39,7 +39,7 @@ if (messaging) {
     // Firebase does NOT show notifications in foreground by default.
     // We must manually trigger a local notification to ensure sound/alert works.
     messaging().onMessage(async remoteMessage => {
-        console.log('FCM Message Received (Foreground):', remoteMessage);
+
 
         const { notification, data } = remoteMessage;
 
@@ -58,7 +58,7 @@ if (messaging) {
 
     // Background handler is required by RNFirebase
     messaging().setBackgroundMessageHandler(async remoteMessage => {
-        console.log('FCM Message Received (Background):', remoteMessage);
+
         // Handled specifically by Native System using app.json channel config
     });
 }
