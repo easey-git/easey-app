@@ -484,6 +484,20 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     };
 
+    const handleShippedToggle = async (item) => {
+        try {
+            // Reverting from 'shipped' goes back to 'confirmed' by default as logical step, or 'pending' if it was pending.
+            // Assumption: Unchecking shipped means it goes back to active pool, usually 'confirmed' ready to ship.
+            const newStatus = item.cod_status === 'shipped' ? 'confirmed' : 'shipped';
+            await updateDoc(doc(db, selectedCollection, item.id), { cod_status: newStatus });
+            setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
+            showSnackbar(`Order marked as ${newStatus.toUpperCase()}`);
+        } catch (error) {
+            console.error("Error toggling Shipped status:", error);
+            showSnackbar("Failed to update status", true);
+        }
+    };
+
     const renderDocItem = useCallback(({ item }) => {
         const isSelected = selectedItems.has(item.id);
         return (
@@ -499,9 +513,10 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 onReset={handleResetItem}
                 onAttachVoice={handleAttachVoice}
                 onDeleteVoice={handleDeleteVoice}
+                onShippedToggle={handleShippedToggle}
             />
         );
-    }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection, role]);
+    }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection, role, handleCodToggle, handleResetItem, handleAttachVoice, handleDeleteVoice, handleShippedToggle]);
 
     const { isMobile } = useResponsive();
 

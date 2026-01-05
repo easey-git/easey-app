@@ -31,7 +31,7 @@ const CopyableText = ({ text, display, style, theme, numberOfLines = 1 }) => {
     );
 };
 
-const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset, onAttachVoice, onDeleteVoice }) => {
+const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset, onAttachVoice, onDeleteVoice, onShippedToggle }) => {
     const { isMobile } = useResponsive();
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
 
@@ -387,8 +387,8 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                             </Chip>
                         )}
 
-                        {/* COD Confirmation Status (Always visible if COD) */}
-                        {(isCOD && selectedCollection !== 'checkouts') && (
+                        {/* COD Confirmation Status (Always visible if COD, unless shipped) */}
+                        {(isCOD && selectedCollection !== 'checkouts' && item.cod_status !== 'shipped') && (
                             <Chip
                                 mode="flat"
                                 compact
@@ -399,18 +399,31 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                     borderWidth: 1
                                 }]}
                                 textStyle={{
-                                    fontSize: 10,
-                                    lineHeight: 16,
-                                    marginVertical: 0,
-                                    marginHorizontal: 8,
-                                    color: item.cod_status === 'confirmed' ? '#047857' : '#c2410c',
-                                    fontWeight: 'bold'
+                                    fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold',
+                                    color: item.cod_status === 'confirmed' ? '#166534' : '#9a3412'
                                 }}
                             >
                                 {item.cod_status === 'confirmed' ? 'CONFIRMED' : 'PENDING'}
                             </Chip>
                         )}
                     </View>
+
+                    {/* Shipped Status - Admin Only (New Row Below) */}
+                    {(isAdmin && selectedCollection !== 'checkouts') && (
+                        <View style={{ flexDirection: 'row', marginTop: 8 }}>
+                            <TouchableOpacity
+                                onPress={() => onShippedToggle && onShippedToggle(item)}
+                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: item.cod_status === 'shipped' ? theme.colors.primaryContainer : 'transparent', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2, borderWidth: 1, borderColor: theme.colors.outline }}
+                            >
+                                <Checkbox.Android
+                                    status={item.cod_status === 'shipped' ? 'checked' : 'unchecked'}
+                                    onPress={() => onShippedToggle && onShippedToggle(item)}
+                                    color={theme.colors.primary}
+                                />
+                                <Text variant="labelSmall" style={{ fontWeight: 'bold' }}>SHIPPED</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     {/* Modification Warning (New Line) */}
                     {(item.adminEdited || item.verificationStatus === 'address_change_requested') && (
