@@ -23,7 +23,7 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Desktop Sidebar - Always visible on Desktop */}
-            {isDesktop && <Sidebar activeRoute={routeName} />}
+            {isDesktop && <Sidebar activeRoute={routeName} navigation={navigation} />}
 
             {/* Mobile/Tablet Sidebar - Drawer via Portal */}
             {!isDesktop && (
@@ -31,19 +31,26 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
                     <Modal
                         visible={isMobileMenuOpen}
                         onDismiss={() => setIsMobileMenuOpen(false)}
+                        dismissable={true}
                         contentContainerStyle={{
                             position: 'absolute',
                             left: 0,
                             top: 0,
                             bottom: 0,
-                            width: 280, // Standard drawer width
+                            width: 280,
                             backgroundColor: theme.colors.surface,
-                            padding: 0,
-                            margin: 0
+                            shadowColor: '#000',
+                            shadowOffset: { width: 2, height: 0 },
+                            shadowOpacity: 0.25,
+                            shadowRadius: 8,
+                            elevation: 5,
                         }}
-                        style={{ justifyContent: 'flex-start' }}
+                        style={{
+                            justifyContent: 'flex-start',
+                            margin: 0,
+                        }}
                     >
-                        <Sidebar onClose={() => setIsMobileMenuOpen(false)} activeRoute={routeName} />
+                        <Sidebar onClose={() => setIsMobileMenuOpen(false)} activeRoute={routeName} navigation={navigation} />
                     </Modal>
                 </Portal>
             )}

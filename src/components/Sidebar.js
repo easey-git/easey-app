@@ -1,12 +1,10 @@
 import React from 'react';
 import { View, StyleSheet, Image, ScrollView, Pressable } from 'react-native';
 import { Text, useTheme, Drawer, Avatar } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 
-export const Sidebar = ({ onClose, activeRoute }) => {
+export const Sidebar = ({ onClose, activeRoute, navigation }) => {
     const theme = useTheme();
-    const navigation = useNavigation();
     const { logout, user, role, hasPermission } = useAuth();
 
     // Helper to get display name
@@ -55,8 +53,10 @@ export const Sidebar = ({ onClose, activeRoute }) => {
                                 label={item.label}
                                 active={isActive}
                                 onPress={() => {
-                                    navigation.navigate(item.route);
-                                    if (onClose) onClose();
+                                    if (navigation) {
+                                        navigation.navigate(item.route);
+                                        if (onClose) onClose();
+                                    }
                                 }}
                                 style={{ borderRadius: 8, marginBottom: 4 }}
                                 theme={theme}
