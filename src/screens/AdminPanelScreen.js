@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, ScrollView } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, ScrollView, useWindowDimensions } from 'react-native';
 import { Text, useTheme, Avatar, Surface, IconButton, ActivityIndicator, Chip, Divider, Button, Portal, Dialog, Switch } from 'react-native-paper';
 import { collection, getDocs, query, orderBy, doc, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -7,6 +7,7 @@ import { CRMLayout } from '../components/CRMLayout';
 
 const AdminPanelScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { width, height } = useWindowDimensions();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -35,6 +36,17 @@ const AdminPanelScreen = ({ navigation }) => {
     const [selectedUser, setSelectedUser] = useState(null);
     const [permissionsDialogVisible, setPermissionsDialogVisible] = useState(false);
     const [tempPermissions, setTempPermissions] = useState([]);
+
+    const ROLE_PRESETS = {
+        'Manager': ['view_financial_stats', 'view_order_stats', 'access_orders', 'access_wallet', 'access_campaigns', 'access_whatsapp', 'access_analytics', 'manage_orders', 'manage_wallet', 'manage_campaigns', 'manage_users'],
+        'Support': ['view_order_stats', 'access_orders', 'access_whatsapp', 'manage_orders'],
+        'Analyst': ['view_financial_stats', 'view_order_stats', 'access_analytics', 'access_campaigns'],
+        'Viewer': ['view_order_stats', 'access_orders']
+    };
+
+    const applyPreset = (presetName) => {
+        setTempPermissions(ROLE_PRESETS[presetName]);
+    };
 
     const AVAILABLE_PERMISSIONS = [
         // Dashboard
@@ -185,15 +197,39 @@ const AdminPanelScreen = ({ navigation }) => {
 
                 {/* Permissions Dialog */}
                 <Portal>
-                    <Dialog visible={permissionsDialogVisible} onDismiss={() => setPermissionsDialogVisible(false)}>
+                    <Dialog
+                        visible={permissionsDialogVisible}
+                        onDismiss={() => setPermissionsDialogVisible(false)}
+                        style={{
+                            maxHeight: height * 0.85,
+                            width: width > 768 ? 600 : '90%',
+                            alignSelf: 'center'
+                        }}
+                    >
                         <Dialog.Title>Edit Permissions</Dialog.Title>
                         <Dialog.Content style={{ paddingBottom: 0 }}>
+                            <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
+                                Quick Presets:
+                            </Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                                {Object.keys(ROLE_PRESETS).map(role => (
+                                    <Chip
+                                        key={role}
+                                        onPress={() => applyPreset(role)}
+                                        mode="outlined"
+                                        style={{ height: 32 }}
+                                        textStyle={{ fontSize: 12, lineHeight: 18 }}
+                                    >
+                                        {role}
+                                    </Chip>
+                                ))}
+                            </View>
                             <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
                                 Assign fine-grained access to {selectedUser?.email}
                             </Text>
                         </Dialog.Content>
-                        <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0, borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.colors.outlineVariant }}>
-                            <ScrollView contentContainerStyle={{ padding: 24 }}>
+                        <Dialog.ScrollArea style={{ borderColor: theme.colors.outlineVariant, borderTopWidth: 1, borderBottomWidth: 1, paddingHorizontal: 0 }}>
+                            <ScrollView style={{ maxHeight: height * 0.5 }} contentContainerStyle={{ padding: 24 }}>
                                 <View style={{ gap: 8 }}>
                                     {AVAILABLE_PERMISSIONS.map((perm) => (
                                         <Surface
