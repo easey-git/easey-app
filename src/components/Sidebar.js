@@ -14,29 +14,29 @@ export const Sidebar = React.memo(({ onClose }) => {
     const { closeDrawer } = useDrawer();
     const { isDesktop } = useResponsive();
 
-    // Track active route manually to support Root-level rendering (MobileDrawer)
+    // Track active route - use try-catch to handle both navigation contexts
     const [activeRoute, setActiveRoute] = React.useState('Home');
 
     React.useEffect(() => {
-        // Initial route check, safe for all environments
-        const getRouteName = () => {
-            if (navigation && typeof navigation.getCurrentRoute === 'function') {
-                const route = navigation.getCurrentRoute();
-                return route ? route.name : 'Home';
+        const updateRoute = () => {
+            try {
+                // Try to get navigation state
+                const state = navigation.getState();
+                if (state && state.routes && state.routes[state.index]) {
+                    setActiveRoute(state.routes[state.index].name);
+                }
+            } catch (error) {
+                // Fallback for when navigation context is not available
+                console.log('Navigation state not available');
             }
-            return 'Home';
         };
 
-        setActiveRoute(getRouteName());
+        updateRoute();
 
-        // Listen for changes if navigation object is valid
-        if (navigation) {
-            const unsubscribe = navigation.addListener('state', () => {
-                setActiveRoute(getRouteName());
-            });
+        // Listen for navigation state changes
+        const unsubscribe = navigation.addListener('state', updateRoute);
 
-            return unsubscribe;
-        }
+        return unsubscribe;
     }, [navigation]);
 
     // Helper to get display name
