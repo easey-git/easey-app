@@ -39,6 +39,7 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
     const [sound, setSound] = useState(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isLoadingSound, setIsLoadingSound] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     useEffect(() => {
         return sound ? () => { sound.unloadAsync(); } : undefined;
@@ -48,33 +49,52 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
         if (!item.voiceNoteUrl) return;
         try {
             if (sound) {
-                if (isPlaying) {
-                    await sound.pauseAsync();
-                    setIsPlaying(false);
+                const status = await sound.getStatusAsync();
+                if (status.isLoaded) {
+                    if (isPlaying) {
+                        await sound.pauseAsync();
+                        setIsPlaying(false);
+                    } else {
+                        await sound.playAsync();
+                        setIsPlaying(true);
+                    }
                 } else {
-                    await sound.playAsync();
-                    setIsPlaying(true);
+                    // Sound unloaded unexpectedly, reload
+                    setSound(null);
+                    setIsPlaying(false);
+                    handlePlayPause(); // Retry once
                 }
             } else {
                 setIsLoadingSound(true);
-                const { sound: newSound } = await Audio.Sound.createAsync(
+                const { sound: newSound, status } = await Audio.Sound.createAsync(
                     { uri: item.voiceNoteUrl },
                     { shouldPlay: true }
                 );
-                setSound(newSound);
-                setIsPlaying(true);
-                newSound.setOnPlaybackStatusUpdate(status => {
-                    if (status.didJustFinish) {
-                        setIsPlaying(false);
-                        newSound.setPositionAsync(0);
-                    }
-                });
+                if (status.isLoaded) {
+                    setSound(newSound);
+                    setIsPlaying(true);
+                    newSound.setOnPlaybackStatusUpdate(s => {
+                        if (s.didJustFinish) {
+                            setIsPlaying(false);
+                            newSound.setPositionAsync(0);
+                        }
+                    });
+                } else {
+                    console.error("Sound failed to load");
+                }
             }
         } catch (error) {
             console.error("Audio Error:", error);
         } finally {
             setIsLoadingSound(false);
         }
+    };
+
+    const handleUpload = async () => {
+        if (!onAttachVoice) return;
+        setIsUploading(true);
+        await onAttachVoice(item);
+        setIsUploading(false);
     };
 
     // ... (Keep existing blocks for Push Tokens, WhatsApp, Wallet, Dashboard - simpler to just keep them as is or apply minor padding fixes if needed. 
@@ -291,35 +311,47 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                     {/* Voice Note Section */}
                     <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
                         {item.voiceNoteUrl ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.elevation.level2, borderRadius: 20, paddingRight: 8 }}>
+                            <View style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: theme.colors.elevation.level2,
+                                borderRadius: 24,
+                                padding: 4,
+                                height: 48
+                            }}>
                                 <IconButton
                                     icon={isPlaying ? "pause" : "play"}
                                     mode="contained"
                                     containerColor={theme.colors.primary}
                                     iconColor={theme.colors.onPrimary}
-                                    size={20}
+                                    size={24}
                                     onPress={handlePlayPause}
                                     loading={isLoadingSound}
                                     disabled={isLoadingSound}
                                 />
-                                <Text style={{ marginLeft: 8, marginRight: 8, fontSize: 12 }}>
-                                    {item.voiceNoteName || 'Voice Note'}
-                                </Text>
                                 <IconButton
                                     icon="delete"
-                                    size={18}
+                                    size={20}
                                     iconColor={theme.colors.error}
                                     onPress={() => onDeleteVoice && onDeleteVoice(item)}
                                 />
                             </View>
                         ) : (
-                            <IconButton
-                                icon="microphone-plus" // or 'voice'
-                                mode="outlined"
-                                size={20}
-                                onPress={() => onAttachVoice && onAttachVoice(item)}
-                                style={{ margin: 0, borderColor: theme.colors.outline }}
-                            />
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                {isUploading ? (
+                                    <ActivityIndicator size="small" style={{ marginRight: 8 }} />
+                                ) : (
+                                    <Chip
+                                        icon="microphone"
+                                        mode="outlined"
+                                        onPress={handleUpload}
+                                        style={{ borderRadius: 20, borderColor: theme.colors.outlineVariant }}
+                                        textStyle={{ fontSize: 12, fontWeight: 'bold' }}
+                                    >
+                                        Add Note
+                                    </Chip>
+                                )}
+                            </View>
                         )}
                     </View>
 

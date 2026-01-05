@@ -439,7 +439,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         try {
             const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*' });
             if (!result.canceled && result.assets && result.assets.length > 0) {
-                setLoading(true);
+                // Return start of upload
                 const asset = result.assets[0];
                 const response = await fetch(asset.uri);
                 const blob = await response.blob();
@@ -450,12 +450,13 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: url, voiceNoteName: asset.name || 'Voice Note' });
                 setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: url, voiceNoteName: asset.name || 'Voice Note' } : d));
                 showSnackbar("Voice note attached");
+                return true;
             }
+            return false; // Canceled
         } catch (err) {
             console.error(err);
             showSnackbar("Failed to upload voice note", true);
-        } finally {
-            setLoading(false);
+            return false;
         }
     };
 
