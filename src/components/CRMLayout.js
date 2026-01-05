@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { useTheme, Appbar, Portal, Modal } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { useTheme, Appbar, Portal } from 'react-native-paper';
 import { Sidebar } from './Sidebar';
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveContainer } from './ResponsiveContainer';
@@ -25,14 +25,32 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
             {/* Desktop Sidebar - Always visible on Desktop */}
             {isDesktop && <Sidebar activeRoute={routeName} navigation={navigation} />}
 
-            {/* Mobile/Tablet Sidebar - Drawer via Portal */}
-            {!isDesktop && (
+            {/* Mobile/Tablet Sidebar - Full-height Drawer */}
+            {!isDesktop && isMobileMenuOpen && (
                 <Portal>
-                    <Modal
-                        visible={isMobileMenuOpen}
-                        onDismiss={() => setIsMobileMenuOpen(false)}
-                        dismissable={true}
-                        contentContainerStyle={{
+                    <View style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 1000,
+                    }}>
+                        {/* Backdrop */}
+                        <Pressable
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                            }}
+                            onPress={() => setIsMobileMenuOpen(false)}
+                        />
+
+                        {/* Sidebar */}
+                        <View style={{
                             position: 'absolute',
                             left: 0,
                             top: 0,
@@ -44,14 +62,10 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
                             shadowOpacity: 0.25,
                             shadowRadius: 8,
                             elevation: 5,
-                        }}
-                        style={{
-                            justifyContent: 'flex-start',
-                            margin: 0,
-                        }}
-                    >
-                        <Sidebar onClose={() => setIsMobileMenuOpen(false)} activeRoute={routeName} navigation={navigation} />
-                    </Modal>
+                        }}>
+                            <Sidebar onClose={() => setIsMobileMenuOpen(false)} activeRoute={routeName} navigation={navigation} />
+                        </View>
+                    </View>
                 </Portal>
             )}
 
