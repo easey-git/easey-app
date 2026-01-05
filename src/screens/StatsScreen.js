@@ -233,88 +233,92 @@ const StatsScreen = ({ navigation }) => {
     }
 
     return (
-        <CRMLayout title="Analytics" navigation={navigation} scrollable={true}>
-            {/* Key Metrics - Horizontal Scrollable Cards */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.metricsScrollContent}
-                style={styles.metricsScroll}
-            >
-                {/* Admin Only Stats: Revenue & Active Carts */}
-                {hasPermission('view_financial_stats') && (
-                    <>
-                        {/* Total Revenue Card */}
-                        <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>TODAY'S REVENUE</Text>
-                            <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>₹{todaysSales.toLocaleString()}</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                <Icon source="chart-line" size={16} color={theme.colors.primary} />
-                                <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Since Midnight</Text>
-                            </View>
-                        </Surface>
-
-                        {/* Active Carts Card */}
-                        <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE CARTS</Text>
-                            <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeCarts}</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
-                                <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>Live Now</Text>
-                            </View>
-                        </Surface>
-                    </>
-                )}
-
-                {/* Active Visitors Card */}
-                <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ACTIVE VISITORS</Text>
-                    <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{activeVisitorsData.activeVisitors}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                        {activeVisitorsData.details?.length > 0 ? (
-                            <>
-                                <Icon source="map-marker" size={14} color="#f59e0b" />
-                                <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: 'bold', marginLeft: 4 }} numberOfLines={1}>
-                                    {activeVisitorsData.details[0].city}
+        <CRMLayout title="Analytics" navigation={navigation} scrollable={true} fullWidth={true}>
+            {/* Key Metrics - Clean & Open Horizontal Scroll */}
+            <View style={{ marginBottom: 24 }}>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: 16, gap: 32 }}
+                    style={{ paddingVertical: 16 }}
+                >
+                    {/* Admin Only Stats: Revenue & Active Carts */}
+                    {hasPermission('view_financial_stats') && (
+                        <>
+                            {/* Total Revenue Card */}
+                            <View>
+                                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>REVENUE</Text>
+                                <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                                    ₹{todaysSales.toLocaleString()}
                                 </Text>
-                            </>
-                        ) : (
-                            <>
-                                <Icon source="clock-outline" size={16} color="#f59e0b" />
-                                <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Live</Text>
-                            </>
-                        )}
-                    </View>
-                </Surface>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                    <Icon source="chart-line" size={14} color={theme.colors.primary} />
+                                    <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Since Midnight</Text>
+                                </View>
+                            </View>
 
-                {/* Abandoned Carts Card */}
-                <Surface style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant, marginRight: 16 }]} elevation={1}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>ABANDONED</Text>
-                    <Text variant="titleLarge" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', marginTop: 4, color: theme.colors.onSurface }}>{abandonedCarts}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                        <Icon source="cart-off" size={16} color={theme.colors.error} />
-                        <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Lost</Text>
-                    </View>
-                </Surface>
-            </ScrollView>
+                            {/* Active Carts Card */}
+                            <View>
+                                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>ACTIVE CARTS</Text>
+                                <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                                    {activeCarts}
+                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
+                                    <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>Live</Text>
+                                </View>
+                            </View>
+                        </>
+                    )}
 
-            {/* Chart Section */}
-            <Surface style={[styles.chartSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={1}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16 }}>
+                    {/* Active Visitors Card */}
                     <View>
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Sales History</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                            <Icon source="timeline-text" size={14} color={theme.colors.onSurfaceVariant} />
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>
-                                Last 100 orders
-                            </Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
-                                • 2-hour intervals
-                            </Text>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>VISITORS</Text>
+                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                            {activeVisitorsData.activeVisitors}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                            {activeVisitorsData.details?.length > 0 ? (
+                                <>
+                                    <Icon source="map-marker" size={14} color="#f59e0b" />
+                                    <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }} numberOfLines={1}>
+                                        {activeVisitorsData.details[0].city}
+                                    </Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Icon source="clock-outline" size={14} color="#f59e0b" />
+                                    <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Live</Text>
+                                </>
+                            )}
                         </View>
                     </View>
+
+                    {/* Abandoned Carts Card */}
+                    <View>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>ABANDONED</Text>
+                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                            {abandonedCarts}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                            <Icon source="cart-off" size={14} color={theme.colors.error} />
+                            <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Action Needed</Text>
+                        </View>
+                    </View>
+                </ScrollView>
+            </View>
+
+            {/* Chart Section - Minimalist */}
+            <View style={{ marginBottom: 24, paddingLeft: 0 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 }}>
+                    <View>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Sales History</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                            Last 100 orders • 2-hr intervals
+                        </Text>
+                    </View>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingLeft: 0 }}>
                     <LineChart
                         data={(chartData.datasets[0]?.data || [0]).map((value, index) => ({
                             value: value,
@@ -323,8 +327,8 @@ const StatsScreen = ({ navigation }) => {
                             orderCount: chartData.datasets[0]?.orderCounts?.[index] || 0,
                             labelTextStyle: { color: theme.colors.onSurfaceVariant, fontSize: 10 },
                         }))}
-                        height={200}
-                        width={Math.max(screenWidth - 40, chartData.labels.length * 60)}
+                        height={220}
+                        width={Math.max(screenWidth, chartData.labels.length * 60)}
                         scrollable={true}
                         curved
                         areaChart
@@ -332,11 +336,11 @@ const StatsScreen = ({ navigation }) => {
                         color={theme.colors.primary}
                         thickness={3}
                         startFillColor={theme.colors.primary}
-                        endFillColor={theme.colors.surface}
-                        startOpacity={0.3}
-                        endOpacity={0.05}
-                        spacing={45}
-                        backgroundColor={theme.colors.surface}
+                        endFillColor={theme.colors.background}
+                        startOpacity={0.2}
+                        endOpacity={0.0}
+                        spacing={50}
+                        backgroundColor={'transparent'}
                         hideDataPoints={false}
                         dataPointsHeight={8}
                         dataPointsWidth={8}
@@ -346,19 +350,16 @@ const StatsScreen = ({ navigation }) => {
                         textFontSize={11}
                         textShiftY={-8}
                         textShiftX={-10}
-                        yAxisColor={theme.colors.outlineVariant}
-                        xAxisColor={theme.colors.outlineVariant}
+                        yAxisColor="transparent"
+                        xAxisColor="transparent"
                         yAxisTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
                         xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                        rulesType="solid"
+                        rulesType="dashed"
                         rulesColor={theme.colors.outlineVariant}
                         rulesThickness={0.5}
                         showVerticalLines={false}
-                        verticalLinesColor={theme.colors.outlineVariant}
-                        yAxisThickness={1}
-                        xAxisThickness={1}
-                        initialSpacing={10}
-                        endSpacing={20}
+                        initialSpacing={20}
+                        endSpacing={40}
                         noOfSections={4}
                         maxValue={Math.max(...chartData.datasets[0].data) * 1.2}
                         yAxisLabelPrefix="₹"
@@ -390,22 +391,20 @@ const StatsScreen = ({ navigation }) => {
                                             height: 100,
                                             width: 110,
                                             justifyContent: 'center',
-                                            backgroundColor: theme.colors.primaryContainer,
+                                            backgroundColor: theme.colors.inverseSurface,
                                             borderRadius: 12,
                                             padding: 12,
-                                            borderWidth: 1.5,
-                                            borderColor: theme.colors.primary,
                                         }}>
-                                        <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
+                                        <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
                                             {datePart}
                                         </Text>
-                                        <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 11, textAlign: 'center', marginTop: 2, opacity: 0.8 }}>
+                                        <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 11, textAlign: 'center', marginTop: 2, opacity: 0.8 }}>
                                             {timePart}
                                         </Text>
-                                        <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 6 }}>
+                                        <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 6 }}>
                                             ₹{Math.round(items[0].value).toLocaleString()}
                                         </Text>
-                                        <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 11, textAlign: 'center', marginTop: 4, opacity: 0.9 }}>
+                                        <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 11, textAlign: 'center', marginTop: 4, opacity: 0.9 }}>
                                             {orderCount} {orderCount === 1 ? 'Order' : 'Orders'}
                                         </Text>
                                     </View>
@@ -414,11 +413,11 @@ const StatsScreen = ({ navigation }) => {
                         }}
                     />
                 </ScrollView>
-            </Surface>
+            </View>
 
-            {/* Recent Activity List */}
-            <View style={[styles.listSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 }}>
+            {/* Recent Activity List - Edge to Edge */}
+            <View style={{ paddingBottom: 40 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 }}>
                     <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Live Feed</Text>
                     <Button
                         mode="text"
@@ -429,12 +428,13 @@ const StatsScreen = ({ navigation }) => {
                         History
                     </Button>
                 </View>
-                <Divider />
+
                 {recentActivity.map((item) => (
                     <React.Fragment key={item.id}>
                         <List.Item
                             title={item.customerName || item.first_name || item.phone || item.phone_number || 'Visitor'}
                             titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }}
+                            style={{ paddingHorizontal: 16 }}
                             description={() => {
                                 const displayItems = item.items || item.line_items || [];
                                 return (
@@ -458,14 +458,14 @@ const StatsScreen = ({ navigation }) => {
                                     </View>
                                 );
                             }}
-                            left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />}
+                            left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.surfaceVariant }} color={theme.colors.onSurfaceVariant} />}
                             right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.total_price || item.amount || 0}</Text>}
                             onPress={() => {
                                 setSelectedDoc(item);
                                 setModalVisible(true);
                             }}
                         />
-                        <Divider />
+                        <Divider style={{ marginLeft: 72 }} />
                     </React.Fragment>
                 ))}
             </View>
