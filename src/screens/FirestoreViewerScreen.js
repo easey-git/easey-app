@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'; // Cache bust 1
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Platform } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
-import { collection, query, where, limit, getDocs, doc, updateDoc, writeBatch, deleteField, getDocsFromServer, orderBy, startAfter, Timestamp } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, doc, updateDoc, writeBatch, deleteField, getDocsFromServer, orderBy, startAfter, Timestamp, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 import DocItem from '../components/DocItem';
@@ -185,16 +185,10 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 const itemsToDelete = Array.from(selectedItems);
 
                 itemsToDelete.forEach(id => {
-                    // Find the document object to get the ref
-                    const docObj = documents.find(d => d.id === id);
-                    if (docObj && docObj.ref) {
-                        batch.delete(docObj.ref);
-                    } else {
-                        // Fallback (shouldn't happen if list is fresh)
-                        const cleanId = id.trim();
-                        const ref = doc(db, selectedCollection, cleanId);
-                        batch.delete(ref);
-                    }
+                    // Always create a fresh reference from the current db instance
+                    const cleanId = id.trim();
+                    const docRef = doc(db, selectedCollection, cleanId);
+                    batch.delete(docRef);
                 });
 
                 await batch.commit();
@@ -203,14 +197,9 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 fetchDocuments();
                 showSnackbar(`Successfully deleted ${itemsToDelete.length} documents`);
             } else if (pendingAction?.type === 'single') {
-                // Find the document object to get the ref
-                const docObj = documents.find(d => d.id === pendingAction.id);
-                if (docObj && docObj.ref) {
-                    await deleteDoc(docObj.ref);
-                } else {
-                    const docRef = doc(db, selectedCollection, pendingAction.id);
-                    await deleteDoc(docRef);
-                }
+                // Always create a fresh reference from the current db instance
+                const docRef = doc(db, selectedCollection, pendingAction.id);
+                await deleteDoc(docRef);
                 setVisible(false);
                 fetchDocuments();
                 showSnackbar("Document deleted successfully");
