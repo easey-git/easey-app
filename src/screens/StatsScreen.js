@@ -248,7 +248,7 @@ const StatsScreen = ({ navigation }) => {
                             {/* Total Revenue Card */}
                             <View>
                                 <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>REVENUE</Text>
-                                <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                                <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
                                     ₹{todaysSales.toLocaleString()}
                                 </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -260,7 +260,7 @@ const StatsScreen = ({ navigation }) => {
                             {/* Active Carts Card */}
                             <View>
                                 <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>ACTIVE CARTS</Text>
-                                <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                                <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
                                     {activeCarts}
                                 </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -274,7 +274,7 @@ const StatsScreen = ({ navigation }) => {
                     {/* Active Visitors Card */}
                     <View>
                         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>VISITORS</Text>
-                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
                             {activeVisitorsData.activeVisitors}
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -297,7 +297,7 @@ const StatsScreen = ({ navigation }) => {
                     {/* Abandoned Carts Card */}
                     <View>
                         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>ABANDONED</Text>
-                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
                             {abandonedCarts}
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
