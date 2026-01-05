@@ -55,5 +55,8 @@
   "devDependencies": {
     "babel-preset-expo": "^54.0.9",
     "eas-cli": "^16.28.0"
+  },
+  "overrides": {
+    "react-native-reanimated": "~3.16.1"
   }
 }

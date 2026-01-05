@@ -111,6 +111,9 @@ service cloud.firestore {
       allow delete: if request.auth != null && (isAdmin() || resource.data.userId == request.auth.uid);
     }
 
+    // 8. Chat System - Open Model
+
+
     // Fallback: Default Deny for everything else
     match /{document=**} {
       allow read, write: if false; 

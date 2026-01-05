@@ -35,7 +35,7 @@ const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
     const { isDesktop, isTablet, spacing } = useResponsive();
     const { playSound } = useSound();
-    const { hasPermission, isAdmin } = useAuth();
+    const { hasPermission, isAdmin, user } = useAuth();
     const prevOrdersRef = React.useRef(0);
     const [timeRange, setTimeRange] = useState('today');
     const [stats, setStats] = useState({ sales: 0, orders: 0, aov: 0, activeCarts: 0 });
@@ -168,7 +168,7 @@ const HomeScreen = ({ navigation }) => {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <View>
                     <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>Dashboard</Text>
-                    <Text variant="bodyMedium" style={{ color: theme.colors.outline }}>Welcome back, Mackruize</Text>
+                    <Text variant="bodyMedium" style={{ color: theme.colors.outline }}>Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}</Text>
                 </View>
                 <SegmentedButtons
                     value={timeRange}

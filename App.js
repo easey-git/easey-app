@@ -18,6 +18,7 @@ import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
 import AssistantScreen from './src/screens/AssistantScreen';
 import AdminPanelScreen from './src/screens/AdminPanelScreen';
+
 import { theme } from './src/theme/theme';
 import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -241,6 +242,7 @@ function AppNavigator() {
                 component={AssistantScreen}
                 options={{ headerShown: false }}
               />
+
             </>
           )}
         </Stack.Navigator>
