@@ -8,10 +8,11 @@ import { useSound } from '../context/SoundContext';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 
+import { useResponsive } from '../hooks/useResponsive';
+
 const HomeScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { width } = useWindowDimensions();
-    const isDesktop = width >= 1024;
+    const { isDesktop, isTablet } = useResponsive();
     const { playSound } = useSound();
     const { hasPermission } = useAuth(); // Auth Hook
     const prevOrdersRef = React.useRef(0);
@@ -31,7 +32,8 @@ const HomeScreen = ({ navigation }) => {
         shopify: false
     });
 
-    const menuCardWidth = isDesktop ? '23%' : '48%';
+    // Clean grid for mobile apps menu
+    const menuCardWidth = '48%';
 
     // ... (Keep existing Listeners: useEffects for workQuery, checkWebhookHealth, fetchStats) ...
     // Listener for Action Items (Pending/Confirmed Orders)

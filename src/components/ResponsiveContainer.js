@@ -1,14 +1,15 @@
 import React from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { useResponsive } from '../hooks/useResponsive';
 
-export const ResponsiveContainer = ({ children, style }) => {
-    const { width } = useWindowDimensions();
-    const isDesktop = width >= 768;
+export const ResponsiveContainer = ({ children, style, maxWidth }) => {
+    const { containerStyle } = useResponsive();
 
     return (
         <View style={[
             styles.container,
-            isDesktop && styles.desktopContainer,
+            containerStyle,
+            maxWidth && { maxWidth }, // specific override
             style
         ]}>
             {children}
@@ -20,10 +21,5 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         width: '100%',
-    },
-    desktopContainer: {
-        maxWidth: 1200,
-        alignSelf: 'center',
-        paddingHorizontal: 24, // Add some breathing room on desktop
-    },
+    }
 });

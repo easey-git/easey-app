@@ -1,12 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, Image, ScrollView } from 'react-native';
-import { Text, TouchableRipple, useTheme, Drawer, Avatar } from 'react-native-paper';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { View, StyleSheet, Image, ScrollView, Pressable } from 'react-native';
+import { Text, useTheme, Drawer, Avatar } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 
-export const Sidebar = ({ onClose }) => {
+export const Sidebar = ({ onClose, activeRoute }) => {
     const theme = useTheme();
-    const route = useRoute();
     const navigation = useNavigation();
     const { logout, user, role, hasPermission } = useAuth();
 
@@ -48,7 +47,7 @@ export const Sidebar = ({ onClose }) => {
             <ScrollView style={styles.content}>
                 <Drawer.Section showDivider={false}>
                     {visibleMenuItems.map((item, index) => {
-                        const isActive = route.name === item.route;
+                        const isActive = activeRoute === item.route;
                         return (
                             <Drawer.Item
                                 key={index}
@@ -69,7 +68,7 @@ export const Sidebar = ({ onClose }) => {
 
             {/* User / Footer */}
             <View style={[styles.footer, { borderTopColor: theme.colors.outlineVariant }]}>
-                <TouchableRipple onPress={logout} style={styles.userCard}>
+                <Pressable onPress={logout} style={styles.userCard}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Avatar.Text
                             size={32}
@@ -82,7 +81,7 @@ export const Sidebar = ({ onClose }) => {
                             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Logout</Text>
                         </View>
                     </View>
-                </TouchableRipple>
+                </Pressable>
             </View>
         </View>
     );
@@ -90,7 +89,7 @@ export const Sidebar = ({ onClose }) => {
 
 const styles = StyleSheet.create({
     container: {
-        width: 260,
+        width: 280,
         height: '100%',
         borderRightWidth: 1,
         display: 'flex',

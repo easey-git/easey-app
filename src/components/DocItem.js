@@ -332,17 +332,18 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: 'rgba(0,0,0,0.05)',
-        marginHorizontal: 4
+        // marginHorizontal: 4 // Removed for grid alignment
+        marginBottom: 0 // Handled by separator
     },
     cardContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 8
+        paddingVertical: 12, // Increased for touch target
+        paddingHorizontal: 16 // Increased for breathing room
     },
     textContainer: {
         flex: 1,
-        marginLeft: 12
+        marginLeft: 16 // Increased spacing
     },
     rowBetween: {
         flexDirection: 'row',
@@ -350,8 +351,8 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     chip: {
-        height: 20,
-        borderRadius: 4,
+        height: 24, // Taller chip
+        borderRadius: 6,
         paddingHorizontal: 0,
         justifyContent: 'center',
         alignItems: 'center'
