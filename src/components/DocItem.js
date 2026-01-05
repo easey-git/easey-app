@@ -193,32 +193,34 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                 )}
 
                 <View style={[styles.textContainer, { marginLeft: isMobile ? 4 : 16 }]}>
-                    {/* Top Row: Name & Order ID */}
+                    {/* Top Row: Name & Price (Swapped) */}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <View style={{ flex: 1, marginRight: 8 }}>
                             <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
                                 {item.customerName || 'No Name'}
                             </Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.outline, fontFamily: 'monospace' }}>
-                                #{item.orderNumber || item.id}
-                            </Text>
-                        </View>
-
-                        {/* Price & Date (Right aligned top) */}
-                        <View style={{ alignItems: 'flex-end' }}>
+                            {/* Price moved to Left (under Name) - applied Order # style (Small/Subtle) */}
                             {item.totalPrice && (
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2, fontWeight: 'bold' }}>
                                     ₹{item.totalPrice}
                                 </Text>
                             )}
-                            <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
+                        </View>
+
+                        {/* Order # & Date (Right aligned) */}
+                        <View style={{ alignItems: 'flex-end' }}>
+                            {/* Order # moved to Right - applied Price style (Big/Primary) */}
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary, fontFamily: 'monospace' }}>
+                                #{item.orderNumber || item.id}
+                            </Text>
+                            <Text variant="labelSmall" style={{ color: theme.colors.outline, marginTop: 2 }}>
                                 {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : ''}
                             </Text>
                         </View>
                     </View>
 
                     {/* Middle Row: Address & Contact */}
-                    <View style={{ marginTop: 4 }}>
+                    <View style={{ marginTop: 6 }}>
                         {item.phone && (
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <Icon source="phone" size={12} color={theme.colors.onSurfaceVariant} />
@@ -230,9 +232,10 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 />
                             </View>
                         )}
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 2 }}>
-                            <Icon source="map-marker" size={12} color={theme.colors.onSurfaceVariant} />
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1, marginLeft: 4 }} numberOfLines={isMobile ? 2 : 1}>
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 4 }}>
+                            <Icon source="map-marker" size={12} color={theme.colors.onSurfaceVariant} style={{ marginTop: 2 }} />
+                            {/* Address: Removed numberOfLines to allow full expansion */}
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1, marginLeft: 4 }}>
                                 {[item.address1, item.city, item.province].filter(Boolean).join(', ') || 'No Address'}
                             </Text>
                         </View>
