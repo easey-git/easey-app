@@ -40,7 +40,7 @@ const StatsScreen = ({ navigation }) => {
     });
 
     useEffect(() => {
-        // Get today's date at midnight (start of day)
+        // Get today's date at midnight in local timezone (IST)
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
 
@@ -55,7 +55,7 @@ const StatsScreen = ({ navigation }) => {
             let todayTotal = 0;
             const buckets = {}; // Map to group orders by 2-hour blocks
 
-            snapshot.docs.forEach(doc => {
+            snapshot.docs.forEach((doc, index) => {
                 const data = doc.data();
                 const orderDate = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
                 const price = parseFloat(data.totalPrice || 0);
@@ -253,7 +253,7 @@ const StatsScreen = ({ navigation }) => {
                                 </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                                     <Icon source="chart-line" size={14} color={theme.colors.primary} />
-                                    <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Since Midnight</Text>
+                                    <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Today</Text>
                                 </View>
                             </View>
 

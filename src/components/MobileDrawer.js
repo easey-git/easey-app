@@ -23,10 +23,10 @@ export const MobileDrawer = React.memo(() => {
     // Web does not support useNativeDriver for layout properties or at all in some versions
     const useNativeDriver = Platform.OS !== 'web';
 
-    // Force hide on desktop
-    if (isDesktop) return null;
-
     useEffect(() => {
+        // Don't animate if on desktop
+        if (isDesktop) return;
+
         if (isDrawerOpen) {
             // Animate In - Standard Material Deceleration
             Animated.parallel([
@@ -58,7 +58,10 @@ export const MobileDrawer = React.memo(() => {
                 })
             ]).start();
         }
-    }, [isDrawerOpen]);
+    }, [isDrawerOpen, isDesktop, slideAnim, fadeAnim, useNativeDriver, OFF_SCREEN]);
+
+    // Force hide on desktop - AFTER all hooks
+    if (isDesktop) return null;
 
     const panResponder = useRef(
         PanResponder.create({
