@@ -97,9 +97,6 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
         setIsUploading(false);
     };
 
-    // ... (Keep existing blocks for Push Tokens, WhatsApp, Wallet, Dashboard - simpler to just keep them as is or apply minor padding fixes if needed. 
-    // Since the user specifically mentioned "Orders screen" (Firestore Viewer), I will focus optimization there, but general padding applies to all.)
-
     // Special rendering for Push Tokens
     if (selectedCollection === 'push_tokens') {
         return (
@@ -228,7 +225,6 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
         );
     }
 
-    // Default rendering (Orders, Checkouts, etc.) - OPTIMIZED FOR MOBILE
     // Default rendering (Orders, Checkouts, etc.) - LIST STYLE
     return (
         <TouchableOpacity
@@ -387,7 +383,7 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                             </Chip>
                         )}
 
-                        {/* COD Confirmation Status (Always visible if COD, unless shipped) */}
+                        {/* COD Confirmation Status (Active if COD and NOT Shipped) */}
                         {(isCOD && selectedCollection !== 'checkouts' && item.cod_status !== 'shipped') && (
                             <Chip
                                 mode="flat"
@@ -406,24 +402,29 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 {item.cod_status === 'confirmed' ? 'CONFIRMED' : 'PENDING'}
                             </Chip>
                         )}
-                    </View>
 
-                    {/* Shipped Status - Admin Only (New Row Below) */}
-                    {(isAdmin && selectedCollection !== 'checkouts') && (
-                        <View style={{ flexDirection: 'row', marginTop: 8 }}>
-                            <TouchableOpacity
-                                onPress={() => onShippedToggle && onShippedToggle(item)}
-                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: item.cod_status === 'shipped' ? theme.colors.primaryContainer : 'transparent', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2, borderWidth: 1, borderColor: theme.colors.outline }}
+                        {/* Shipped Status (Visible if Shipped OR Admin and Confirmed) */}
+                        {selectedCollection !== 'checkouts' && (item.cod_status === 'shipped' || (isAdmin && item.cod_status === 'confirmed')) && (
+                            <Chip
+                                mode="flat"
+                                compact
+                                onPress={() => isAdmin && onShippedToggle && onShippedToggle(item)}
+                                showSelectedOverlay={true}
+                                style={[styles.chip, {
+                                    backgroundColor: item.cod_status === 'shipped' ? theme.colors.primary : 'transparent',
+                                    borderColor: theme.colors.primary,
+                                    borderWidth: 1,
+                                    opacity: (item.cod_status === 'shipped' || isAdmin) ? 1 : 0.7
+                                }]}
+                                textStyle={{
+                                    fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold',
+                                    color: item.cod_status === 'shipped' ? theme.colors.onPrimary : theme.colors.primary
+                                }}
                             >
-                                <Checkbox.Android
-                                    status={item.cod_status === 'shipped' ? 'checked' : 'unchecked'}
-                                    onPress={() => onShippedToggle && onShippedToggle(item)}
-                                    color={theme.colors.primary}
-                                />
-                                <Text variant="labelSmall" style={{ fontWeight: 'bold' }}>SHIPPED</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
+                                {item.cod_status === 'shipped' ? 'SHIPPED' : 'MARK SHIPPED'}
+                            </Chip>
+                        )}
+                    </View>
 
                     {/* Modification Warning (New Line) */}
                     {(item.adminEdited || item.verificationStatus === 'address_change_requested') && (

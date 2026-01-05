@@ -1,0 +1,23 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper to check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Voice Notes: Used in Orders
+    // Allow read/write if authenticated. 
+    // Ideally, we would check specific permissions, but Storage rules don't share context with Firestore permissions easily.
+    // Rely on app logic + Firestore rules for strict access control, use this to prevent public unauthenticated access.
+    match /voice_notes/{allPaths=**} {
+      allow read, write: if isAuth();
+    }
+    
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
