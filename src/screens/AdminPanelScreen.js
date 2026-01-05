@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, ScrollView } from 'react-native';
 import { Text, useTheme, Avatar, Surface, IconButton, ActivityIndicator, Chip, Divider, Button, Portal, Dialog, Switch } from 'react-native-paper';
 import { collection, getDocs, query, orderBy, doc, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -187,33 +187,39 @@ const AdminPanelScreen = ({ navigation }) => {
                 <Portal>
                     <Dialog visible={permissionsDialogVisible} onDismiss={() => setPermissionsDialogVisible(false)}>
                         <Dialog.Title>Edit Permissions</Dialog.Title>
-                        <Dialog.Content>
+                        <Dialog.Content style={{ paddingBottom: 0 }}>
                             <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
                                 Assign fine-grained access to {selectedUser?.email}
                             </Text>
-                            <View style={{ gap: 8 }}>
-                                {AVAILABLE_PERMISSIONS.map((perm) => (
-                                    <Surface
-                                        key={perm.id}
-                                        style={{
-                                            padding: 12,
-                                            borderRadius: 8,
-                                            backgroundColor: tempPermissions.includes(perm.id) ? theme.colors.secondaryContainer : theme.colors.surface,
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between'
-                                        }}
-                                        mode="flat"
-                                    >
-                                        <Text>{perm.label}</Text>
-                                        <Switch
-                                            value={tempPermissions.includes(perm.id)}
-                                            onValueChange={() => togglePermission(perm.id)}
-                                        />
-                                    </Surface>
-                                ))}
-                            </View>
                         </Dialog.Content>
+                        <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0, borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.colors.outlineVariant }}>
+                            <ScrollView contentContainerStyle={{ padding: 24 }}>
+                                <View style={{ gap: 8 }}>
+                                    {AVAILABLE_PERMISSIONS.map((perm) => (
+                                        <Surface
+                                            key={perm.id}
+                                            style={{
+                                                padding: 12,
+                                                borderRadius: 8,
+                                                backgroundColor: tempPermissions.includes(perm.id) ? theme.colors.secondaryContainer : theme.colors.surface,
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                borderWidth: 1,
+                                                borderColor: tempPermissions.includes(perm.id) ? 'transparent' : theme.colors.outlineVariant
+                                            }}
+                                            mode="flat"
+                                        >
+                                            <Text variant="bodyMedium" style={{ fontWeight: tempPermissions.includes(perm.id) ? 'bold' : 'normal' }}>{perm.label}</Text>
+                                            <Switch
+                                                value={tempPermissions.includes(perm.id)}
+                                                onValueChange={() => togglePermission(perm.id)}
+                                            />
+                                        </Surface>
+                                    ))}
+                                </View>
+                            </ScrollView>
+                        </Dialog.ScrollArea>
                         <Dialog.Actions>
                             <Button onPress={() => setPermissionsDialogVisible(false)}>Cancel</Button>
                             <Button onPress={handleSavePermissions} mode="contained">Save</Button>
