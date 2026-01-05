@@ -18,19 +18,25 @@ export const Sidebar = ({ onClose }) => {
     const [activeRoute, setActiveRoute] = React.useState('Home');
 
     React.useEffect(() => {
-        // Initial route
-        const route = navigation.getCurrentRoute();
-        if (route) setActiveRoute(route.name);
-
-        // Listen for changes
-        const unsubscribe = navigation.addListener('state', () => {
-            const currentRoute = navigation.getCurrentRoute();
-            if (currentRoute) {
-                setActiveRoute(currentRoute.name);
+        // Initial route check, safe for all environments
+        const getRouteName = () => {
+            if (navigation && typeof navigation.getCurrentRoute === 'function') {
+                const route = navigation.getCurrentRoute();
+                return route ? route.name : 'Home';
             }
-        });
+            return 'Home';
+        };
 
-        return unsubscribe;
+        setActiveRoute(getRouteName());
+
+        // Listen for changes if navigation object is valid
+        if (navigation) {
+            const unsubscribe = navigation.addListener('state', () => {
+                setActiveRoute(getRouteName());
+            });
+
+            return unsubscribe;
+        }
     }, [navigation]);
 
     // Helper to get display name

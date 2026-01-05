@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, Pressable, Animated, PanResponder, Easing, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Pressable, Animated, PanResponder, Easing, useWindowDimensions, Platform } from 'react-native';
 import { useTheme, Portal } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDrawer } from '../context/DrawerContext';
@@ -20,6 +20,9 @@ export const MobileDrawer = () => {
     const slideAnim = useRef(new Animated.Value(OFF_SCREEN)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
+    // Web does not support useNativeDriver for layout properties or at all in some versions
+    const useNativeDriver = Platform.OS !== 'web';
+
     // Mounted state for "Keep mounted while animating, unmount after"
     // This creates the perfect "Native" feel: instant start, clean cleanup.
     const [isMounted, setIsMounted] = React.useState(false);
@@ -36,13 +39,13 @@ export const MobileDrawer = () => {
                     Animated.timing(slideAnim, {
                         toValue: 0,
                         duration: 300,
-                        useNativeDriver: true,
+                        useNativeDriver,
                         easing: Easing.out(Easing.poly(4)),
                     }),
                     Animated.timing(fadeAnim, {
                         toValue: 1,
                         duration: 300,
-                        useNativeDriver: true,
+                        useNativeDriver,
                     })
                 ]).start();
             });
@@ -52,13 +55,13 @@ export const MobileDrawer = () => {
                 Animated.timing(slideAnim, {
                     toValue: OFF_SCREEN,
                     duration: 250,
-                    useNativeDriver: true,
+                    useNativeDriver,
                     easing: Easing.in(Easing.poly(4)),
                 }),
                 Animated.timing(fadeAnim, {
                     toValue: 0,
                     duration: 250,
-                    useNativeDriver: true,
+                    useNativeDriver,
                 })
             ]).start(({ finished }) => {
                 if (finished) {
@@ -83,7 +86,7 @@ export const MobileDrawer = () => {
                 } else {
                     Animated.spring(slideAnim, {
                         toValue: 0,
-                        useNativeDriver: true,
+                        useNativeDriver,
                         bounciness: 4
                     }).start();
                 }
@@ -96,8 +99,10 @@ export const MobileDrawer = () => {
     return (
         <Portal>
             <View
-                style={styles.backdropContainer}
-                pointerEvents={isDrawerOpen ? 'auto' : 'none'}
+                style={[
+                    styles.backdropContainer,
+                    { pointerEvents: isDrawerOpen ? 'auto' : 'none' }
+                ]}
             >
                 {/* Backdrop with Fade */}
                 <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
