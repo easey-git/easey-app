@@ -509,11 +509,183 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData }) => {
                 Advanced Analytics
             </Text>
 
-            <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
-                    Analytics data loaded successfully. Detailed breakdowns and insights available.
-                </Text>
-            </Surface>
+            {/* Period Info */}
+            {analyticsData.period && (
+                <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Icon source="calendar-range" size={20} color={theme.colors.primary} />
+                        <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>Period</Text>
+                    </View>
+                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+                        {new Date(analyticsData.period.since).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} - {new Date(analyticsData.period.until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                        {analyticsData.period.days} day{analyticsData.period.days !== 1 ? 's' : ''} • {analyticsData.level} level
+                    </Text>
+                </Surface>
+            )}
+
+            {/* Summary Metrics */}
+            {analyticsData.summary && (
+                <>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 16, marginBottom: 12 }}>
+                        Performance Summary
+                    </Text>
+
+                    <Surface style={[styles.card, { backgroundColor: theme.colors.primaryContainer }]} elevation={0}>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+                            <View style={{ flex: 1, minWidth: 100 }}>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>Spend</Text>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                    ₹{analyticsData.summary.spend?.toLocaleString('en-IN')}
+                                </Text>
+                            </View>
+                            <View style={{ flex: 1, minWidth: 100 }}>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>Revenue</Text>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                    ₹{analyticsData.summary.revenue?.toLocaleString('en-IN')}
+                                </Text>
+                            </View>
+                            <View style={{ flex: 1, minWidth: 100 }}>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>ROAS</Text>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                    {analyticsData.summary.roas?.toFixed(2)}x
+                                </Text>
+                            </View>
+                        </View>
+                    </Surface>
+
+                    {/* Additional Metrics */}
+                    <View style={styles.statsGrid}>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Impressions</Text>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                {analyticsData.summary.impressions?.toLocaleString('en-IN')}
+                            </Text>
+                        </Surface>
+
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Clicks</Text>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                {analyticsData.summary.clicks?.toLocaleString('en-IN')}
+                            </Text>
+                        </Surface>
+                    </View>
+
+                    <View style={styles.statsGrid}>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>CPM</Text>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                ₹{analyticsData.summary.cpm?.toFixed(2)}
+                            </Text>
+                        </Surface>
+
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>CTR</Text>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                {analyticsData.summary.ctr?.toFixed(2)}%
+                            </Text>
+                        </Surface>
+                    </View>
+                </>
+            )}
+
+            {/* Top Performers */}
+            {analyticsData.topPerformers && analyticsData.topPerformers.length > 0 && (
+                <>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 24, marginBottom: 12 }}>
+                        Top Performers (by ROAS)
+                    </Text>
+                    {analyticsData.topPerformers.map((item, index) => (
+                        <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <Chip mode="flat" compact style={{ height: 20, backgroundColor: theme.colors.primaryContainer }}>
+                                            <Text variant="labelSmall" style={{ fontSize: 10, color: theme.colors.onPrimaryContainer }}>
+                                                #{index + 1}
+                                            </Text>
+                                        </Chip>
+                                        <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flex: 1 }}>
+                                            {item.name}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                                <View style={{ flex: 1, minWidth: 80 }}>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>ROAS</Text>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                        {item.roas?.toFixed(2)}x
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1, minWidth: 80 }}>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Spend</Text>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        ₹{item.spend?.toLocaleString('en-IN')}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1, minWidth: 80 }}>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Revenue</Text>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        ₹{item.revenue?.toLocaleString('en-IN')}
+                                    </Text>
+                                </View>
+                            </View>
+                        </Surface>
+                    ))}
+                </>
+            )}
+
+            {/* Breakdown Data */}
+            {analyticsData.breakdownData && Object.keys(analyticsData.breakdownData).length > 0 && (
+                <>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 24, marginBottom: 12 }}>
+                        Breakdown by {analyticsData.breakdown}
+                    </Text>
+                    {Object.entries(analyticsData.breakdownData).map(([key, data], index) => (
+                        <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 8 }}>
+                                {key}
+                            </Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                                <View style={{ flex: 1, minWidth: 80 }}>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Spend</Text>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        ₹{Math.round(data.spend)?.toLocaleString('en-IN')}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1, minWidth: 80 }}>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>ROAS</Text>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                        {data.roas}x
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1, minWidth: 80 }}>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Purchases</Text>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        {data.purchases}
+                                    </Text>
+                                </View>
+                            </View>
+                        </Surface>
+                    ))}
+                </>
+            )}
+
+            {/* Comparison */}
+            {analyticsData.comparison && (
+                <>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 24, marginBottom: 12 }}>
+                        Period Comparison
+                    </Text>
+                    <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+                            Comparison data available for previous period analysis.
+                        </Text>
+                    </Surface>
+                </>
+            )}
         </>
     );
 };
