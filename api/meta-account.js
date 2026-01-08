@@ -12,14 +12,10 @@ const runMiddleware = (req, res, fn) => {
 };
 
 /**
- * Meta Account API - Comprehensive account, billing, and financial data
+ * Meta Account API - Account billing and financial data
  * 
- * Features:
- * - Account balance and spending limits
- * - Payment methods and billing info
- * - Transaction history
- * - Spend tracking (today, this month, lifetime)
- * - Account health status
+ * All fields verified against official Facebook Marketing API documentation:
+ * https://developers.facebook.com/docs/marketing-api/reference/ad-account
  */
 
 module.exports = async (req, res) => {
@@ -47,7 +43,7 @@ module.exports = async (req, res) => {
         const cleanAdAccountId = adAccountId.replace(/^act_/, '');
         const baseUrl = `https://graph.facebook.com/v21.0/act_${cleanAdAccountId}`;
 
-        // Fetch comprehensive account data
+        // Only use fields that exist in the official API
         const accountFields = [
             'id',
             'account_id',
@@ -64,8 +60,7 @@ module.exports = async (req, res) => {
             'created_time',
             'owner',
             'funding_source',
-            'funding_source_details',
-            'adspaymentcycle'
+            'funding_source_details'
         ].join(',');
 
         const accountResponse = await axios.get(baseUrl, {
@@ -87,7 +82,7 @@ module.exports = async (req, res) => {
             params: {
                 access_token: accessToken,
                 time_range: JSON.stringify({ since: todayStr, until: todayStr }),
-                fields: 'spend,account_currency'
+                fields: 'spend'
             }
         });
 
@@ -111,7 +106,7 @@ module.exports = async (req, res) => {
                 params: {
                     access_token: accessToken,
                     limit: 25,
-                    fields: 'id,time,amount,status,payment_option_id,charge_type,product_type'
+                    fields: 'id,time,amount,status,charge_type'
                 }
             });
             transactions = transactionsResponse.data.data || [];
@@ -128,15 +123,13 @@ module.exports = async (req, res) => {
             8: 'PENDING_SETTLEMENT',
             9: 'IN_GRACE_PERIOD',
             100: 'PENDING_CLOSURE',
-            101: 'CLOSED',
-            201: 'ANY_ACTIVE',
-            202: 'ANY_CLOSED'
+            101: 'CLOSED'
         };
 
         const status = accountStatusMap[account.account_status] || 'UNKNOWN';
 
-        // Calculate balances and limits
-        const balance = parseFloat(account.balance || 0) / 100; // Convert from cents to currency
+        // Calculate balances and limits (all in cents, convert to currency)
+        const balance = parseFloat(account.balance || 0) / 100;
         const amountSpent = parseFloat(account.amount_spent || 0) / 100;
         const spendCap = account.spend_cap ? parseFloat(account.spend_cap) / 100 : null;
         const todaySpendAmount = parseFloat(todaySpend);
@@ -152,8 +145,7 @@ module.exports = async (req, res) => {
             date: new Date(txn.time * 1000).toISOString(),
             amount: parseFloat(txn.amount) / 100,
             status: txn.status,
-            type: txn.charge_type,
-            product: txn.product_type
+            type: txn.charge_type
         }));
 
         // Build response
@@ -186,7 +178,6 @@ module.exports = async (req, res) => {
                 remainingSpendCap: remainingSpendCap,
                 currency: account.currency
             },
-            paymentCycle: account.adspaymentcycle || null,
             fundingSource: account.funding_source_details ? {
                 id: account.funding_source,
                 type: account.funding_source_details.type,
