@@ -153,15 +153,34 @@ async function fetchInsights(baseUrl, accessToken, since, until, breakdown, leve
         fields: fields,
         time_range: JSON.stringify({ since, until }),
         level: level,
-        limit: 500
+        limit: 1000 // Increased to max standard limit for robustness
     };
 
     if (breakdown !== 'none') {
         params.breakdowns = breakdown;
     }
 
-    const response = await axios.get(`${baseUrl}${endpoint}`, { params });
-    return response.data.data || [];
+    try {
+        const response = await axios.get(`${baseUrl}${endpoint}`, { params });
+
+        // Rate Limit Monitoring (Industry Standard)
+        // Check usage headers to pre-emptively detect issues
+        const appUsage = response.headers['x-app-usage'];
+        if (appUsage) {
+            const usageMap = JSON.parse(appUsage);
+            if (usageMap.call_count > 80 || usageMap.total_time > 80 || usageMap.total_cputime > 80) {
+                console.warn(`[Meta API Warning] High App Usage: ${appUsage}`);
+            }
+        }
+
+        return response.data.data || [];
+    } catch (error) {
+        if (error.response?.status === 429) {
+            console.error('[Meta API Critical] Rate Limit Exceeded!');
+            throw new Error('Meta API Rate Limit Exceeded. Please try again in a few minutes.');
+        }
+        throw error;
+    }
 }
 
 // Calculate summary metrics

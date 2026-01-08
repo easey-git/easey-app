@@ -43,76 +43,61 @@ module.exports = async (req, res) => {
         const cleanAdAccountId = adAccountId.replace(/^act_/, '');
         const baseUrl = `https://graph.facebook.com/v21.0/act_${cleanAdAccountId}`;
 
-        // Only use fields that exist in the official API
+        // Prepare Promises for Parallel Execution (Optimization)
+
+        // 1. Account Details
         const accountFields = [
-            'id',
-            'account_id',
-            'name',
-            'currency',
-            'timezone_name',
-            'account_status',
-            'disable_reason',
-            'balance',
-            'amount_spent',
-            'spend_cap',
-            'min_daily_budget',
-            'business',
-            'created_time',
-            'owner',
-            'funding_source',
-            'funding_source_details'
+            'id', 'account_id', 'name', 'currency', 'timezone_name', 'account_status',
+            'disable_reason', 'balance', 'amount_spent', 'spend_cap', 'min_daily_budget',
+            'business', 'created_time', 'owner', 'funding_source', 'funding_source_details'
         ].join(',');
 
-        const accountResponse = await axios.get(baseUrl, {
-            params: {
-                access_token: accessToken,
-                fields: accountFields
-            }
+        const accountPromise = axios.get(baseUrl, {
+            params: { access_token: accessToken, fields: accountFields }
         });
 
-        const account = accountResponse.data;
-
-        // Get today's date range
+        // Date calculations
         const today = new Date();
         const todayStr = today.toISOString().split('T')[0];
         const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
 
-        // Fetch today's spend
-        const todayInsightsResponse = await axios.get(`${baseUrl}/insights`, {
+        // 2. Today's Spend
+        const todayParams = {
+            access_token: accessToken,
+            time_range: JSON.stringify({ since: todayStr, until: todayStr }),
+            fields: 'spend'
+        };
+        const todayPromise = axios.get(`${baseUrl}/insights`, { params: todayParams });
+
+        // 3. Month's Spend
+        const monthParams = {
+            access_token: accessToken,
+            time_range: JSON.stringify({ since: monthStart, until: todayStr }),
+            fields: 'spend'
+        };
+        const monthPromise = axios.get(`${baseUrl}/insights`, { params: monthParams });
+
+        // 4. Transactions (Non-blocking)
+        const transactionsPromise = axios.get(`${baseUrl}/transactions`, {
             params: {
                 access_token: accessToken,
-                time_range: JSON.stringify({ since: todayStr, until: todayStr }),
-                fields: 'spend'
+                limit: 25,
+                fields: 'id,time,amount,status,charge_type'
             }
-        });
+        }).catch(err => ({ data: { data: [] } })); // Return empty on fail
 
-        const todaySpend = todayInsightsResponse.data.data?.[0]?.spend || '0';
+        // Execute all requests in parallel
+        const [accountRes, todayRes, monthRes, transactionsRes] = await Promise.all([
+            accountPromise,
+            todayPromise,
+            monthPromise,
+            transactionsPromise
+        ]);
 
-        // Fetch this month's spend
-        const monthInsightsResponse = await axios.get(`${baseUrl}/insights`, {
-            params: {
-                access_token: accessToken,
-                time_range: JSON.stringify({ since: monthStart, until: todayStr }),
-                fields: 'spend'
-            }
-        });
-
-        const monthSpend = monthInsightsResponse.data.data?.[0]?.spend || '0';
-
-        // Fetch recent transactions (last 25)
-        let transactions = [];
-        try {
-            const transactionsResponse = await axios.get(`${baseUrl}/transactions`, {
-                params: {
-                    access_token: accessToken,
-                    limit: 25,
-                    fields: 'id,time,amount,status,charge_type'
-                }
-            });
-            transactions = transactionsResponse.data.data || [];
-        } catch (err) {
-            console.log('Transactions not available:', err.message);
-        }
+        const account = accountRes.data;
+        const todaySpend = todayRes.data.data?.[0]?.spend || '0';
+        const monthSpend = monthRes.data.data?.[0]?.spend || '0';
+        const transactions = transactionsRes.data?.data || [];
 
         // Parse account status
         const accountStatusMap = {

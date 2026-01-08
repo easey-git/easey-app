@@ -414,75 +414,7 @@ async function handleGetAdSets(req, res, accessToken, campaignId) {
     }
 }
 
-// ============================================================================
-// POST: Create Campaign (DISABLED)
-// ============================================================================
-/*
-async function handleCreate(req, res, accessToken, adAccountId) {
-    const {
-        name,
-        objective = 'OUTCOME_SALES',
-        status = 'PAUSED',
-        dailyBudget,
-        lifetimeBudget,
-        specialAdCategories = []
-    } = req.body;
 
-    // Validation
-    if (!name || name.trim().length === 0) {
-        return res.status(400).json({
-            error: 'Validation failed',
-            message: 'Campaign name is required and cannot be empty'
-        });
-    }
-
-    if (!dailyBudget && !lifetimeBudget) {
-        return res.status(400).json({
-            error: 'Validation failed',
-            message: 'Either dailyBudget or lifetimeBudget is required'
-        });
-    }
-
-    if (dailyBudget && dailyBudget < 1) {
-        return res.status(400).json({
-            error: 'Validation failed',
-            message: 'Daily budget must be at least ₹1'
-        });
-    }
-
-    const url = `https://graph.facebook.com/v21.0/act_${adAccountId}/campaigns`;
-
-    const data = {
-        access_token: accessToken,
-        name: name.trim(),
-        objective: objective,
-        status: status,
-        special_ad_categories: JSON.stringify(specialAdCategories)
-    };
-
-    if (dailyBudget) {
-        data.daily_budget = Math.round(dailyBudget * 100); // Convert to cents
-    }
-
-    if (lifetimeBudget) {
-        data.lifetime_budget = Math.round(lifetimeBudget * 100);
-    }
-
-    const response = await axios.post(url, null, { params: data });
-
-    return res.status(201).json({
-        success: true,
-        campaign: {
-            id: response.data.id,
-            name: name.trim(),
-            status: status,
-            objective: objective
-        },
-        message: 'Campaign created successfully',
-        timestamp: new Date().toISOString()
-    });
-}
-*/
 
 // ============================================================================
 // PATCH: Update Campaign
