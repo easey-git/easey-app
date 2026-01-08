@@ -118,39 +118,41 @@ module.exports = async (req, res) => {
 
 // Fetch insights from Meta API
 async function fetchInsights(baseUrl, accessToken, since, until, breakdown, level) {
-    const endpoint = level === 'campaign' ? '/campaigns' :
-        level === 'adset' ? '/adsets' : '/ads';
+    // Use the /insights endpoint for accurate reporting
+    const endpoint = '/insights';
 
     const fields = [
-        'id',
-        'name',
-        'insights{' +
-        'campaign_name,' +
-        'spend,' +
-        'impressions,' +
-        'reach,' +
-        'clicks,' +
-        'cpc,' +
-        'cpm,' +
-        'ctr,' +
-        'frequency,' +
-        'actions,' +
-        'action_values,' +
-        'cost_per_action_type,' +
-        'conversions,' +
-        'cost_per_conversion,' +
-        'video_play_actions,' +
-        'video_p25_watched_actions,' +
-        'video_p50_watched_actions,' +
-        'video_p75_watched_actions,' +
-        'video_p100_watched_actions' +
-        '}'
+        'campaign_id',
+        'campaign_name',
+        'adset_id',
+        'adset_name',
+        'ad_id',
+        'ad_name',
+        'spend',
+        'impressions',
+        'reach',
+        'clicks',
+        'cpc',
+        'cpm',
+        'ctr',
+        'frequency',
+        'actions',
+        'action_values',
+        'cost_per_action_type',
+        'conversions',
+        'cost_per_conversion',
+        'video_play_actions',
+        'video_p25_watched_actions',
+        'video_p50_watched_actions',
+        'video_p75_watched_actions',
+        'video_p100_watched_actions'
     ].join(',');
 
     const params = {
         access_token: accessToken,
         fields: fields,
         time_range: JSON.stringify({ since, until }),
+        level: level,
         limit: 500
     };
 
@@ -172,24 +174,22 @@ function calculateSummary(data) {
     let totalClicks = 0;
 
     data.forEach(item => {
-        const insights = item.insights?.data?.[0];
-        if (!insights) return;
-
-        totalSpend += parseFloat(insights.spend || 0);
-        totalImpressions += parseInt(insights.impressions || 0);
-        totalReach += parseInt(insights.reach || 0);
-        totalClicks += parseInt(insights.clicks || 0);
+        // Data is now flat, no need for item.insights.data[0]
+        totalSpend += parseFloat(item.spend || 0);
+        totalImpressions += parseInt(item.impressions || 0);
+        totalReach += parseInt(item.reach || 0);
+        totalClicks += parseInt(item.clicks || 0);
 
         // Extract purchases and revenue
-        if (insights.actions) {
-            const purchaseAction = insights.actions.find(
+        if (item.actions) {
+            const purchaseAction = item.actions.find(
                 a => a.action_type === 'omni_purchase' || a.action_type === 'purchase'
             );
             totalPurchases += parseInt(purchaseAction?.value || 0);
         }
 
-        if (insights.action_values) {
-            const purchaseValue = insights.action_values.find(
+        if (item.action_values) {
+            const purchaseValue = item.action_values.find(
                 av => av.action_type === 'omni_purchase' || av.action_type === 'purchase'
             );
             totalRevenue += parseFloat(purchaseValue?.value || 0);
@@ -221,39 +221,35 @@ function groupByBreakdown(data, breakdown) {
     const grouped = {};
 
     data.forEach(item => {
-        const insights = item.insights?.data || [];
+        const key = item[breakdown] || 'Unknown';
 
-        insights.forEach(insight => {
-            const key = insight[breakdown] || 'Unknown';
+        if (!grouped[key]) {
+            grouped[key] = {
+                spend: 0,
+                revenue: 0,
+                purchases: 0,
+                impressions: 0,
+                clicks: 0
+            };
+        }
 
-            if (!grouped[key]) {
-                grouped[key] = {
-                    spend: 0,
-                    revenue: 0,
-                    purchases: 0,
-                    impressions: 0,
-                    clicks: 0
-                };
-            }
+        grouped[key].spend += parseFloat(item.spend || 0);
+        grouped[key].impressions += parseInt(item.impressions || 0);
+        grouped[key].clicks += parseInt(item.clicks || 0);
 
-            grouped[key].spend += parseFloat(insight.spend || 0);
-            grouped[key].impressions += parseInt(insight.impressions || 0);
-            grouped[key].clicks += parseInt(insight.clicks || 0);
+        if (item.actions) {
+            const purchaseAction = item.actions.find(
+                a => a.action_type === 'omni_purchase' || a.action_type === 'purchase'
+            );
+            grouped[key].purchases += parseInt(purchaseAction?.value || 0);
+        }
 
-            if (insight.actions) {
-                const purchaseAction = insight.actions.find(
-                    a => a.action_type === 'omni_purchase' || a.action_type === 'purchase'
-                );
-                grouped[key].purchases += parseInt(purchaseAction?.value || 0);
-            }
-
-            if (insight.action_values) {
-                const purchaseValue = insight.action_values.find(
-                    av => av.action_type === 'omni_purchase' || av.action_type === 'purchase'
-                );
-                grouped[key].revenue += parseFloat(purchaseValue?.value || 0);
-            }
-        });
+        if (item.action_values) {
+            const purchaseValue = item.action_values.find(
+                av => av.action_type === 'omni_purchase' || av.action_type === 'purchase'
+            );
+            grouped[key].revenue += parseFloat(purchaseValue?.value || 0);
+        }
     });
 
     // Calculate ROAS for each group

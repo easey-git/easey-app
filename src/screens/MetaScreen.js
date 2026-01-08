@@ -31,6 +31,7 @@ const MetaScreen = ({ navigation }) => {
     const [accountData, setAccountData] = useState(null);
     const [campaignsData, setCampaignsData] = useState(null);
     const [analyticsData, setAnalyticsData] = useState(null);
+    const [datePreset, setDatePreset] = useState('today');
 
     const [error, setError] = useState(null);
 
@@ -52,8 +53,37 @@ const MetaScreen = ({ navigation }) => {
                     break;
 
                 case 'analytics':
-                    const today = new Date().toISOString().split('T')[0];
-                    const analyticsRes = await fetch(`${BASE_URL}/analytics?level=campaign&since=${today}&until=${today}&_=${timestamp}`);
+                    const getDates = () => {
+                        // Helper to format date as YYYY-MM-DD in local time
+                        const toLocalISO = (date) => {
+                            const offset = date.getTimezoneOffset() * 60000;
+                            const localDate = new Date(date.getTime() - offset);
+                            return localDate.toISOString().split('T')[0];
+                        };
+
+                        const now = new Date();
+                        const today = toLocalISO(now);
+
+                        if (datePreset === 'yesterday') {
+                            const y = new Date(now);
+                            y.setDate(y.getDate() - 1);
+                            return { since: toLocalISO(y), until: toLocalISO(y) };
+                        }
+                        if (datePreset === 'last_7d') {
+                            const sevenDaysAgo = new Date(now);
+                            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+                            return { since: toLocalISO(sevenDaysAgo), until: today };
+                        }
+                        if (datePreset === 'this_month') {
+                            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                            return { since: toLocalISO(firstDay), until: today };
+                        }
+                        // Default: today
+                        return { since: today, until: today };
+                    };
+
+                    const { since, until } = getDates();
+                    const analyticsRes = await fetch(`${BASE_URL}/analytics?level=campaign&since=${since}&until=${until}&_=${timestamp}`);
                     if (analyticsRes.ok) setAnalyticsData(await analyticsRes.json());
                     break;
 
@@ -66,12 +96,12 @@ const MetaScreen = ({ navigation }) => {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [activeTab, accountData]);
+    }, [activeTab, accountData, datePreset]);
 
     useEffect(() => {
         setLoading(true);
         fetchData();
-    }, [activeTab]);
+    }, [activeTab, datePreset]);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -193,6 +223,8 @@ const MetaScreen = ({ navigation }) => {
                             error={error}
                             theme={theme}
                             fetchData={fetchData}
+                            datePreset={datePreset}
+                            setDatePreset={setDatePreset}
                         />
                     )}
 
@@ -744,7 +776,7 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
 // ============================================================================
 // Analytics Tab
 // ============================================================================
-const AnalyticsTab = ({ analyticsData, error, theme, fetchData }) => {
+const AnalyticsTab = ({ analyticsData, error, theme, fetchData, datePreset, setDatePreset }) => {
     if (error) {
         return (
             <Surface style={[styles.errorCard, { backgroundColor: theme.colors.errorContainer }]} elevation={0}>
@@ -772,12 +804,31 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData }) => {
                 Advanced Analytics
             </Text>
 
+            {/* Period Selector */}
+            <View style={{ marginBottom: 16 }}>
+                <SegmentedButtons
+                    value={datePreset}
+                    onValueChange={setDatePreset}
+                    buttons={[
+                        { value: 'today', label: 'Today' },
+                        { value: 'yesterday', label: 'Yesterday' },
+                        { value: 'last_7d', label: 'Last 7d' },
+                        { value: 'this_month', label: 'Month' },
+                    ]}
+                    style={{ marginBottom: 8 }}
+                />
+            </View>
+
             {/* Period Info */}
             {analyticsData.period && (
                 <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                         <Icon source="calendar-range" size={20} color={theme.colors.primary} />
-                        <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>Period</Text>
+                        <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>
+                            Period: {datePreset === 'today' ? 'Today' :
+                                datePreset === 'yesterday' ? 'Yesterday' :
+                                    datePreset === 'last_7d' ? 'Last 7 Days' : 'This Month'}
+                        </Text>
                     </View>
                     <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
                         {new Date(analyticsData.period.since).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} - {new Date(analyticsData.period.until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
