@@ -189,15 +189,14 @@ async function getPixelDetails(pixelId, accessToken, since, until, res) {
 
         const pixel = pixelResponse.data;
 
-        // Get event stats
+        // Get event stats (last 30 days)
         let eventStats = [];
         try {
             const statsResponse = await axios.get(`${pixelUrl}/stats`, {
                 params: {
                     access_token: accessToken,
-                    start_time: since || getDateDaysAgo(7),
-                    end_time: until || getDateDaysAgo(0),
-                    aggregation: 'event'
+                    start_time: since || getDateDaysAgo(30),
+                    end_time: until || getDateDaysAgo(0)
                 }
             });
 
@@ -243,7 +242,7 @@ async function getPixelDetails(pixelId, accessToken, since, until, res) {
             eventHealth: eventHealth,
             recentServerEvents: [], // Server events require additional permissions
             period: {
-                since: since || getDateDaysAgo(7),
+                since: since || getDateDaysAgo(30),
                 until: until || getDateDaysAgo(0)
             },
             timestamp: new Date().toISOString()
