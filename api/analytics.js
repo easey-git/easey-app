@@ -298,14 +298,11 @@ function calculateChanges(current, previous) {
 // Get top performers
 function getTopPerformers(data, limit = 5) {
     const items = data.map(item => {
-        const insights = item.insights?.data?.[0];
-        if (!insights) return null;
-
-        const spend = parseFloat(insights.spend || 0);
+        const spend = parseFloat(item.spend || 0);
         let revenue = 0;
 
-        if (insights.action_values) {
-            const purchaseValue = insights.action_values.find(
+        if (item.action_values) {
+            const purchaseValue = item.action_values.find(
                 av => av.action_type === 'omni_purchase' || av.action_type === 'purchase'
             );
             revenue = parseFloat(purchaseValue?.value || 0);
@@ -314,13 +311,13 @@ function getTopPerformers(data, limit = 5) {
         const roas = spend > 0 ? revenue / spend : 0;
 
         return {
-            id: item.id,
-            name: item.name,
+            id: item.campaign_id || item.adset_id || item.ad_id || 'unknown',
+            name: item.campaign_name || item.adset_name || item.ad_name || 'Unknown',
             spend,
             revenue,
             roas: parseFloat(roas.toFixed(2))
         };
-    }).filter(Boolean);
+    }).filter(item => item.spend > 0); // Only show items with spend
 
     return items.sort((a, b) => b.roas - a.roas).slice(0, limit);
 }
