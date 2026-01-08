@@ -107,11 +107,19 @@ const MetaScreen = ({ navigation }) => {
 
     if (loading && !refreshing) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }]}>
+            <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
         );
     }
+
+    const StatusBadge = ({ status, color }) => (
+        <View style={[styles.badge, { backgroundColor: color + '15', borderColor: color + '30' }]}>
+            <Text style={[styles.badgeText, { color: color }]}>
+                {status}
+            </Text>
+        </View>
+    );
 
     return (
         <CRMLayout
@@ -128,9 +136,24 @@ const MetaScreen = ({ navigation }) => {
                             value={activeTab}
                             onValueChange={setActiveTab}
                             buttons={[
-                                { value: 'overview', label: 'Overview', icon: 'view-dashboard' },
-                                { value: 'campaigns', label: 'Campaigns', icon: 'bullhorn' },
-                                { value: 'analytics', label: 'Analytics', icon: 'chart-line' },
+                                {
+                                    value: 'overview',
+                                    label: 'Overview',
+                                    icon: width < 380 ? undefined : 'view-dashboard',
+                                    labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
+                                },
+                                {
+                                    value: 'campaigns',
+                                    label: 'Campaigns',
+                                    icon: width < 380 ? undefined : 'bullhorn',
+                                    labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
+                                },
+                                {
+                                    value: 'analytics',
+                                    label: 'Analytics',
+                                    icon: width < 380 ? undefined : 'chart-line',
+                                    labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
+                                },
 
                             ]}
                             style={styles.segmentedButtons}
@@ -221,20 +244,20 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
 
             {/* Alerts */}
             {accountData.alerts && accountData.alerts.length > 0 && (
-                <View style={{ gap: 12, marginBottom: 16 }}>
+                <View style={{ gap: 16, marginBottom: 24 }}>
                     {accountData.alerts.map((alert, index) => (
-                        <Surface key={index} style={[styles.alertCard, { borderLeftColor: getAlertColor(alert.level), backgroundColor: theme.colors.surface }]} elevation={1}>
+                        <Surface key={index} style={[styles.alertCard, { borderLeftColor: getAlertColor(alert.level), backgroundColor: theme.colors.elevation.level1 }]} elevation={2}>
                             <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
                                 <Icon
                                     source={alert.level === 'critical' ? 'alert-circle' : 'alert'}
-                                    size={20}
+                                    size={24}
                                     color={getAlertColor(alert.level)}
                                 />
-                                <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text variant="labelMedium" style={{ color: getAlertColor(alert.level), fontWeight: 'bold', marginBottom: 4 }}>
+                                <View style={{ flex: 1, marginLeft: 16 }}>
+                                    <Text variant="titleSmall" style={{ color: getAlertColor(alert.level), fontWeight: 'bold', marginBottom: 4 }}>
                                         {alert.type.replace(/_/g, ' ')}
                                     </Text>
-                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurface }}>
+                                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
                                         {alert.message}
                                     </Text>
                                 </View>
@@ -266,33 +289,33 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
             </Text>
 
             <View style={styles.statsGrid}>
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                        <Icon source="calendar-today" size={20} color={theme.colors.secondary} />
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                        <Icon source="calendar-today" size={20} color={theme.colors.primary} />
                         <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>Today</Text>
                     </View>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
                         ₹{accountData.spending?.today?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </Text>
                 </Surface>
 
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                        <Icon source="calendar-month" size={20} color={theme.colors.tertiary} />
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                        <Icon source="calendar-month" size={20} color={theme.colors.secondary} />
                         <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>This Month</Text>
                     </View>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
                         ₹{accountData.spending?.thisMonth?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </Text>
                 </Surface>
             </View>
 
-            <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <Icon source="chart-timeline-variant" size={20} color={theme.colors.primary} />
-                    <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>Lifetime</Text>
+            <Surface style={[styles.card, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                    <Icon source="chart-timeline-variant" size={24} color={theme.colors.tertiary} />
+                    <Text variant="titleMedium" style={{ marginLeft: 12, color: theme.colors.onSurface }}>Lifetime Spend</Text>
                 </View>
-                <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4 }}>
                     ₹{accountData.spending?.lifetime?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                 </Text>
             </Surface>
@@ -410,29 +433,31 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
     return (
         <>
             <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginBottom: 16 }}>
-                Campaign Management
+                Campaigns
             </Text>
 
             {/* Summary */}
             {campaignsData.summary && (
-                <Surface style={[styles.card, { backgroundColor: theme.colors.primaryContainer }]} elevation={0}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, marginBottom: 12 }}>Today's Summary</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
-                        <View style={{ flex: 1, minWidth: 100 }}>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>Spend</Text>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
-                                ₹{campaignsData.summary.spend?.toLocaleString('en-IN')}
+                <Surface style={[styles.summaryCard, { backgroundColor: theme.colors.primaryContainer }]} elevation={1}>
+                    <Text variant="titleMedium" style={{ color: theme.colors.onPrimaryContainer, marginBottom: 16, opacity: 0.9 }}>Today's Performance</Text>
+                    <View style={styles.metricsRow}>
+                        <View style={styles.metricItem}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Spend</Text>
+                            <Text variant="headlineSmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                ₹{campaignsData.summary.spend?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                             </Text>
                         </View>
-                        <View style={{ flex: 1, minWidth: 100 }}>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>ROAS</Text>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                        <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
+                        <View style={styles.metricItem}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>ROAS</Text>
+                            <Text variant="headlineSmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
                                 {campaignsData.summary.roas?.toFixed(2)}x
                             </Text>
                         </View>
-                        <View style={{ flex: 1, minWidth: 100 }}>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>Purchases</Text>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                        <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
+                        <View style={styles.metricItem}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Purchases</Text>
+                            <Text variant="headlineSmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
                                 {campaignsData.summary.purchases}
                             </Text>
                         </View>
@@ -451,22 +476,22 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
             </View>
 
             {campaignsData.campaigns && campaignsData.campaigns.map((campaign, index) => (
-                <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                        <View style={{ flex: 1 }}>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 4 }}>
-                                {campaign.name}
-                            </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <Chip mode="flat" compact style={{ height: 20 }}>
-                                    <Text variant="labelSmall" style={{ fontSize: 10, color: getCampaignStatusColor(campaign.status) }}>
+                <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.elevation.level1, borderColor: theme.colors.outlineVariant }]} elevation={1}>
+                    <View style={styles.campaignHeader}>
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                                <View style={[styles.badge, { backgroundColor: getCampaignStatusColor(campaign.status) + '15', borderColor: getCampaignStatusColor(campaign.status) + '30' }]}>
+                                    <Text style={[styles.badgeText, { color: getCampaignStatusColor(campaign.status) }]}>
                                         {campaign.status}
                                     </Text>
-                                </Chip>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                </View>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
                                     {campaign.objective}
                                 </Text>
                             </View>
+                            <Text variant="titleMedium" style={{ fontWeight: '600', color: theme.colors.onSurface }} numberOfLines={2}>
+                                {campaign.name}
+                            </Text>
                         </View>
 
                         {/* Action Menu */}
@@ -597,23 +622,25 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData }) => {
                         Performance Summary
                     </Text>
 
-                    <Surface style={[styles.card, { backgroundColor: theme.colors.primaryContainer }]} elevation={0}>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
-                            <View style={{ flex: 1, minWidth: 100 }}>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>Spend</Text>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
-                                    ₹{analyticsData.summary.spend?.toLocaleString('en-IN')}
+                    <Surface style={[styles.summaryCard, { backgroundColor: theme.colors.primaryContainer }]} elevation={1}>
+                        <View style={styles.metricsRow}>
+                            <View style={styles.metricItem}>
+                                <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Spend</Text>
+                                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                    ₹{analyticsData.summary.spend?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                 </Text>
                             </View>
-                            <View style={{ flex: 1, minWidth: 100 }}>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>Revenue</Text>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
-                                    ₹{analyticsData.summary.revenue?.toLocaleString('en-IN')}
+                            <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
+                            <View style={styles.metricItem}>
+                                <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Revenue</Text>
+                                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                    ₹{analyticsData.summary.revenue?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                 </Text>
                             </View>
-                            <View style={{ flex: 1, minWidth: 100 }}>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>ROAS</Text>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                            <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
+                            <View style={styles.metricItem}>
+                                <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>ROAS</Text>
+                                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
                                     {analyticsData.summary.roas?.toFixed(2)}x
                                 </Text>
                             </View>
@@ -622,32 +649,32 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData }) => {
 
                     {/* Additional Metrics */}
                     <View style={styles.statsGrid}>
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Impressions</Text>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>Impressions</Text>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
                                 {analyticsData.summary.impressions?.toLocaleString('en-IN')}
                             </Text>
                         </Surface>
 
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Clicks</Text>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>Clicks</Text>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
                                 {analyticsData.summary.clicks?.toLocaleString('en-IN')}
                             </Text>
                         </Surface>
                     </View>
 
                     <View style={styles.statsGrid}>
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>CPM</Text>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>CPM</Text>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
                                 ₹{analyticsData.summary.cpm?.toFixed(2)}
                             </Text>
                         </Surface>
 
-                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>CTR</Text>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                        <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>CTR</Text>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
                                 {analyticsData.summary.ctr?.toFixed(2)}%
                             </Text>
                         </Surface>
@@ -764,7 +791,7 @@ const styles = StyleSheet.create({
     },
     tabBar: {
         paddingVertical: 8,
-        paddingHorizontal: 16,
+        // paddingHorizontal: 0, // Removed padding to prevent text shrinking
     },
     tabScrollContent: {
         flexGrow: 1,
@@ -822,10 +849,52 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
     },
+    badge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+        borderWidth: 1,
+        alignSelf: 'flex-start',
+    },
+    badgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    campaignHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 16,
+    },
+    summaryCard: {
+        padding: 20,
+        borderRadius: 16,
+        marginBottom: 20,
+    },
+    metricsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    metricItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    metricDivider: {
+        width: 1,
+        height: 40,
+        marginHorizontal: 8,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     campaignCard: {
         padding: 16,
         borderRadius: 12,
-        borderWidth: 1,
         marginBottom: 12,
     },
 });
