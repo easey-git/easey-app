@@ -543,17 +543,140 @@ const PixelsTab = ({ pixelsData, error, theme, fetchData }) => {
         );
     }
 
+    // Check permission status
+    const hasAccess = pixelsData.permissionStatus?.hasFullAccess;
+
     return (
         <>
             <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginBottom: 16 }}>
                 Pixel & Conversion Tracking
             </Text>
 
-            <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
-                    Pixel tracking data loaded successfully. Monitor event health and conversions.
-                </Text>
-            </Surface>
+            {/* Permission Status */}
+            {!hasAccess && pixelsData.permissionStatus?.error && (
+                <Surface style={[styles.card, { backgroundColor: theme.colors.errorContainer }]} elevation={0}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Icon source="lock" size={24} color={theme.colors.error} />
+                        <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onErrorContainer, fontWeight: 'bold' }}>
+                            Access Restricted
+                        </Text>
+                    </View>
+                    <Text variant="bodyMedium" style={{ color: theme.colors.onErrorContainer, marginBottom: 12 }}>
+                        {pixelsData.permissionStatus.error.message}
+                    </Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onErrorContainer, marginBottom: 8, fontWeight: 'bold' }}>
+                        Solution:
+                    </Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onErrorContainer }}>
+                        {pixelsData.permissionStatus.solution}
+                    </Text>
+                </Surface>
+            )}
+
+            {/* Summary */}
+            {pixelsData.summary && (
+                <Surface style={[styles.card, { backgroundColor: hasAccess ? theme.colors.primaryContainer : theme.colors.surfaceVariant }]} elevation={0}>
+                    <Text variant="labelMedium" style={{ color: hasAccess ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+                        Summary
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+                        <View style={{ flex: 1, minWidth: 100 }}>
+                            <Text variant="bodySmall" style={{ color: hasAccess ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant }}>
+                                Pixels
+                            </Text>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: hasAccess ? theme.colors.onPrimaryContainer : theme.colors.onSurface }}>
+                                {pixelsData.summary.totalPixels}
+                            </Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 100 }}>
+                            <Text variant="bodySmall" style={{ color: hasAccess ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant }}>
+                                Active
+                            </Text>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: hasAccess ? theme.colors.onPrimaryContainer : theme.colors.onSurface }}>
+                                {pixelsData.summary.activePixels}
+                            </Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 100 }}>
+                            <Text variant="bodySmall" style={{ color: hasAccess ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant }}>
+                                Conversions
+                            </Text>
+                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: hasAccess ? theme.colors.onPrimaryContainer : theme.colors.onSurface }}>
+                                {pixelsData.summary.totalConversions}
+                            </Text>
+                        </View>
+                    </View>
+                </Surface>
+            )}
+
+            {/* Pixels List */}
+            {pixelsData.pixels && pixelsData.pixels.length > 0 && (
+                <>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 16, marginBottom: 12 }}>
+                        Pixels ({pixelsData.pixels.length})
+                    </Text>
+                    {pixelsData.pixels.map((pixel, index) => (
+                        <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <View style={{ flex: 1 }}>
+                                    <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 4 }}>
+                                        {pixel.name}
+                                    </Text>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                        ID: {pixel.id}
+                                    </Text>
+                                    {pixel.lastFiredTime && (
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                                            Last fired: {new Date(pixel.lastFiredTime).toLocaleDateString('en-IN')}
+                                        </Text>
+                                    )}
+                                </View>
+                                <Chip mode="flat" compact style={{ height: 20 }}>
+                                    <Text variant="labelSmall" style={{ fontSize: 10, color: pixel.isActive ? '#4ade80' : theme.colors.error }}>
+                                        {pixel.isActive ? 'Active' : 'Inactive'}
+                                    </Text>
+                                </Chip>
+                            </View>
+                        </Surface>
+                    ))}
+                </>
+            )}
+
+            {/* Custom Conversions */}
+            {pixelsData.customConversions && pixelsData.customConversions.length > 0 && (
+                <>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 24, marginBottom: 12 }}>
+                        Custom Conversions ({pixelsData.customConversions.length})
+                    </Text>
+                    {pixelsData.customConversions.map((conv, index) => (
+                        <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <View style={{ flex: 1 }}>
+                                    <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 4 }}>
+                                        {conv.name}
+                                    </Text>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                        {conv.eventType}
+                                    </Text>
+                                </View>
+                                <Chip mode="flat" compact style={{ height: 20 }}>
+                                    <Text variant="labelSmall" style={{ fontSize: 10 }}>
+                                        {conv.isArchived ? 'Archived' : 'Active'}
+                                    </Text>
+                                </Chip>
+                            </View>
+                        </Surface>
+                    ))}
+                </>
+            )}
+
+            {/* No data message */}
+            {hasAccess && pixelsData.pixels.length === 0 && pixelsData.customConversions.length === 0 && (
+                <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, textAlign: 'center' }}>
+                        No pixels or custom conversions found for this ad account.
+                    </Text>
+                </Surface>
+            )}
         </>
     );
 };
