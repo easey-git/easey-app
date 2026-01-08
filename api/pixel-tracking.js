@@ -13,8 +13,10 @@ const runMiddleware = (req, res, fn) => {
 /**
  * Pixel & Conversion Tracking API
  * 
- * Note: Requires ad account owner permission or explicit access grant
- * Falls back gracefully if permissions are insufficient
+ * Features:
+ * - List all pixels
+ * - Detailed pixel statistics (when pixelId is provided)
+ * - Event tracking and health scoring
  */
 
 module.exports = async (req, res) => {
@@ -39,6 +41,14 @@ module.exports = async (req, res) => {
         const cleanAdAccountId = adAccountId.replace(/^act_/, '');
         const baseUrl = `https://graph.facebook.com/v21.0/act_${cleanAdAccountId}`;
 
+        const { pixelId, since, until } = req.query;
+
+        // If specific pixel requested, get detailed stats
+        if (pixelId) {
+            return await getPixelDetails(pixelId, accessToken, since, until, res);
+        }
+
+        // Otherwise, list all pixels
         let pixels = [];
         let customConversions = [];
         let permissionError = null;
@@ -156,3 +166,129 @@ module.exports = async (req, res) => {
         });
     }
 };
+
+// Get detailed pixel statistics
+async function getPixelDetails(pixelId, accessToken, since, until, res) {
+    const pixelUrl = `https://graph.facebook.com/v21.0/${pixelId}`;
+
+    try {
+        // Get pixel info
+        const pixelResponse = await axios.get(pixelUrl, {
+            params: {
+                access_token: accessToken,
+                fields: [
+                    'id',
+                    'name',
+                    'code',
+                    'creation_time',
+                    'last_fired_time',
+                    'is_unavailable'
+                ].join(',')
+            }
+        });
+
+        const pixel = pixelResponse.data;
+
+        // Get event stats
+        let eventStats = [];
+        try {
+            const statsResponse = await axios.get(`${pixelUrl}/stats`, {
+                params: {
+                    access_token: accessToken,
+                    start_time: since || getDateDaysAgo(7),
+                    end_time: until || getDateDaysAgo(0),
+                    aggregation: 'event'
+                }
+            });
+
+            eventStats = statsResponse.data.data || [];
+        } catch (err) {
+            console.log('Event stats not available:', err.response?.data?.error?.message);
+        }
+
+        // Process event stats by type
+        const eventsByType = {};
+        eventStats.forEach(stat => {
+            const eventName = stat.event_name || 'Unknown';
+            if (!eventsByType[eventName]) {
+                eventsByType[eventName] = {
+                    count: 0,
+                    value: 0
+                };
+            }
+            eventsByType[eventName].count += parseInt(stat.count || 0);
+            eventsByType[eventName].value += parseFloat(stat.value || 0);
+        });
+
+        // Calculate event health
+        const standardEvents = ['PageView', 'ViewContent', 'AddToCart', 'InitiateCheckout', 'Purchase'];
+        const detectedEvents = Object.keys(eventsByType);
+        const eventHealth = {
+            standardEventsDetected: standardEvents.filter(e => detectedEvents.includes(e)),
+            customEventsDetected: detectedEvents.filter(e => !standardEvents.includes(e)),
+            totalEvents: detectedEvents.length,
+            healthScore: calculatePixelHealth(eventsByType, standardEvents)
+        };
+
+        return res.status(200).json({
+            pixel: {
+                id: pixel.id,
+                name: pixel.name,
+                code: pixel.code,
+                createdTime: pixel.creation_time,
+                lastFiredTime: pixel.last_fired_time,
+                isActive: !pixel.is_unavailable
+            },
+            events: eventsByType,
+            eventHealth: eventHealth,
+            recentServerEvents: [], // Server events require additional permissions
+            period: {
+                since: since || getDateDaysAgo(7),
+                until: until || getDateDaysAgo(0)
+            },
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('Pixel Details Error:', JSON.stringify(error.response?.data || error.message, null, 2));
+        return res.status(500).json({
+            error: error.response?.data?.error?.message || error.message,
+            details: error.response?.data || null
+        });
+    }
+}
+
+// Calculate pixel health score (0-100)
+function calculatePixelHealth(eventsByType, standardEvents) {
+    let score = 0;
+
+    // Base score for having events
+    if (Object.keys(eventsByType).length > 0) {
+        score += 20;
+    }
+
+    // Score for standard events
+    const detectedStandardEvents = standardEvents.filter(e => eventsByType[e]);
+    score += (detectedStandardEvents.length / standardEvents.length) * 50;
+
+    // Score for purchase events
+    if (eventsByType['Purchase'] && eventsByType['Purchase'].count > 0) {
+        score += 20;
+    }
+
+    // Score for funnel completeness
+    const funnelEvents = ['ViewContent', 'AddToCart', 'InitiateCheckout', 'Purchase'];
+    const funnelComplete = funnelEvents.every(e => eventsByType[e]);
+    if (funnelComplete) {
+        score += 10;
+    }
+
+    return Math.min(100, Math.round(score));
+}
+
+// Helper: Get date N days ago in Unix timestamp
+function getDateDaysAgo(days) {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return Math.floor(date.getTime() / 1000);
+}
