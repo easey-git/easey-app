@@ -162,8 +162,8 @@ module.exports = async (req, res) => {
                 owner: account.owner || null,
                 business: account.business || null
             },
-            balance: {
-                current: remainingBalance,
+            billing: {
+                amountDue: balance, // Bill amount owed to Facebook
                 currency: account.currency
             },
             spending: {
@@ -184,7 +184,7 @@ module.exports = async (req, res) => {
                 displayString: account.funding_source_details.display_string
             } : null,
             transactions: processedTransactions,
-            alerts: generateAlerts(status, remainingBalance, spendCap, amountSpent),
+            alerts: generateAlerts(status, spendCap, amountSpent),
             timestamp: new Date().toISOString()
         };
 
@@ -203,7 +203,7 @@ module.exports = async (req, res) => {
 };
 
 // Generate smart alerts based on account status
-function generateAlerts(status, balance, spendCap, amountSpent) {
+function generateAlerts(status, spendCap, amountSpent) {
     const alerts = [];
 
     // Account status alerts
@@ -219,23 +219,6 @@ function generateAlerts(status, balance, spendCap, amountSpent) {
             type: 'PENDING_REVIEW',
             message: 'Your account is under review. Ad delivery may be limited.'
         });
-    }
-
-    // Balance alerts
-    if (balance !== null) {
-        if (balance <= 0) {
-            alerts.push({
-                level: 'critical',
-                type: 'NO_BALANCE',
-                message: 'Account balance is zero. Please add funds to continue running ads.'
-            });
-        } else if (balance < 500) {
-            alerts.push({
-                level: 'warning',
-                type: 'LOW_BALANCE',
-                message: `Low balance: Only ₹${balance.toFixed(2)} remaining.`
-            });
-        }
     }
 
     // Spend cap alerts

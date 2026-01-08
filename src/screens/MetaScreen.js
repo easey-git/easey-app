@@ -168,15 +168,18 @@ const MetaScreen = ({ navigation }) => {
                             </View>
                         )}
 
-                        {/* Balance Card */}
-                        {accountData.balance?.current !== null && (
-                            <Surface style={[styles.card, { backgroundColor: theme.colors.primaryContainer }]} elevation={0}>
+                        {/* Billing Card */}
+                        {accountData.billing?.amountDue !== null && accountData.billing?.amountDue > 0 && (
+                            <Surface style={[styles.card, { backgroundColor: theme.colors.errorContainer }]} elevation={0}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                    <Icon source="wallet" size={24} color={theme.colors.primary} />
-                                    <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onPrimaryContainer }}>Current Balance</Text>
+                                    <Icon source="alert-circle" size={24} color={theme.colors.error} />
+                                    <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onErrorContainer }}>Amount Due</Text>
                                 </View>
-                                <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
-                                    ₹{accountData.balance.current?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer }}>
+                                    ₹{accountData.billing.amountDue?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                </Text>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onErrorContainer, marginTop: 4 }}>
+                                    Outstanding bill amount
                                 </Text>
                             </Surface>
                         )}
