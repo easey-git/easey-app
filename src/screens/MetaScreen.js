@@ -43,7 +43,11 @@ const MetaScreen = ({ navigation }) => {
             // Fetch based on active tab
             switch (activeTab) {
                 case 'overview':
-                    const accountRes = await fetch(`${BASE_URL}/meta-account?_=${timestamp}`);
+                    // Pass local 'today' to ensure Overview matches local time
+                    const offset = new Date().getTimezoneOffset() * 60000;
+                    const localToday = new Date(Date.now() - offset).toISOString().split('T')[0];
+
+                    const accountRes = await fetch(`${BASE_URL}/meta-account?today=${localToday}&_=${timestamp}`);
                     if (accountRes.ok) setAccountData(await accountRes.json());
                     break;
 

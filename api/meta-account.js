@@ -57,9 +57,12 @@ module.exports = async (req, res) => {
         });
 
         // Date calculations
-        const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+        // Use client-provided local date if available, else fallback to UTC
+        const todayStr = req.query.today || new Date().toISOString().split('T')[0];
+
+        // Calculate Month Start based on the input date
+        const dateObj = new Date(todayStr); // Ensure this parses correctly YYYY-MM-DD
+        const monthStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1).toISOString().split('T')[0];
 
         // 2. Today's Spend
         const todayParams = {
