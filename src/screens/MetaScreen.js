@@ -784,6 +784,26 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData }) => {
 // Pixels Tab
 // ============================================================================
 const PixelsTab = ({ pixelsData, error, theme, fetchData }) => {
+    const [selectedPixel, setSelectedPixel] = useState(null);
+    const [pixelDetails, setPixelDetails] = useState(null);
+    const [loadingDetails, setLoadingDetails] = useState(false);
+
+    const loadPixelDetails = async (pixelId) => {
+        setLoadingDetails(true);
+        try {
+            const response = await fetch(`${BASE_URL}/pixel-tracking?pixelId=${pixelId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setPixelDetails(data);
+                setSelectedPixel(pixelId);
+            }
+        } catch (error) {
+            console.error('Failed to load pixel details:', error);
+        } finally {
+            setLoadingDetails(false);
+        }
+    };
+
     if (error) {
         return (
             <Surface style={[styles.errorCard, { backgroundColor: theme.colors.errorContainer }]} elevation={0}>
@@ -808,6 +828,130 @@ const PixelsTab = ({ pixelsData, error, theme, fetchData }) => {
     // Check permission status
     const hasAccess = pixelsData.permissionStatus?.hasFullAccess;
 
+    // If viewing pixel details
+    if (selectedPixel && pixelDetails) {
+        return (
+            <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                    <IconButton icon="arrow-left" size={24} onPress={() => { setSelectedPixel(null); setPixelDetails(null); }} />
+                    <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onBackground, flex: 1 }}>
+                        {pixelDetails.pixel?.name}
+                    </Text>
+                </View>
+
+                {/* Pixel Info */}
+                <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>Pixel ID</Text>
+                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, marginBottom: 12 }}>{pixelDetails.pixel?.id}</Text>
+
+                    {pixelDetails.pixel?.lastFiredTime && (
+                        <>
+                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>Last Fired</Text>
+                            <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+                                {new Date(pixelDetails.pixel.lastFiredTime).toLocaleString('en-IN')}
+                            </Text>
+                        </>
+                    )}
+                </Surface>
+
+                {/* Event Health */}
+                {pixelDetails.eventHealth && (
+                    <Surface style={[styles.card, { backgroundColor: theme.colors.primaryContainer }]} elevation={0}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, marginBottom: 12 }}>Pixel Health Score</Text>
+                        <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer, marginBottom: 8 }}>
+                            {pixelDetails.eventHealth.healthScore}/100
+                        </Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>
+                            {pixelDetails.eventHealth.totalEvents} events detected
+                        </Text>
+                    </Surface>
+                )}
+
+                {/* Standard Events */}
+                {pixelDetails.eventHealth?.standardEventsDetected && pixelDetails.eventHealth.standardEventsDetected.length > 0 && (
+                    <>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 16, marginBottom: 12 }}>
+                            Standard Events
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                            {pixelDetails.eventHealth.standardEventsDetected.map((event, index) => (
+                                <Chip key={index} mode="flat" style={{ backgroundColor: theme.colors.primaryContainer }}>
+                                    <Text variant="labelSmall" style={{ color: theme.colors.onPrimaryContainer }}>✓ {event}</Text>
+                                </Chip>
+                            ))}
+                        </View>
+                    </>
+                )}
+
+                {/* Event Statistics */}
+                {pixelDetails.events && Object.keys(pixelDetails.events).length > 0 && (
+                    <>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 16, marginBottom: 12 }}>
+                            Event Statistics
+                        </Text>
+                        {Object.entries(pixelDetails.events).map(([eventName, stats], index) => (
+                            <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
+                                <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 8 }}>
+                                    {eventName}
+                                </Text>
+                                <View style={{ flexDirection: 'row', gap: 16 }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Count</Text>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                            {stats.count?.toLocaleString('en-IN')}
+                                        </Text>
+                                    </View>
+                                    {stats.value > 0 && (
+                                        <View style={{ flex: 1 }}>
+                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Value</Text>
+                                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                                ₹{stats.value?.toLocaleString('en-IN')}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </Surface>
+                        ))}
+                    </>
+                )}
+
+                {/* Recent Server Events */}
+                {pixelDetails.recentServerEvents && pixelDetails.recentServerEvents.length > 0 && (
+                    <>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 24, marginBottom: 12 }}>
+                            Recent Server Events
+                        </Text>
+                        {pixelDetails.recentServerEvents.map((event, index) => (
+                            <Surface key={index} style={[styles.transactionCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text variant="labelMedium" style={{ color: theme.colors.onSurface, fontWeight: 'bold', marginBottom: 2 }}>
+                                            {event.eventName}
+                                        </Text>
+                                        {event.eventSourceUrl && (
+                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }} numberOfLines={1}>
+                                                {event.eventSourceUrl}
+                                            </Text>
+                                        )}
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                            {new Date(event.eventTime * 1000).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                                        </Text>
+                                        <Chip mode="flat" compact style={{ marginTop: 4, height: 20 }}>
+                                            <Text variant="labelSmall" style={{ fontSize: 10 }}>{event.userData}</Text>
+                                        </Chip>
+                                    </View>
+                                </View>
+                            </Surface>
+                        ))}
+                    </>
+                )}
+            </>
+        );
+    }
+
+    // Main pixel list view
     return (
         <>
             <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginBottom: 16 }}>
@@ -877,7 +1021,11 @@ const PixelsTab = ({ pixelsData, error, theme, fetchData }) => {
                         Pixels ({pixelsData.pixels.length})
                     </Text>
                     {pixelsData.pixels.map((pixel, index) => (
-                        <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
+                        <Surface
+                            key={index}
+                            style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}
+                            elevation={0}
+                        >
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <View style={{ flex: 1 }}>
                                     <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 4 }}>
@@ -892,11 +1040,21 @@ const PixelsTab = ({ pixelsData, error, theme, fetchData }) => {
                                         </Text>
                                     )}
                                 </View>
-                                <Chip mode="flat" compact style={{ height: 20 }}>
-                                    <Text variant="labelSmall" style={{ fontSize: 10, color: pixel.isActive ? '#4ade80' : theme.colors.error }}>
-                                        {pixel.isActive ? 'Active' : 'Inactive'}
-                                    </Text>
-                                </Chip>
+                                <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                                    <Chip mode="flat" compact style={{ height: 20 }}>
+                                        <Text variant="labelSmall" style={{ fontSize: 10, color: pixel.isActive ? '#4ade80' : theme.colors.error }}>
+                                            {pixel.isActive ? 'Active' : 'Inactive'}
+                                        </Text>
+                                    </Chip>
+                                    <Button
+                                        mode="outlined"
+                                        compact
+                                        onPress={() => loadPixelDetails(pixel.id)}
+                                        loading={loadingDetails && selectedPixel === pixel.id}
+                                    >
+                                        View Details
+                                    </Button>
+                                </View>
                             </View>
                         </Surface>
                     ))}
