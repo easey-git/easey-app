@@ -55,7 +55,7 @@ export const Sidebar = React.memo(({ onClose }) => {
         { label: 'Analytics', icon: 'chart-bar', route: 'Stats', permission: 'access_analytics' },
         { label: 'Wallet', icon: 'wallet-outline', route: 'Wallet', permission: 'access_wallet' },
         { label: 'WhatsApp', icon: 'whatsapp', route: 'WhatsAppManager', permission: 'access_whatsapp' },
-        { label: 'Campaigns', icon: 'bullhorn', route: 'Campaigns', permission: 'access_campaigns' },
+        { label: 'Meta Account', icon: 'facebook', route: 'Meta', permission: 'access_campaigns' },
         { label: 'Notes', icon: 'notebook', route: 'Notes' }, // Always visible
         { label: 'Settings', icon: 'cog', route: 'Settings' }, // Always visible
     ];

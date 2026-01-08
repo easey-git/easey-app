@@ -13,7 +13,7 @@ import StatsScreen from './src/screens/StatsScreen';
 import FirestoreViewerScreen from './src/screens/FirestoreViewerScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import WhatsAppManagerScreen from './src/screens/WhatsAppManagerScreen';
-import CampaignsScreen from './src/screens/CampaignsScreen';
+import MetaScreen from './src/screens/MetaScreen';
 import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
 import AssistantScreen from './src/screens/AssistantScreen';
@@ -218,9 +218,9 @@ function AppStack() {
               options={{ title: 'Admin Panel' }}
             />
             <Stack.Screen
-              name="Campaigns"
-              component={CampaignsScreen}
-              options={{ title: 'Campaigns' }}
+              name="Meta"
+              component={MetaScreen}
+              options={{ title: 'Meta Account' }}
             />
             <Stack.Screen
               name="Notes"
