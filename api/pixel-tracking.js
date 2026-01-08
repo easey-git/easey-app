@@ -189,20 +189,43 @@ async function getPixelDetails(pixelId, accessToken, since, until, res) {
 
         const pixel = pixelResponse.data;
 
-        // Get event stats (last 30 days)
+        // Get event stats - try multiple approaches
         let eventStats = [];
-        try {
-            const statsResponse = await axios.get(`${pixelUrl}/stats`, {
-                params: {
-                    access_token: accessToken,
-                    start_time: since || getDateDaysAgo(30),
-                    end_time: until || getDateDaysAgo(0)
-                }
-            });
+        let statsError = null;
 
+        // Approach 1: Try with date range (last 90 days for more data)
+        try {
+            const params = {
+                access_token: accessToken
+            };
+
+            // Add date range if provided, otherwise get all-time stats
+            if (since && until) {
+                params.start_time = since;
+                params.end_time = until;
+            } else {
+                // Try last 90 days
+                params.start_time = getDateDaysAgo(90);
+                params.end_time = getDateDaysAgo(0);
+            }
+
+            const statsResponse = await axios.get(`${pixelUrl}/stats`, { params });
             eventStats = statsResponse.data.data || [];
         } catch (err) {
-            console.log('Event stats not available:', err.response?.data?.error?.message);
+            statsError = err.response?.data?.error?.message;
+            console.log('Event stats with dates failed:', statsError);
+
+            // Approach 2: Try without any date restrictions
+            try {
+                const statsResponse = await axios.get(`${pixelUrl}/stats`, {
+                    params: {
+                        access_token: accessToken
+                    }
+                });
+                eventStats = statsResponse.data.data || [];
+            } catch (err2) {
+                console.log('Event stats without dates also failed:', err2.response?.data?.error?.message);
+            }
         }
 
         // Process event stats by type
@@ -242,8 +265,9 @@ async function getPixelDetails(pixelId, accessToken, since, until, res) {
             eventHealth: eventHealth,
             recentServerEvents: [], // Server events require additional permissions
             period: {
-                since: since || getDateDaysAgo(30),
-                until: until || getDateDaysAgo(0)
+                since: since || getDateDaysAgo(90),
+                until: until || getDateDaysAgo(0),
+                description: since && until ? 'Custom range' : 'Last 90 days'
             },
             timestamp: new Date().toISOString()
         });
