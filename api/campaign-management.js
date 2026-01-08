@@ -82,8 +82,18 @@ async function handleGet(req, res, accessToken, adAccountId) {
         breakdown,
         limit = 100,
         sortBy = 'roas',
-        sortOrder = 'desc'
+        sortOrder = 'desc',
+        scope,         // 'campaigns' (default) or 'adsets'
+        campaignId     // Required if scope is 'adsets'
     } = req.query;
+
+    // Handle Ad Sets Fetch scope
+    if (scope === 'adsets') {
+        if (!campaignId) {
+            return res.status(400).json({ error: 'campaignId is required when scope is adsets' });
+        }
+        return await handleGetAdSets(req, res, accessToken, campaignId);
+    }
 
     // Determine date range
     const today = new Date().toISOString().split('T')[0];
@@ -349,6 +359,62 @@ async function handleGet(req, res, accessToken, adAccountId) {
 }
 
 // ============================================================================
+// GET: List Ad Sets (Helper)
+// ============================================================================
+async function handleGetAdSets(req, res, accessToken, campaignId) {
+    const url = `https://graph.facebook.com/v21.0/${campaignId}/adsets`;
+
+    const fields = [
+        'id',
+        'name',
+        'status',
+        'effective_status',
+        'daily_budget',
+        'lifetime_budget',
+        'budget_remaining',
+        'start_time',
+        'end_time'
+    ].join(',');
+
+    try {
+        const response = await axios.get(url, {
+            params: {
+                access_token: accessToken,
+                fields: fields,
+                limit: 50
+            }
+        });
+
+        const adSets = response.data.data.map(adSet => ({
+            id: adSet.id,
+            name: adSet.name,
+            status: mapStatus(adSet.effective_status),
+            effectiveStatus: adSet.effective_status,
+            budget: {
+                daily: adSet.daily_budget ? parseFloat(adSet.daily_budget) / 100 : null,
+                lifetime: adSet.lifetime_budget ? parseFloat(adSet.lifetime_budget) / 100 : null,
+                remaining: adSet.budget_remaining ? parseFloat(adSet.budget_remaining) / 100 : null
+            },
+            dates: {
+                start: adSet.start_time,
+                end: adSet.end_time
+            }
+        }));
+
+        return res.status(200).json({
+            success: true,
+            adSets: adSets,
+            count: adSets.length,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('Ad Sets Fetch Error:', error.message);
+        throw error; // Let main catch block handle it
+    }
+}
+
+// ============================================================================
 // POST: Create Campaign (DISABLED)
 // ============================================================================
 /*
@@ -424,20 +490,24 @@ async function handleCreate(req, res, accessToken, adAccountId) {
 async function handleUpdate(req, res, accessToken) {
     const {
         campaignId,
+        adSetId,
         name,
         status,
         dailyBudget,
         lifetimeBudget
     } = req.body;
 
-    if (!campaignId) {
+    // Determine target ID (Campaign or Ad Set)
+    const targetId = adSetId || campaignId;
+
+    if (!targetId) {
         return res.status(400).json({
             error: 'Validation failed',
-            message: 'campaignId is required'
+            message: 'campaignId or adSetId is required'
         });
     }
 
-    const url = `https://graph.facebook.com/v21.0/${campaignId}`;
+    const url = `https://graph.facebook.com/v21.0/${targetId}`;
 
     const data = {
         access_token: accessToken
@@ -481,7 +551,8 @@ async function handleUpdate(req, res, accessToken) {
 
     return res.status(200).json({
         success: response.data.success,
-        message: 'Campaign updated successfully',
+        message: 'Update successful',
+        targetId: targetId,
         updates: {
             name: name,
             status: status,

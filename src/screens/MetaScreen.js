@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, FlatList } from 'react-native';
-import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Button, SegmentedButtons, DataTable, FAB, Menu, IconButton } from 'react-native-paper';
+import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Button, SegmentedButtons, DataTable, FAB, Menu, IconButton, Portal, Dialog, TextInput } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
@@ -389,23 +389,91 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
         }
     };
 
-    const deleteCampaign = async (campaignId, campaignName) => {
-        if (!confirm(`Delete campaign "${campaignName}"? This cannot be undone.`)) return;
+    const [editBudgetVisible, setEditBudgetVisible] = useState(false);
+    const [editingItem, setEditingItem] = useState(null); // Campaign or Ad Set
+    const [isEditingAdSet, setIsEditingAdSet] = useState(false);
+    const [budgetInput, setBudgetInput] = useState('');
+    const [updatingBudget, setUpdatingBudget] = useState(false);
 
+    // Ad Sets State
+    const [adSetsVisible, setAdSetsVisible] = useState(false);
+    const [currentAdSets, setCurrentAdSets] = useState([]);
+    const [loadingAdSets, setLoadingAdSets] = useState(false);
+    const [selectedCampaignName, setSelectedCampaignName] = useState('');
+
+    const fetchAdSets = async (campaignId, campaignName) => {
+        setLoadingAdSets(true);
+        setSelectedCampaignName(campaignName);
+        setAdSetsVisible(true);
         try {
-            const response = await fetch(`${BASE_URL}/campaign-management?campaignId=${campaignId}`, {
-                method: 'DELETE'
+            const response = await fetch(`${BASE_URL}/campaign-management?scope=adsets&campaignId=${campaignId}`);
+            const data = await response.json();
+            if (response.ok) {
+                setCurrentAdSets(data.adSets || []);
+            } else {
+                alert('Failed to fetch Ad Sets');
+            }
+        } catch (error) {
+            alert('Error fetching Ad Sets: ' + error.message);
+        } finally {
+            setLoadingAdSets(false);
+        }
+    };
+
+    const openEditBudget = (item, isAdSet = false) => {
+        setEditingItem(item);
+        setIsEditingAdSet(isAdSet);
+        const currentBudget = item.budget?.daily || item.budget?.lifetime || 0;
+        setBudgetInput(String(currentBudget));
+        setEditBudgetVisible(true);
+    };
+
+    const handleUpdateBudget = async () => {
+        if (!editingItem || !budgetInput) return;
+
+        const amount = parseFloat(budgetInput);
+        if (isNaN(amount) || amount <= 0) {
+            alert('Please enter a valid budget amount');
+            return;
+        }
+
+        setUpdatingBudget(true);
+        try {
+            const isLifetime = !!editingItem.budget?.lifetime;
+            const payload = {
+                [isEditingAdSet ? 'adSetId' : 'campaignId']: editingItem.id,
+                [isLifetime ? 'lifetimeBudget' : 'dailyBudget']: amount
+            };
+
+            const response = await fetch(`${BASE_URL}/campaign-management`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
-                alert('Campaign deleted successfully');
-                fetchData(); // Refresh data
+                setEditBudgetVisible(false);
+
+                if (isEditingAdSet) {
+                    // Update the specific ad set in the local list to reflect change immediately
+                    setCurrentAdSets(prev => prev.map(adSet =>
+                        adSet.id === editingItem.id
+                            ? { ...adSet, budget: { ...adSet.budget, [isLifetime ? 'lifetime' : 'daily']: amount } }
+                            : adSet
+                    ));
+                    alert('Ad Set budget updated');
+                } else {
+                    setEditingItem(null);
+                    fetchData(); // Refresh campaign list
+                }
             } else {
                 const errorData = await response.json();
-                alert('Failed to delete campaign: ' + (errorData.error || 'Unknown error'));
+                alert('Failed to update budget: ' + (errorData.error || 'Unknown error'));
             }
         } catch (error) {
             alert('Error: ' + error.message);
+        } finally {
+            setUpdatingBudget(false);
         }
     };
 
@@ -490,6 +558,18 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                             <Text variant="titleMedium" style={{ fontWeight: '600', color: theme.colors.onSurface }} numberOfLines={2}>
                                 {campaign.name}
                             </Text>
+
+                            {/* Budget Display */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                <Icon source="wallet-outline" size={14} color={theme.colors.secondary} />
+                                <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.secondary }}>
+                                    {campaign.budget?.daily
+                                        ? `Daily: ₹${campaign.budget.daily.toLocaleString('en-IN')}`
+                                        : campaign.budget?.lifetime
+                                            ? `Lifetime: ₹${campaign.budget.lifetime.toLocaleString('en-IN')}`
+                                            : 'Budget: Not Set (ABO)'}
+                                </Text>
+                            </View>
                         </View>
 
                         {/* Action Menu */}
@@ -515,19 +595,23 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                             <Menu.Item
                                 onPress={() => {
                                     setMenuVisible({ ...menuVisible, [campaign.id]: false });
-                                    alert('Edit Budget: Use Facebook Ads Manager for now');
+                                    fetchAdSets(campaign.id, campaign.name);
                                 }}
-                                leadingIcon="currency-usd"
-                                title="Edit Budget"
+                                leadingIcon="layers"
+                                title="View Ad Sets"
                             />
                             <Menu.Item
                                 onPress={() => {
                                     setMenuVisible({ ...menuVisible, [campaign.id]: false });
-                                    deleteCampaign(campaign.id, campaign.name);
+                                    if (!campaign.budget?.daily && !campaign.budget?.lifetime) {
+                                        // ABO mode - open Ad Sets directly
+                                        fetchAdSets(campaign.id, campaign.name);
+                                    } else {
+                                        openEditBudget(campaign, false);
+                                    }
                                 }}
-                                leadingIcon="delete"
-                                title="Delete"
-                                titleStyle={{ color: theme.colors.error }}
+                                leadingIcon="currency-usd"
+                                title={!campaign.budget?.daily && !campaign.budget?.lifetime ? "Edit Budget (ABO)" : "Edit Budget"}
                             />
                         </Menu>
                     </View>
@@ -562,6 +646,76 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                     )}
                 </Surface>
             ))}
+
+            {/* Ad Sets List Dialog */}
+            <Portal>
+                <Dialog visible={adSetsVisible} onDismiss={() => setAdSetsVisible(false)} style={{ backgroundColor: theme.colors.surface, maxHeight: '80%' }}>
+                    <Dialog.Title style={{ color: theme.colors.onSurface }}>
+                        Ad Sets: {selectedCampaignName}
+                    </Dialog.Title>
+                    <Dialog.ScrollArea>
+                        <ScrollView contentContainerStyle={{ paddingVertical: 12 }}>
+                            {loadingAdSets ? (
+                                <ActivityIndicator style={{ padding: 20 }} color={theme.colors.primary} />
+                            ) : currentAdSets.length === 0 ? (
+                                <Text style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', padding: 20 }}>No active Ad Sets found</Text>
+                            ) : (
+                                currentAdSets.map((adSet, i) => (
+                                    <View key={i} style={{ borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <View style={{ flex: 1, paddingRight: 10 }}>
+                                            <Text variant="titleSmall" style={{ color: theme.colors.onSurface }}>{adSet.name}</Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                                <StatusBadge status={adSet.status} color={adSet.status === 'ACTIVE' ? '#4ade80' : theme.colors.outline} />
+                                                <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.secondary }}>
+                                                    {adSet.budget?.daily
+                                                        ? `Daily: ₹${adSet.budget.daily.toLocaleString('en-IN')}`
+                                                        : `Lifetime: ₹${adSet.budget.lifetime?.toLocaleString('en-IN') || 0}`}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <Button
+                                            mode="outlined"
+                                            compact
+                                            onPress={() => openEditBudget(adSet, true)}
+                                            style={{ borderColor: theme.colors.outline }}
+                                        >
+                                            Edit
+                                        </Button>
+                                    </View>
+                                ))
+                            )}
+                        </ScrollView>
+                    </Dialog.ScrollArea>
+                    <Dialog.Actions>
+                        <Button onPress={() => setAdSetsVisible(false)}>Close</Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
+
+            {/* Edit Budget Dialog */}
+            <Portal>
+                <Dialog visible={editBudgetVisible} onDismiss={() => setEditBudgetVisible(false)} style={{ backgroundColor: theme.colors.surface }}>
+                    <Dialog.Title style={{ color: theme.colors.onSurface }}>Edit Budget</Dialog.Title>
+                    <Dialog.Content>
+                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+                            Update budget for "{editingItem?.name}".
+                            {editingItem?.budget?.lifetime ? ' (Lifetime)' : ' (Daily)'}
+                        </Text>
+                        <TextInput
+                            label="Budget Amount (₹)"
+                            value={budgetInput}
+                            onChangeText={setBudgetInput}
+                            keyboardType="numeric"
+                            mode="outlined"
+                            left={<TextInput.Affix text="₹" />}
+                        />
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setEditBudgetVisible(false)} textColor={theme.colors.onSurfaceVariant}>Cancel</Button>
+                        <Button onPress={handleUpdateBudget} loading={updatingBudget} disabled={updatingBudget}>Update</Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
         </>
     );
 };
