@@ -51,8 +51,8 @@ module.exports = async (req, res) => {
         switch (req.method) {
             case 'GET':
                 return await handleGet(req, res, accessToken, cleanAdAccountId);
-            case 'POST':
-                return await handleCreate(req, res, accessToken, cleanAdAccountId);
+            // case 'POST':
+            //     return await handleCreate(req, res, accessToken, cleanAdAccountId);
             case 'PATCH':
                 return await handleUpdate(req, res, accessToken);
             case 'DELETE':
@@ -349,8 +349,9 @@ async function handleGet(req, res, accessToken, adAccountId) {
 }
 
 // ============================================================================
-// POST: Create Campaign
+// POST: Create Campaign (DISABLED)
 // ============================================================================
+/*
 async function handleCreate(req, res, accessToken, adAccountId) {
     const {
         name,
@@ -415,6 +416,7 @@ async function handleCreate(req, res, accessToken, adAccountId) {
         timestamp: new Date().toISOString()
     });
 }
+*/
 
 // ============================================================================
 // PATCH: Update Campaign

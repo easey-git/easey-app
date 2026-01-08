@@ -130,7 +130,7 @@ const MetaScreen = ({ navigation }) => {
         >
             <View style={styles.container}>
                 {/* Tab Navigation */}
-                <Surface style={[styles.tabBar, { backgroundColor: theme.colors.surface }]} elevation={1}>
+                <View style={[styles.tabBar, { backgroundColor: 'transparent' }]}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
                         <SegmentedButtons
                             value={activeTab}
@@ -159,7 +159,7 @@ const MetaScreen = ({ navigation }) => {
                             style={styles.segmentedButtons}
                         />
                     </ScrollView>
-                </Surface>
+                </View>
 
                 {/* Tab Content */}
                 <ScrollView
@@ -267,18 +267,18 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                 </View>
             )}
 
-            {/* Billing Alert */}
-            {accountData.billing?.amountDue !== null && accountData.billing?.amountDue > 0 && (
-                <Surface style={[styles.card, { backgroundColor: theme.colors.errorContainer }]} elevation={0}>
+            {/* Remaining Account Balance (calculated from spend_cap - amount_spent) */}
+            {accountData.limits?.remainingSpendCap !== null && (
+                <Surface style={[styles.card, { backgroundColor: theme.colors.secondaryContainer }]} elevation={0}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                        <Icon source="alert-circle" size={24} color={theme.colors.error} />
-                        <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onErrorContainer }}>Amount Due</Text>
+                        <Icon source="wallet" size={24} color={theme.colors.secondary} />
+                        <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSecondaryContainer }}>Remaining Balance</Text>
                     </View>
-                    <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer }}>
-                        ₹{accountData.billing.amountDue?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer }}>
+                        ₹{accountData.limits.remainingSpendCap?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                     </Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onErrorContainer, marginTop: 4 }}>
-                        Outstanding bill amount
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSecondaryContainer, marginTop: 4 }}>
+                        Available account funds (Spend Cap - Spent)
                     </Text>
                 </Surface>
             )}
@@ -443,21 +443,21 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                     <View style={styles.metricsRow}>
                         <View style={styles.metricItem}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Spend</Text>
-                            <Text variant="headlineSmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
                                 ₹{campaignsData.summary.spend?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                             </Text>
                         </View>
                         <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
                         <View style={styles.metricItem}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>ROAS</Text>
-                            <Text variant="headlineSmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
                                 {campaignsData.summary.roas?.toFixed(2)}x
                             </Text>
                         </View>
                         <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
                         <View style={styles.metricItem}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Purchases</Text>
-                            <Text variant="headlineSmall" numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
                                 {campaignsData.summary.purchases}
                             </Text>
                         </View>
@@ -466,13 +466,11 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
             )}
 
             {/* Campaigns List */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 12 }}>
+            {/* Campaigns List */}
+            <View style={{ marginTop: 16, marginBottom: 12 }}>
                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>
                     Campaigns ({campaignsData.campaigns?.length || 0})
                 </Text>
-                <Button mode="contained" icon="plus" compact onPress={() => alert('Create Campaign: Use Facebook Ads Manager for now')}>
-                    Create
-                </Button>
             </View>
 
             {campaignsData.campaigns && campaignsData.campaigns.map((campaign, index) => (
@@ -693,11 +691,18 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData }) => {
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                                 <View style={{ flex: 1 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <Chip mode="flat" compact style={{ height: 20, backgroundColor: theme.colors.primaryContainer }}>
-                                            <Text variant="labelSmall" style={{ fontSize: 10, color: theme.colors.onPrimaryContainer }}>
+                                        <View style={{
+                                            height: 20,
+                                            paddingHorizontal: 6,
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            backgroundColor: theme.colors.primaryContainer,
+                                            borderRadius: 4
+                                        }}>
+                                            <Text variant="labelSmall" style={{ fontSize: 10, color: theme.colors.onPrimaryContainer, fontWeight: 'bold' }}>
                                                 #{index + 1}
                                             </Text>
-                                        </Chip>
+                                        </View>
                                         <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flex: 1 }}>
                                             {item.name}
                                         </Text>
