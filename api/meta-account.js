@@ -60,7 +60,6 @@ module.exports = async (req, res) => {
             'amount_spent',
             'spend_cap',
             'min_daily_budget',
-            'daily_spend_limit',
             'business',
             'created_time',
             'owner',
@@ -140,14 +139,12 @@ module.exports = async (req, res) => {
         const balance = parseFloat(account.balance || 0) / 100; // Convert from cents to currency
         const amountSpent = parseFloat(account.amount_spent || 0) / 100;
         const spendCap = account.spend_cap ? parseFloat(account.spend_cap) / 100 : null;
-        const dailySpendLimit = account.daily_spend_limit ? parseFloat(account.daily_spend_limit) / 100 : null;
         const todaySpendAmount = parseFloat(todaySpend);
         const monthSpendAmount = parseFloat(monthSpend);
 
         // Calculate remaining amounts
         const remainingBalance = balance > 0 ? balance : null;
         const remainingSpendCap = spendCap ? spendCap - amountSpent : null;
-        const remainingDailyLimit = dailySpendLimit ? dailySpendLimit - todaySpendAmount : null;
 
         // Process transactions
         const processedTransactions = transactions.map(txn => ({
@@ -185,10 +182,8 @@ module.exports = async (req, res) => {
             },
             limits: {
                 spendCap: spendCap,
-                dailyLimit: dailySpendLimit,
                 minDailyBudget: account.min_daily_budget ? parseFloat(account.min_daily_budget) / 100 : null,
                 remainingSpendCap: remainingSpendCap,
-                remainingDailyLimit: remainingDailyLimit,
                 currency: account.currency
             },
             paymentCycle: account.adspaymentcycle || null,
@@ -198,7 +193,7 @@ module.exports = async (req, res) => {
                 displayString: account.funding_source_details.display_string
             } : null,
             transactions: processedTransactions,
-            alerts: generateAlerts(status, remainingBalance, remainingDailyLimit, spendCap, amountSpent),
+            alerts: generateAlerts(status, remainingBalance, spendCap, amountSpent),
             timestamp: new Date().toISOString()
         };
 
@@ -217,7 +212,7 @@ module.exports = async (req, res) => {
 };
 
 // Generate smart alerts based on account status
-function generateAlerts(status, balance, remainingDaily, spendCap, amountSpent) {
+function generateAlerts(status, balance, spendCap, amountSpent) {
     const alerts = [];
 
     // Account status alerts
@@ -248,24 +243,6 @@ function generateAlerts(status, balance, remainingDaily, spendCap, amountSpent) 
                 level: 'warning',
                 type: 'LOW_BALANCE',
                 message: `Low balance: Only ₹${balance.toFixed(2)} remaining.`
-            });
-        }
-    }
-
-    // Daily limit alerts
-    if (remainingDaily !== null) {
-        const percentUsed = ((remainingDaily / (remainingDaily + amountSpent)) * 100);
-        if (remainingDaily <= 0) {
-            alerts.push({
-                level: 'critical',
-                type: 'DAILY_LIMIT_REACHED',
-                message: 'Daily spending limit reached. Ads are paused until tomorrow.'
-            });
-        } else if (percentUsed < 20) {
-            alerts.push({
-                level: 'warning',
-                type: 'DAILY_LIMIT_WARNING',
-                message: `80% of daily limit used. ₹${remainingDaily.toFixed(2)} remaining today.`
             });
         }
     }

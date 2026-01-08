@@ -224,35 +224,6 @@ const MetaScreen = ({ navigation }) => {
                         </Text>
 
                         <View style={{ gap: 12 }}>
-                            {accountData.limits?.dailyLimit && (
-                                <Surface style={[styles.limitCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Daily Limit</Text>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                            ₹{accountData.limits.dailyLimit.toLocaleString('en-IN')}
-                                        </Text>
-                                    </View>
-                                    {accountData.limits.remainingDailyLimit !== null && (
-                                        <>
-                                            <View style={styles.progressBar}>
-                                                <View
-                                                    style={[
-                                                        styles.progressFill,
-                                                        {
-                                                            width: `${Math.max(0, Math.min(100, ((accountData.limits.dailyLimit - accountData.limits.remainingDailyLimit) / accountData.limits.dailyLimit) * 100))}%`,
-                                                            backgroundColor: accountData.limits.remainingDailyLimit < accountData.limits.dailyLimit * 0.2 ? theme.colors.error : theme.colors.primary
-                                                        }
-                                                    ]}
-                                                />
-                                            </View>
-                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                                                ₹{accountData.limits.remainingDailyLimit.toLocaleString('en-IN')} remaining today
-                                            </Text>
-                                        </>
-                                    )}
-                                </Surface>
-                            )}
-
                             {accountData.limits?.spendCap && (
                                 <Surface style={[styles.limitCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
