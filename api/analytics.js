@@ -10,6 +10,9 @@ const runMiddleware = (req, res, fn) => {
     });
 };
 
+// Helper to format date as YYYY-MM-DD
+const toISO = (date) => date.toISOString().split('T')[0];
+
 /**
  * Advanced Analytics API - Deep insights with breakdowns and comparisons
  * 
@@ -86,12 +89,44 @@ module.exports = async (req, res) => {
             );
         }
 
+        // Determine effective dates for response metadata
+        let effectiveSince = since;
+        let effectiveUntil = until;
+
+        if (date_preset) {
+            const now = new Date();
+            const today = toISO(now);
+
+            if (date_preset === 'today') {
+                effectiveSince = today;
+                effectiveUntil = today;
+            } else if (date_preset === 'yesterday') {
+                const y = new Date(now);
+                y.setDate(y.getDate() - 1);
+                effectiveSince = toISO(y);
+                effectiveUntil = toISO(y);
+            } else if (date_preset === 'last_7d') { // Meta includes today in last_7d usually, or last 7 days excluding today? Standard is usually including.
+                const start = new Date(now);
+                start.setDate(start.getDate() - 6);
+                effectiveSince = toISO(start);
+                effectiveUntil = today;
+            } else if (date_preset === 'this_month') {
+                const start = new Date(now.getFullYear(), now.getMonth(), 1);
+                effectiveSince = toISO(start);
+                effectiveUntil = today;
+            } else {
+                // Fallback for unknown preset
+                effectiveSince = today;
+                effectiveUntil = today;
+            }
+        }
+
         // Process and analyze data
         const analytics = {
             period: {
-                since,
-                until,
-                days: calculateDays(since, until)
+                since: effectiveSince,
+                until: effectiveUntil,
+                days: calculateDays(effectiveSince, effectiveUntil)
             },
             breakdown: breakdown,
             level: level,
