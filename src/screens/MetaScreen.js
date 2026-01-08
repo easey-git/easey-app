@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, FlatList } from 'react-native';
-import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Button, SegmentedButtons, DataTable, FAB } from 'react-native-paper';
+import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Button, SegmentedButtons, DataTable, FAB, Menu, IconButton } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
@@ -362,9 +362,55 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
 };
 
 // ============================================================================
-// Campaigns Tab
+// Campaigns Tab (WITH MANAGEMENT)
 // ============================================================================
 const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fetchData }) => {
+    const [menuVisible, setMenuVisible] = useState({});
+
+    const toggleCampaignStatus = async (campaignId, currentStatus) => {
+        try {
+            const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+
+            const response = await fetch(`${BASE_URL}/campaign-management`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    campaignId,
+                    status: newStatus
+                })
+            });
+
+            if (response.ok) {
+                fetchData(); // Refresh data
+            } else {
+                const errorData = await response.json();
+                alert('Failed to update campaign: ' + (errorData.error || 'Unknown error'));
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    };
+
+    const deleteCampaign = async (campaignId, campaignName) => {
+        if (!confirm(`Delete campaign "${campaignName}"? This cannot be undone.`)) return;
+
+        try {
+            const response = await fetch(`${BASE_URL}/campaign-management?campaignId=${campaignId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                alert('Campaign deleted successfully');
+                fetchData(); // Refresh data
+            } else {
+                const errorData = await response.json();
+                alert('Failed to delete campaign: ' + (errorData.error || 'Unknown error'));
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    };
+
     if (error) {
         return (
             <Surface style={[styles.errorCard, { backgroundColor: theme.colors.errorContainer }]} elevation={0}>
@@ -389,7 +435,7 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
     return (
         <>
             <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginBottom: 16 }}>
-                Campaign Performance
+                Campaign Management
             </Text>
 
             {/* Summary */}
@@ -420,9 +466,14 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
             )}
 
             {/* Campaigns List */}
-            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 16, marginBottom: 12 }}>
-                Active Campaigns ({campaignsData.campaigns?.length || 0})
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 12 }}>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>
+                    Campaigns ({campaignsData.campaigns?.length || 0})
+                </Text>
+                <Button mode="contained" icon="plus" compact onPress={() => alert('Create Campaign: Use Facebook Ads Manager for now')}>
+                    Create
+                </Button>
+            </View>
 
             {campaignsData.campaigns && campaignsData.campaigns.map((campaign, index) => (
                 <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
@@ -431,7 +482,7 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                             <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 4 }}>
                                 {campaign.name}
                             </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                 <Chip mode="flat" compact style={{ height: 20 }}>
                                     <Text variant="labelSmall" style={{ fontSize: 10, color: getCampaignStatusColor(campaign.status) }}>
                                         {campaign.status}
@@ -442,6 +493,45 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                                 </Text>
                             </View>
                         </View>
+
+                        {/* Action Menu */}
+                        <Menu
+                            visible={menuVisible[campaign.id]}
+                            onDismiss={() => setMenuVisible({ ...menuVisible, [campaign.id]: false })}
+                            anchor={
+                                <IconButton
+                                    icon="dots-vertical"
+                                    size={20}
+                                    onPress={() => setMenuVisible({ ...menuVisible, [campaign.id]: true })}
+                                />
+                            }
+                        >
+                            <Menu.Item
+                                onPress={() => {
+                                    setMenuVisible({ ...menuVisible, [campaign.id]: false });
+                                    toggleCampaignStatus(campaign.id, campaign.status);
+                                }}
+                                leadingIcon={campaign.status === 'ACTIVE' ? 'pause' : 'play'}
+                                title={campaign.status === 'ACTIVE' ? 'Pause' : 'Resume'}
+                            />
+                            <Menu.Item
+                                onPress={() => {
+                                    setMenuVisible({ ...menuVisible, [campaign.id]: false });
+                                    alert('Edit Budget: Use Facebook Ads Manager for now');
+                                }}
+                                leadingIcon="currency-usd"
+                                title="Edit Budget"
+                            />
+                            <Menu.Item
+                                onPress={() => {
+                                    setMenuVisible({ ...menuVisible, [campaign.id]: false });
+                                    deleteCampaign(campaign.id, campaign.name);
+                                }}
+                                leadingIcon="delete"
+                                title="Delete"
+                                titleStyle={{ color: theme.colors.error }}
+                            />
+                        </Menu>
                     </View>
 
                     {campaign.performance && (
