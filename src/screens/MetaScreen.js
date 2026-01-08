@@ -57,37 +57,9 @@ const MetaScreen = ({ navigation }) => {
                     break;
 
                 case 'analytics':
-                    const getDates = () => {
-                        // Helper to format date as YYYY-MM-DD in local time
-                        const toLocalISO = (date) => {
-                            const offset = date.getTimezoneOffset() * 60000;
-                            const localDate = new Date(date.getTime() - offset);
-                            return localDate.toISOString().split('T')[0];
-                        };
-
-                        const now = new Date();
-                        const today = toLocalISO(now);
-
-                        if (datePreset === 'yesterday') {
-                            const y = new Date(now);
-                            y.setDate(y.getDate() - 1);
-                            return { since: toLocalISO(y), until: toLocalISO(y) };
-                        }
-                        if (datePreset === 'last_7d') {
-                            const sevenDaysAgo = new Date(now);
-                            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-                            return { since: toLocalISO(sevenDaysAgo), until: today };
-                        }
-                        if (datePreset === 'this_month') {
-                            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-                            return { since: toLocalISO(firstDay), until: today };
-                        }
-                        // Default: today
-                        return { since: today, until: today };
-                    };
-
-                    const { since, until } = getDates();
-                    const analyticsRes = await fetch(`${BASE_URL}/analytics?level=campaign&since=${since}&until=${until}&_=${timestamp}`);
+                    // Industry Standard: Use Meta's native date_preset
+                    // This delegates Timezone calculation entirely to Meta servers
+                    const analyticsRes = await fetch(`${BASE_URL}/analytics?level=campaign&date_preset=${datePreset}&_=${timestamp}`);
                     if (analyticsRes.ok) setAnalyticsData(await analyticsRes.json());
                     break;
 

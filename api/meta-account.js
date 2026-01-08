@@ -64,18 +64,18 @@ module.exports = async (req, res) => {
         const dateObj = new Date(todayStr); // Ensure this parses correctly YYYY-MM-DD
         const monthStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1).toISOString().split('T')[0];
 
-        // 2. Today's Spend
+        // 2. Today's Spend (Using native date_preset for correct timezone)
         const todayParams = {
             access_token: accessToken,
-            time_range: JSON.stringify({ since: todayStr, until: todayStr }),
+            date_preset: 'today',
             fields: 'spend'
         };
         const todayPromise = axios.get(`${baseUrl}/insights`, { params: todayParams });
 
-        // 3. Month's Spend
+        // 3. Month's Spend (Using native date_preset)
         const monthParams = {
             access_token: accessToken,
-            time_range: JSON.stringify({ since: monthStart, until: todayStr }),
+            date_preset: 'this_month',
             fields: 'spend'
         };
         const monthPromise = axios.get(`${baseUrl}/insights`, { params: monthParams });

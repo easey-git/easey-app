@@ -46,15 +46,16 @@ module.exports = async (req, res) => {
         const {
             since,
             until,
+            date_preset, // New support for native presets
             breakdown = 'none', // age, gender, country, region, placement, device_platform, publisher_platform
             level = 'campaign', // campaign, adset, ad
             compareWith = 'none' // previous_period, last_week, last_month
         } = req.query;
 
         // Validate date range
-        if (!since || !until) {
+        if (!date_preset && (!since || !until)) {
             return res.status(400).json({
-                error: 'Date range required. Provide "since" and "until" parameters (YYYY-MM-DD)'
+                error: 'Date range required. Provide "date_preset" or "since"/"until" parameters'
             });
         }
 
@@ -67,7 +68,8 @@ module.exports = async (req, res) => {
             since,
             until,
             breakdown,
-            level
+            level,
+            date_preset // Pass native preset
         );
 
         // Fetch comparison data if requested
@@ -117,7 +119,7 @@ module.exports = async (req, res) => {
 };
 
 // Fetch insights from Meta API
-async function fetchInsights(baseUrl, accessToken, since, until, breakdown, level) {
+async function fetchInsights(baseUrl, accessToken, since, until, breakdown, level, datePreset) {
     // Use the /insights endpoint for accurate reporting
     const endpoint = '/insights';
 
@@ -151,10 +153,16 @@ async function fetchInsights(baseUrl, accessToken, since, until, breakdown, leve
     const params = {
         access_token: accessToken,
         fields: fields,
-        time_range: JSON.stringify({ since, until }),
         level: level,
-        limit: 1000 // Increased to max standard limit for robustness
+        limit: 1000
     };
+
+    // Use native Meta date_preset if available (most robust), else fallback to custom time_range
+    if (datePreset && datePreset !== 'custom') {
+        params.date_preset = datePreset;
+    } else {
+        params.time_range = JSON.stringify({ since, until });
+    }
 
     if (breakdown !== 'none') {
         params.breakdowns = breakdown;
