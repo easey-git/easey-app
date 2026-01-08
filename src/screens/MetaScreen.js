@@ -52,7 +52,8 @@ const MetaScreen = ({ navigation }) => {
                     break;
 
                 case 'analytics':
-                    const analyticsRes = await fetch(`${BASE_URL}/analytics?level=campaign&_=${timestamp}`);
+                    const today = new Date().toISOString().split('T')[0];
+                    const analyticsRes = await fetch(`${BASE_URL}/analytics?level=campaign&since=${today}&until=${today}&_=${timestamp}`);
                     if (analyticsRes.ok) setAnalyticsData(await analyticsRes.json());
                     break;
 
