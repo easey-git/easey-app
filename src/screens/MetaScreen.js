@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, FlatList } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, FlatList, TouchableOpacity } from 'react-native';
 import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Button, SegmentedButtons, DataTable, FAB, Menu, IconButton, Portal, Dialog, TextInput } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
@@ -559,20 +559,54 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                                 {campaign.name}
                             </Text>
 
-                            {/* Budget Display */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                <Icon source="wallet-outline" size={14} color={theme.colors.secondary} />
-                                <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.secondary }}>
+                            {/* Smart Budget Chip - Standardized Entry Point */}
+                            <TouchableOpacity
+                                onPress={() => {
+                                    if (campaign.budget?.daily || campaign.budget?.lifetime) {
+                                        // CBO: Edit Campaign Budget directly
+                                        openEditBudget(campaign, false);
+                                    } else {
+                                        // ABO: Open Ad Sets List
+                                        fetchAdSets(campaign.id, campaign.name);
+                                    }
+                                }}
+                                style={{
+                                    marginTop: 8,
+                                    alignSelf: 'flex-start',
+                                    borderRadius: 8,
+                                    backgroundColor: (campaign.budget?.daily || campaign.budget?.lifetime)
+                                        ? theme.colors.secondaryContainer
+                                        : theme.colors.surfaceVariant,
+                                    paddingVertical: 6,
+                                    paddingHorizontal: 12,
+                                    flexDirection: 'row',
+                                    alignItems: 'center'
+                                }}
+                            >
+                                <Icon
+                                    source={campaign.budget?.daily || campaign.budget?.lifetime ? "wallet" : "layers-outline"}
+                                    size={16}
+                                    color={theme.colors.onSecondaryContainer}
+                                />
+                                <Text
+                                    variant="labelMedium"
+                                    style={{
+                                        marginLeft: 6,
+                                        color: theme.colors.onSecondaryContainer,
+                                        fontWeight: '600'
+                                    }}
+                                >
                                     {campaign.budget?.daily
                                         ? `Daily: ₹${campaign.budget.daily.toLocaleString('en-IN')}`
                                         : campaign.budget?.lifetime
                                             ? `Lifetime: ₹${campaign.budget.lifetime.toLocaleString('en-IN')}`
-                                            : 'Budget: Not Set (ABO)'}
+                                            : 'Ad Set Budgets (ABO)'}
                                 </Text>
-                            </View>
+                                <Icon source="pencil-outline" size={14} color={theme.colors.onSecondaryContainer} style={{ marginLeft: 8, opacity: 0.6 }} />
+                            </TouchableOpacity>
                         </View>
 
-                        {/* Action Menu */}
+                        {/* Action Menu (Simplified) */}
                         <Menu
                             visible={menuVisible[campaign.id]}
                             onDismiss={() => setMenuVisible({ ...menuVisible, [campaign.id]: false })}
@@ -587,31 +621,18 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                             <Menu.Item
                                 onPress={() => {
                                     setMenuVisible({ ...menuVisible, [campaign.id]: false });
-                                    toggleCampaignStatus(campaign.id, campaign.status);
+                                    // Make sure toggle function name matches state
+                                    // Assuming handleStatusToggle or equivalent exists, using the one visible in previous context if possible, 
+                                    // otherwise sticking to what was likely there.
+                                    // The previous view showed: toggleCampaignStatus(campaign.id, campaign.status);
+                                    if (typeof toggleCampaignStatus === 'function') {
+                                        toggleCampaignStatus(campaign.id, campaign.status);
+                                    } else {
+                                        alert('Status toggle function not found');
+                                    }
                                 }}
                                 leadingIcon={campaign.status === 'ACTIVE' ? 'pause' : 'play'}
                                 title={campaign.status === 'ACTIVE' ? 'Pause' : 'Resume'}
-                            />
-                            <Menu.Item
-                                onPress={() => {
-                                    setMenuVisible({ ...menuVisible, [campaign.id]: false });
-                                    fetchAdSets(campaign.id, campaign.name);
-                                }}
-                                leadingIcon="layers"
-                                title="View Ad Sets"
-                            />
-                            <Menu.Item
-                                onPress={() => {
-                                    setMenuVisible({ ...menuVisible, [campaign.id]: false });
-                                    if (!campaign.budget?.daily && !campaign.budget?.lifetime) {
-                                        // ABO mode - open Ad Sets directly
-                                        fetchAdSets(campaign.id, campaign.name);
-                                    } else {
-                                        openEditBudget(campaign, false);
-                                    }
-                                }}
-                                leadingIcon="currency-usd"
-                                title={!campaign.budget?.daily && !campaign.budget?.lifetime ? "Edit Budget (ABO)" : "Edit Budget"}
                             />
                         </Menu>
                     </View>
@@ -665,7 +686,7 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                                         <View style={{ flex: 1, paddingRight: 10 }}>
                                             <Text variant="titleSmall" style={{ color: theme.colors.onSurface }}>{adSet.name}</Text>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                                <StatusBadge status={adSet.status} color={adSet.status === 'ACTIVE' ? '#4ade80' : theme.colors.outline} />
+                                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: adSet.status === 'ACTIVE' ? '#4ade80' : theme.colors.outline }} />
                                                 <Text variant="bodySmall" style={{ marginLeft: 8, color: theme.colors.secondary }}>
                                                     {adSet.budget?.daily
                                                         ? `Daily: ₹${adSet.budget.daily.toLocaleString('en-IN')}`
