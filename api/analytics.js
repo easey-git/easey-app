@@ -317,7 +317,7 @@ function getTopPerformers(data, limit = 5) {
             revenue,
             roas: parseFloat(roas.toFixed(2))
         };
-    }).filter(item => item.spend > 0); // Only show items with spend
+    }).filter(item => item.spend > 0 || (item.revenue && item.revenue > 0) || (item.impressions && item.impressions > 0)); // Show items with any activity
 
     return items.sort((a, b) => b.roas - a.roas).slice(0, limit);
 }
