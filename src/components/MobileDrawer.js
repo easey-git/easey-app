@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, Pressable, Animated, PanResponder, Easing, useWindowDimensions, Platform } from 'react-native';
+import { View, StyleSheet, Pressable, Animated, PanResponder, Easing, Dimensions, Platform, useWindowDimensions } from 'react-native';
 import { useTheme, Portal } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDrawer } from '../context/DrawerContext';
@@ -8,7 +8,8 @@ import { useResponsive } from '../hooks/useResponsive';
 
 export const MobileDrawer = React.memo(() => {
     const theme = useTheme();
-    const { height } = useWindowDimensions();
+    useWindowDimensions(); // Subscribe to dimension updates
+    const screenHeight = Dimensions.get('screen').height;
     const { isDrawerOpen, closeDrawer } = useDrawer();
     const { isDesktop } = useResponsive();
 
@@ -107,7 +108,7 @@ export const MobileDrawer = React.memo(() => {
                         {
                             backgroundColor: theme.colors.surface,
                             transform: [{ translateX: slideAnim }],
-                            height: height,
+                            height: screenHeight,
                             // Only apply shadow when open to prevent "bleeding" artifacts on Android
                             elevation: isDrawerOpen ? 16 : 0,
                             shadowOpacity: isDrawerOpen ? 0.3 : 0,
