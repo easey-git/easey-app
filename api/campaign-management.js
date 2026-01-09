@@ -287,7 +287,9 @@ async function handleGet(req, res, accessToken, adAccountId) {
 
     // Sort campaigns
     campaigns.sort((a, b) => {
-        if (!a.performance || !b.performance) return 0;
+        if (!a.performance && !b.performance) return 0;
+        if (!a.performance) return 1;
+        if (!b.performance) return -1;
 
         let aVal, bVal;
         switch (sortBy) {

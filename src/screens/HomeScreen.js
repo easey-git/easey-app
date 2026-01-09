@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Text, useTheme, Surface, Icon, FAB, SegmentedButtons, IconButton, Divider } from 'react-native-paper';
+import { Text, useTheme, Surface, Icon, SegmentedButtons, IconButton, Divider } from 'react-native-paper';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { TeamBoardCard } from '../components/TeamBoardCard';
@@ -254,14 +254,7 @@ const HomeScreen = ({ navigation }) => {
             navigation={navigation}
             scrollable={true}
             showHeader={!isDesktop}
-            floatingButton={
-                <FAB
-                    icon="auto-fix"
-                    style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-                    color={theme.colors.onPrimary}
-                    onPress={() => navigation.navigate('Assistant')}
-                />
-            }
+
         >
             {isDesktop ? <DesktopLayout /> : <MobileLayout />}
         </CRMLayout>
@@ -283,14 +276,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'flex-start'
     },
-    fab: {
-        position: 'absolute',
-        margin: 16,
-        right: 0,
-        bottom: 0,
-        borderRadius: 16,
-        zIndex: 10
-    }
+
 });
 
 export default HomeScreen;
