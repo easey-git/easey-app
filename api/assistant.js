@@ -5,9 +5,18 @@ const cors = require('cors')({ origin: true });
 // ---------------------------------------------------------
 // CONSTANTS
 // ---------------------------------------------------------
-const ALLOWED_COLLECTIONS = ['orders', 'checkouts', 'wallet_transactions'];
+const ALLOWED_COLLECTIONS = [
+    'orders',
+    'checkouts',
+    'wallet_transactions',
+    'campaigns',
+    'whatsapp_messages',
+    'users',
+    'system' // For team_board
+];
+
 const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 500; // Increased to 500 for better monthly stats
+const MAX_LIMIT = 500;
 
 // ---------------------------------------------------------
 // INITIALIZATION
@@ -27,7 +36,6 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// Initialize Gemini AI
 let ai;
 try {
     if (!process.env.GEMINI_API_KEY) {
@@ -39,49 +47,48 @@ try {
 }
 
 // ---------------------------------------------------------
-// SYSTEM INSTRUCTION
-// ---------------------------------------------------------
-// SYSTEM_INSTRUCTION moved inside handler to ensure fresh timestamps
-
-// ---------------------------------------------------------
 // HELPER FUNCTIONS
 // ---------------------------------------------------------
 
 /**
  * Apply filters to a Firestore query reference
- * @param {Object} ref - Firestore query reference
- * @param {Array} filters - Array of filter arrays
- * @returns {Object} Modified reference
  */
 const applyFilters = (ref, filters) => {
     let queryRef = ref;
 
     if (filters && Array.isArray(filters)) {
-        // Use for...of to ensure sequential reference updates
         for (const [field, op, val] of filters) {
             let queryVal = val;
 
-            // Auto-convert numbers for specific fields (Handles AI sending "1631")
-            if (['orderNumber', 'order_number', 'amount', 'totalPrice', 'count'].includes(field)) {
-                // If value is a valid number string, convert it
+            // --- SMART TYPE CONVERSION ---
+
+            // Numbers
+            if (['orderNumber', 'amount', 'totalPrice', 'count', 'spend', 'revenue', 'item_count'].includes(field)) {
                 if (!isNaN(val) && val !== '' && val !== null) {
                     queryVal = Number(val);
                 }
             }
 
-            // Auto-correct casing for known event types
-            if (field === 'eventType' && typeof val === 'string') {
-                const lower = val.toLowerCase();
-                if (lower === 'abandoned') queryVal = 'ABANDONED';
-                else if (lower === 'init') queryVal = 'init';
-                else if (lower === 'payment_initiated') queryVal = 'payment_initiated';
-                else if (lower === 'phone_received') queryVal = 'phone_received';
-                else if (lower === 'order_placed') queryVal = 'order_placed';
+            // Booleans
+            if (['adminEdited', 'phone_verified', 'whatsappSent'].includes(field)) {
+                if (val === 'true') queryVal = true;
+                if (val === 'false') queryVal = false;
             }
 
-            // Auto-convert ISO date strings to Date objects for timestamp fields
-            if (['createdAt', 'updatedAt', 'date'].includes(field) && typeof val === 'string') {
-                // Check if it looks like a date (starts with YYYY-MM-DD)
+            // Event Types (Normalization)
+            if (field === 'eventType' && typeof val === 'string') {
+                const lower = val.toLowerCase();
+                const map = {
+                    'abandoned': 'ABANDONED',
+                    'init': 'init',
+                    'payment_initiated': 'payment_initiated',
+                    'order_placed': 'order_placed'
+                };
+                if (map[lower]) queryVal = map[lower];
+            }
+
+            // Dates
+            if (['createdAt', 'updatedAt', 'date', 'timestamp'].includes(field) && typeof val === 'string') {
                 if (/^\d{4}-\d{2}-\d{2}/.test(val)) {
                     const date = new Date(val);
                     if (!isNaN(date.getTime())) {
@@ -97,17 +104,18 @@ const applyFilters = (ref, filters) => {
 };
 
 /**
- * Convert Firestore Timestamp objects to ISO strings
- * @param {Object} data - Document data
- * @returns {Object} Data with converted timestamps
+ * Convert Firestore types to JSON-friendly format
  */
-const convertTimestamps = (data) => {
+const convertData = (data) => {
     const converted = { ...data };
     Object.keys(converted).forEach(key => {
         const val = converted[key];
+        // Timestamp to ISO string
         if (val && typeof val === 'object' && val._seconds) {
             converted[key] = new Date(val._seconds * 1000).toISOString();
-        } else if (val && val.toDate && typeof val.toDate === 'function') {
+        }
+        // Firestore Timestamp object
+        else if (val && val.toDate && typeof val.toDate === 'function') {
             converted[key] = val.toDate().toISOString();
         }
     });
@@ -121,26 +129,29 @@ const checkPermission = (collection, userContext) => {
     const { isAdmin, permissions = [] } = userContext;
     if (isAdmin) return true;
 
-    if (collection === 'orders' || collection === 'checkouts') {
-        return permissions.includes('access_orders');
-    }
-    if (collection === 'wallet_transactions') {
-        return permissions.includes('access_wallet');
-    }
-    return false;
+    // Mapping collections to permission strings
+    const map = {
+        'orders': 'access_orders',
+        'checkouts': 'access_orders',
+        'wallet_transactions': 'access_wallet',
+        'campaigns': 'access_campaigns',
+        'whatsapp_messages': 'access_whatsapp',
+        'users': null, // Admin only
+        'system': null // Admin only or specific logic
+    };
+
+    if (map[collection] === null) return false;
+    return permissions.includes(map[collection]);
 };
 
-/**
- * perform server-side aggregation (Count, Sum, Average)
- */
+// ---------------------------------------------------------
+// TOOLS
+// ---------------------------------------------------------
+
 const aggregateFirestore = async ({ collection, filters, aggregationType, field }, userContext) => {
     try {
         if (!checkPermission(collection, userContext)) {
-            return `Error: Access Denied. You do not have permission to view ${collection}.`;
-        }
-
-        if (!ALLOWED_COLLECTIONS.includes(collection)) {
-            return `Error: Only 'orders', 'checkouts', and 'wallet_transactions' collections are supported.`;
+            return `Error: Access Denied to ${collection}`;
         }
 
         let ref = db.collection(collection);
@@ -151,9 +162,8 @@ const aggregateFirestore = async ({ collection, filters, aggregationType, field 
             return { count: snapshot.data().count };
         }
 
-        // Sum and Average only work on numeric fields
         if (['sum', 'average'].includes(aggregationType)) {
-            if (!field) return `Error: 'field' parameter is required for ${aggregationType}.`;
+            if (!field) return `Error: 'field' required for ${aggregationType}`;
 
             const aggField = aggregationType === 'sum'
                 ? admin.firestore.AggregateField.sum(field)
@@ -163,141 +173,77 @@ const aggregateFirestore = async ({ collection, filters, aggregationType, field 
             return { [aggregationType]: snapshot.data().result || 0 };
         }
 
-        return "Error: Invalid aggregationType. Use 'count', 'sum', or 'average'.";
-
+        return "Error: Invalid aggregationType";
     } catch (err) {
-        if (err.code === 9 || err.message.toLowerCase().includes('index')) {
-            const indexUrl = err.message.match(/https?:\/\/[^\s]+/)?.[0];
-            if (indexUrl) return `[INDEX REQUIRED] Create index: ${indexUrl}`;
-        }
-        console.error('[Firestore] Aggregation error:', err.message);
         return `Error: ${err.message}`;
     }
 };
 
-/**
- * Query Firestore with validation and error handling
- */
 const queryFirestore = async ({ collection, filters, limit, orderBy }, userContext) => {
     try {
         if (!checkPermission(collection, userContext)) {
-            return `Error: Access Denied. You do not have permission to view ${collection}.`;
+            return `Error: Access Denied to ${collection}`;
         }
 
-        if (!ALLOWED_COLLECTIONS.includes(collection)) {
-            return `Error: Only 'orders', 'checkouts', and 'wallet_transactions' collections are supported.`;
+        // Special handling for Team Board single doc
+        if (collection === 'system') {
+            const doc = await db.collection('system').doc('team_board').get();
+            return doc.exists ? [{ id: 'team_board', ...convertData(doc.data()) }] : "No team_board found";
         }
 
         let ref = db.collection(collection);
-
-        // Apply filters
         ref = applyFilters(ref, filters);
 
-        // Apply sorting
         if (orderBy && orderBy.length > 0) {
             ref = ref.orderBy(orderBy[0], orderBy[1] || 'desc');
         }
 
-        // Apply limit with max cap
         const queryLimit = Math.min(limit || DEFAULT_LIMIT, MAX_LIMIT);
         ref = ref.limit(queryLimit);
 
-        // Execute query
         const snapshot = await ref.get();
+        if (snapshot.empty) return "No documents found.";
 
-        if (snapshot.empty) {
-            return "No documents found.";
-        }
-
-        // Map results and convert timestamps
         return snapshot.docs.map(doc => ({
             id: doc.id,
-            ...convertTimestamps(doc.data())
+            ...convertData(doc.data())
         }));
 
     } catch (err) {
-        if (err.code === 9 || err.message.toLowerCase().includes('index')) {
-            const indexUrl = err.message.match(/https?:\/\/[^\s]+/)?.[0];
-            if (indexUrl) return `[INDEX REQUIRED] Create index: ${indexUrl}`;
-        }
-        console.error('[Firestore] Query error:', err.message);
         return `Error: ${err.message}`;
     }
 };
 
-/**
- * Run Express middleware in serverless environment
- */
-const runMiddleware = (req, res, fn) => {
-    return new Promise((resolve, reject) => {
-        fn(req, res, (result) => {
-            if (result instanceof Error) return reject(result);
-            return resolve(result);
-        });
-    });
-};
-
-// ---------------------------------------------------------
-// TOOL DEFINITIONS
-// ---------------------------------------------------------
 const TOOLS = [{
     functionDeclarations: [
         {
             name: "queryFirestore",
-            description: "Query specific documents from 'orders' or 'checkouts'. Use this to VIEW details or when you need string fields.",
+            description: "Fetch list of documents. returns array of objects.",
             parametersJsonSchema: {
                 type: "object",
                 properties: {
-                    collection: {
-                        type: "string",
-                        enum: ALLOWED_COLLECTIONS,
-                        description: "Collection to query: 'orders' or 'checkouts'"
-                    },
+                    collection: { type: "string", enum: ALLOWED_COLLECTIONS },
                     filters: {
                         type: "array",
-                        description: "Array of [field, operator, value] filters. Operators: '==', '>=', '<=', '>', '<', 'array-contains'",
-                        items: {
-                            type: "array",
-                            items: { type: "string" }
-                        }
+                        items: { type: "array", items: { type: "string" } },
+                        description: "[[field, op, value], ...]"
                     },
-                    limit: {
-                        type: "number",
-                        description: `Number of documents to return (default: ${DEFAULT_LIMIT}, max: ${MAX_LIMIT})`
-                    },
-                    orderBy: {
-                        type: "array",
-                        description: "Sort order: [field, direction]. Direction: 'asc' or 'desc'",
-                        items: { type: "string" }
-                    }
+                    limit: { type: "number" },
+                    orderBy: { type: "array", items: { type: "string" } }
                 },
                 required: ["collection"]
             }
         },
         {
             name: "aggregateFirestore",
-            description: "Perform server-side COUNT, SUM, or AVERAGE. Use this for 'how many', 'total stats', or analyzing large datasets (supports millions of records).",
+            description: "Perform DB math: count, sum, average.",
             parametersJsonSchema: {
                 type: "object",
                 properties: {
-                    collection: {
-                        type: "string",
-                        enum: ALLOWED_COLLECTIONS,
-                        description: "Collection to analyze"
-                    },
-                    filters: {
-                        type: "array",
-                        description: "Filters to apply before aggregating"
-                    },
-                    aggregationType: {
-                        type: "string",
-                        enum: ["count", "sum", "average"],
-                        description: "Type of calculation"
-                    },
-                    field: {
-                        type: "string",
-                        description: "Field to sum or average (required for sum/average). MUST be a numeric field."
-                    }
+                    collection: { type: "string", enum: ALLOWED_COLLECTIONS },
+                    filters: { type: "array" },
+                    aggregationType: { type: "string", enum: ["count", "sum", "average"] },
+                    field: { type: "string" }
                 },
                 required: ["collection", "aggregationType"]
             }
@@ -309,171 +255,101 @@ const TOOLS = [{
 // MAIN HANDLER
 // ---------------------------------------------------------
 module.exports = async (req, res) => {
-    // Handle CORS
-    await runMiddleware(req, res, cors);
+    await new Promise(resolve => cors(req, res, resolve));
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-
-    // Validate AI initialization
-    if (!ai) {
-        return res.status(500).json({
-            error: 'AI service not initialized',
-            details: 'GEMINI_API_KEY is missing or invalid'
-        });
-    }
+    if (!ai) return res.status(500).json({ error: 'AI not configured' });
 
     try {
-        // ---------------------------------------------------------
-        // SECURE AUTHENTICATION
-        // ---------------------------------------------------------
+        // --- AUTH ---
         const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ error: 'Unauthorized: Missing token' });
-        }
+        if (!authHeader) return res.status(401).json({ error: 'Missing token' });
 
         const token = authHeader.split('Bearer ')[1];
-        let userContext = { isAdmin: false, permissions: [] };
+        const decodedToken = await admin.auth().verifyIdToken(token);
+        const uid = decodedToken.uid;
 
-        try {
-            const decodedToken = await admin.auth().verifyIdToken(token);
-            const uid = decodedToken.uid;
-
-            // Fetch trusted permissions from Firestore
-            const userDoc = await db.collection('users').doc(uid).get();
-            if (userDoc.exists) {
-                const data = userDoc.data();
-                userContext = {
-                    userId: uid,
-                    isAdmin: data.role === 'admin',
-                    permissions: data.permissions || []
-                };
-            }
-        } catch (error) {
-            console.error('[Auth] Token verification failed:', error.message);
-            return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-        }
+        const userDoc = await db.collection('users').doc(uid).get();
+        const userData = userDoc.data() || {};
+        const userContext = {
+            userId: uid,
+            isAdmin: userData.role === 'admin',
+            permissions: userData.permissions || []
+        };
 
         const { prompt, history = [] } = req.body;
+        const todayStr = new Date().toISOString().split('T')[0];
 
-        // Validate input
-        if (!prompt || typeof prompt !== 'string') {
-            return res.status(400).json({
-                error: 'Invalid request',
-                details: 'Prompt is required and must be a string'
-            });
-        }
+        // --- BRAIN ---
+        const SYSTEM_INSTRUCTION = `You are 'Sidekick', the expert AI Data Analyst for this E-commerce business. 
+You are highly intelligent, proactive, and business-savvy.
+Current Date: ${todayStr}.
 
-        // ---------------------------------------------------------
-        // DYNAMIC SYSTEM INSTRUCTION
-        // ---------------------------------------------------------
-        const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
+🔥 **Capabilities**:
+- Financial Audits (Income vs Expense)
+- Order Tracking (Status, Customers)
+- Marketing Analysis (ROAS, Ad Spend)
+- Support History (WhatsApp logs)
+- Team Management (User roles)
 
-        const SYSTEM_INSTRUCTION = `You are an expert E-commerce & Financial Assistant. You manage Orders, Checkouts, and a sophisticated Wallet.
+📊 **DATABASE SCHEMA (Memory)**:
 
-🕒 **CURRENT CONTEXT**:
-- **Today's Date**: ${todayStr} (${today.toDateString()})
-- **Current Time**: ${today.toTimeString()}
-- If user says "today", assume strict date filter: ${todayStr}.
+1. **orders**:
+   - \`orderNumber\` (number), \`totalPrice\` (number), \`status\` ("Paid", "Pending"), \`customerName\`, \`phoneNormalized\`, \`city\`, \`state\`, \`items\` (array), \`adminEdited\` (bool), \`cod_status\`.
+   - USE: finding customers, sales reports.
 
-📊 **DATA SCHEMA:**
+2. **checkouts** (Abandoned Carts):
+   - \`eventType\` ("ABANDONED", "order_placed"), \`total_price\`, \`items\`, \`email\`, \`phoneNormalized\`.
+   - USE: recovery opportunities, cart analysis.
 
-1. **ORDERS** (Collection: "orders")
-   - orderNumber (number)
-   - totalPrice (number): e.g. 699.00 ✅ NUMBER! Unlimited math.
-   - status (string): "COD", "Paid"
-   - address1, city, state, zip
-   - createdAt (timestamp)
+3. **wallet_transactions** (Finance):
+   - \`amount\` (number), \`type\` ("income", "expense"), \`category\` (e.g. "Food", "Business"), \`description\` (e.g. "Delhivery", "Meta"), \`date\` (timestamp).
+   - ⚠️ INTELLIGENCE: Always split totals by TYPE. Never sum income + expense.
 
-2. **CHECKOUTS** (Collection: "checkouts")
-   - total_price (number)
-   - eventType (string): ⚠️ Mixed Case! "ABANDONED" (UPPER), "payment_initiated", "phone_received", "init", "order_placed" (lower).
-   - items, billing_address
-   - phoneNormalized (string): e.g. "919876543210" (Use this for phone queries)
-   - updatedAt (timestamp): ⚠️ USE THIS for "last checkout" sorting (NOT createdAt).
-   - landing_page_url (string)
+4. **campaigns** (Marketing):
+   - \`name\`, \`status\`, \`spend\` (number), \`revenue\` (number), \`impressions\`, \`clicks\`.
+   - 💡 INSIGHT: Calculate ROAS = (revenue / spend).
 
-3. **WALLET** (Collection: "wallet_transactions")
-   - amount (number): e.g. 1500.
-   - type (string): "income" or "expense".
-   - category (string): "Remittance", "Business", "Food", etc.
-   - description (string): "Meta", "PayU", "DEL", "Uber", etc.
-   - date (timestamp): ⚠️ Primary filter for Wallet time queries.
+5. **whatsapp_messages** (Support):
+   - \`body\`, \`phoneNormalized\`, \`direction\` ("inbound", "outbound"), \`status\`.
+   - USE: "What did X say?", "Last message to Y?".
 
-🛠️ **TOOL STRATEGY:**
+6. **users** (Team):
+   - \`email\`, \`role\`, \`displayName\`.
+   - USE: "Who is admin?", "List staff".
 
-1. **aggregateFirestore** (Math Engine):
-   - USE FOR: "Total?", "How much?", "Profit?".
-   
-2. **queryFirestore** (Detail Viewer):
-   - USE FOR: "Show me", "List them", "For what?".
-   - LIMITATION: Max 500 docs.
+7. **system** (Team Board):
+   - Doc ID: 'team_board'. Fields: \`content\`, \`lastEditedBy\`.
+   - USE: "What's on the board?".
 
-🧠 **FINANCIAL ANALYST INTELLIGENCE (CRITICAL):**
+🧠 **ADVANCED RULES**:
+1. **Financial Precision**: 
+   - Query: "Money from DEL?" -> 
+     a) Sum(income, desc='DEL') 
+     b) Sum(expense, desc='DEL')
+     -> Report both.
+2. **Context Inference**:
+   - "Meta" -> Search \`campaigns\` (spend) OR \`wallet_transactions\` (description='Meta'). Ask if unclear or show both.
+3. **Date Intelligence**:
+   - "Last week" -> Compute start/end dates for filter filters \`[['date', '>=', '...'], ['date', '<=', '...']]\`.
+   - "Recent" -> Sort by \`desc\`.
+4. **Fuzzy Handling**:
+   - If user asks for "Delhivery" but data uses "DEL", search for both if possible, or inform user.
 
-1.  **⛔ NEVER MIX TYPES**: 
-    - If user asks "How much money from DEL?" or "Total for Meta?", **DO NOT** sum Income and Expense together. That is financially wrong.
-    - **ACTION**: You MUST calculate specific sides:
-      1. Sum 'income' for that criteria.
-      2. Sum 'expense' for that criteria.
-    - **RESPONSE**: "For DEL, you have **₹46k Income** and **₹21k Expenses**. (Net Flow: +₹25k)."
+💡 **Response Style**:
+- Professional, concise, data-rich.
+- Bold key numbers (e.g., **₹50,000**).
+- If performance is bad (e.g., ROAS < 2), flag it 🔴. If good, 🟢.
+`;
 
-2.  **🔍 SMART SEARCH**:
-    - If user gives a proper noun ("PayU", "DEL", "Meta"), assume it is a **'description'**.
-    - If user gives a general term ("Remittance", "Food"), assume it is a **'category'**.
-    - *Do not ask for clarification.* Just run the query.
-
-3.  **📅 DATE SMARTS**:
-    - "Dec 18" -> Assume **${new Date().getFullYear()}** (Current Year).
-    - If result is 0, reply: "No transactions found for that date" (instead of "You spent ₹0").
-
-4.  **CONTEXT AWARENESS**:
-    - If user asks a follow-up "For what?", use \`queryFirestore\` with the **EXACT SAME FILTERS** you just used for the math.
-
-6.  **🔐 PII PERMISSION & LOOKUP LOGIC**:
-    - **You are an Internal Admin**. You have full permission to view and display Customer Names, Phone Numbers, Emails, and Addresses.
-    - **Phone Numbers**: If asked ("Get phone for order #1234"), display the \`phone\` or \`phoneNormalized\` field.
-    - **Order Lookup**: \`orderNumber\` is a **NUMBER**. Filter example: \`[['orderNumber', '==', 1634]]\`.
-
-7. **CHECKOUT INTELLIGENCE**:
-    - "Last checkout" -> sort by \`['updatedAt', 'desc']\`. (Do not use createdAt).
-    - "Last abandoned" -> filters \`[['eventType', '==', 'ABANDONED']]\`, sort \`['updatedAt', 'desc']\`.
-
-💡 **EXAMPLES:**
-
-Q: "Who is the customer for order 1631?"
-A: Call \`queryFirestore\` (collection='orders', filters=[['orderNumber', '==', 1631]])
-   -> "The customer is Rohit (9876543210)."
-
-Q: "How much did I spend on Meta?"
-A: Call \`aggregateFirestore\` (filters: [['description', '==', 'Meta'], ['type', '==', 'expense']])
-   -> "You spent ₹5,000 on Meta." (Explicitly Expense)
-
-Q: "Money from DEL?"
-A: (Generic query -> Analyst Mode)
-   1. Call \`aggregateFirestore\` (description='DEL', type='income') -> ₹46k
-   2. Call \`aggregateFirestore\` (description='DEL', type='expense') -> ₹21k
-   -> "DEL Report: ₹46,978 Income | ₹21,839 Expense."
-
-Response Style:
-- Precise, Money-First (₹), Analytic.
-- **Show PII when asked.**`;
-
-        // Build conversation contents
         const contents = [
             ...history.map(msg => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 parts: [{ text: msg.content }]
             })),
-            {
-                role: 'user',
-                parts: [{ text: prompt }]
-            }
+            { role: 'user', parts: [{ text: prompt }] }
         ];
 
-        // Initial AI request
         let response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
             contents,
@@ -483,57 +359,36 @@ Response Style:
             }
         });
 
-        // Handle function calls
-        if (response.functionCalls && response.functionCalls.length > 0) {
-            const functionCall = response.functionCalls[0];
-            const args = functionCall.args || functionCall.arguments || {};
+        // Loop for function calls
+        while (response.functionCalls && response.functionCalls.length > 0) {
+            const call = response.functionCalls[0]; // Gemini 2.0 Flash usually does one at a time sequentially
+            const { name, args } = call;
 
-            let functionResult;
-            if (functionCall.name === 'queryFirestore') {
-                functionResult = await queryFirestore(args, userContext);
-            } else if (functionCall.name === 'aggregateFirestore') {
-                functionResult = await aggregateFirestore(args, userContext);
-            }
+            let result;
+            if (name === 'queryFirestore') result = await queryFirestore(args, userContext);
+            if (name === 'aggregateFirestore') result = await aggregateFirestore(args, userContext);
 
-            // Add function call to conversation
+            // Add turn to history
             contents.push({
                 role: 'model',
-                parts: [{
-                    functionCall: {
-                        name: functionCall.name,
-                        args
-                    }
-                }]
+                parts: [{ functionCall: { name, args } }]
             });
-
-            // Add function response to conversation
             contents.push({
                 role: 'user',
-                parts: [{
-                    functionResponse: {
-                        name: functionCall.name,
-                        response: { result: functionResult }
-                    }
-                }]
+                parts: [{ functionResponse: { name, response: { result } } }]
             });
 
-            // Get final response with function results
             response = await ai.models.generateContent({
                 model: 'gemini-2.0-flash-exp',
                 contents,
-                config: {
-                    systemInstruction: SYSTEM_INSTRUCTION
-                }
+                config: { systemInstruction: SYSTEM_INSTRUCTION, tools: TOOLS }
             });
         }
 
-        return res.status(200).json({ text: response.text });
+        res.json({ text: response.text });
 
     } catch (error) {
-        console.error('[Assistant] Error:', error.message);
-        return res.status(500).json({
-            error: 'Internal Server Error',
-            details: error.message
-        });
+        console.error('AI Error:', error);
+        res.status(500).json({ error: error.message });
     }
 };
