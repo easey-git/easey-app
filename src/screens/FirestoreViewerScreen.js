@@ -105,6 +105,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     };
 
     useEffect(() => {
+        setDocuments([]); // Clear data to prevent layout glitch during tab switch
         fetchDocuments();
         setSelectedItems(new Set());
     }, [selectedCollection, filter]); // Re-fetch when filter changes
