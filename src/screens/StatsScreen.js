@@ -23,7 +23,6 @@ const StatsScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [todaysSales, setTodaysSales] = useState(0);
     const [activeCarts, setActiveCarts] = useState(0);
-    const [abandonedCarts, setAbandonedCarts] = useState(0);
     const [ga4Analytics, setGa4Analytics] = useState({
         overview: {
             activeUsers: 0,
@@ -130,8 +129,6 @@ const StatsScreen = ({ navigation }) => {
         const processDocs = (docs) => {
             const activities = [];
             let active = 0;
-            let abandoned = 0;
-            const activeVisitorIds = new Set();
             const now = new Date();
 
             docs.forEach(doc => {
@@ -147,14 +144,9 @@ const StatsScreen = ({ navigation }) => {
                 if (isOrdered) {
                     // Converted
                 } else if (isAbandoned) {
-                    abandoned++;
+                    // Abandoned
                 } else {
                     active++;
-                }
-
-                if (diffMinutes <= 5 && !isOrdered) {
-                    const visitorId = data.customerId || data.phone || data.email || doc.id;
-                    activeVisitorIds.add(visitorId);
                 }
 
                 if (diffMinutes <= 5) {
@@ -168,7 +160,6 @@ const StatsScreen = ({ navigation }) => {
             });
 
             setActiveCarts(active);
-            setAbandonedCarts(abandoned);
 
             const currentMaxTimestamp = activities.length > 0
                 ? Math.max(...activities.map(a => a.jsDate ? a.jsDate.getTime() : 0))
