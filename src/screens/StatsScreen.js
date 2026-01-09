@@ -312,6 +312,8 @@ const StatsScreen = ({ navigation }) => {
                         value: value,
                         label: chartData.labels?.[index] || '',
                         labelTextStyle: { color: theme.colors.outline, fontSize: 10 },
+                        orderCount: chartData.datasets[0]?.orderCounts?.[index] || 0,
+                        dateLabel: chartData.fullLabels?.[index] || ''
                     }))}
                     height={180}
                     width={screenWidth - 40}
@@ -338,17 +340,26 @@ const StatsScreen = ({ navigation }) => {
                         pointerStripColor: theme.colors.primary,
                         pointerColor: theme.colors.primary,
                         radius: 6,
-                        pointerLabelWidth: 100,
+                        pointerLabelWidth: 120,
                         pointerLabelHeight: 90,
                         activatePointersOnLongPress: true,
                         autoAdjustPointerLabelPosition: true,
-                        pointerLabelComponent: items => (
-                            <View style={{ height: 90, width: 100, justifyContent: 'center', backgroundColor: theme.colors.inverseSurface, borderRadius: 8, padding: 8 }}>
-                                <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 14, fontWeight: 'bold', textAlign: 'center' }}>
-                                    ₹{Math.round(items[0].value).toLocaleString()}
-                                </Text>
-                            </View>
-                        ),
+                        pointerLabelComponent: items => {
+                            const item = items[0];
+                            return (
+                                <View style={{ height: 90, width: 120, justifyContent: 'center', backgroundColor: theme.colors.inverseSurface, borderRadius: 8, padding: 8 }}>
+                                    <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 10, textAlign: 'center', opacity: 0.8, marginBottom: 2 }}>
+                                        {item.dateLabel.replace(item.label, '').trim()}
+                                    </Text>
+                                    <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 14, fontWeight: 'bold', textAlign: 'center' }}>
+                                        ₹{Math.round(item.value).toLocaleString()}
+                                    </Text>
+                                    <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 10, textAlign: 'center', marginTop: 2, fontWeight: 'bold' }}>
+                                        {item.orderCount} {item.orderCount === 1 ? 'Order' : 'Orders'}
+                                    </Text>
+                                </View>
+                            );
+                        },
                     }}
                 />
             </Surface>
