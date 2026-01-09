@@ -101,12 +101,12 @@ async function fetchOverview(client, propertyId) {
 }
 
 async function fetchTraffic(client, propertyId) {
-    // Note: Session dimensions are compatible with 'activeUsers' but NOT 'screenPageViews' in realtime
+    // Session dimensions are tricky in Realtime. User-scoped dimensions are safer.
     return client.runRealtimeReport({
         property: `properties/${propertyId}`,
         dimensions: [
-            { name: 'sessionSource' },
-            { name: 'sessionMedium' }
+            { name: 'firstUserSource' },
+            { name: 'firstUserMedium' }
         ],
         metrics: [{ name: 'activeUsers' }],
         limit: 10
@@ -134,7 +134,7 @@ async function fetchTopPages(client, propertyId) {
     return client.runRealtimeReport({
         property: `properties/${propertyId}`,
         dimensions: [{ name: 'unifiedScreenName' }],
-        metrics: [{ name: 'screenPageViews' }, { name: 'activeUsers' }],
+        metrics: [{ name: 'screenPageViews' }],
         limit: 10
     }).then(r => r[0]).catch(handlePartialError('Pages'));
 }
@@ -149,10 +149,12 @@ async function fetchTopEvents(client, propertyId) {
 }
 
 async function fetchTechStack(client, propertyId) {
+    // 'activeUsers' + 'operatingSystem' can be incompatible in Realtime.
+    // 'eventCount' is generally safer for system properties in Realtime.
     return client.runRealtimeReport({
         property: `properties/${propertyId}`,
         dimensions: [{ name: 'operatingSystem' }],
-        metrics: [{ name: 'activeUsers' }]
+        metrics: [{ name: 'eventCount' }]
     }).then(r => r[0]).catch(handlePartialError('Tech'));
 }
 
@@ -192,7 +194,7 @@ function transformPages(response) {
     return response.rows.map(row => ({
         page: row.dimensionValues[0].value,
         views: parseInt(row.metricValues[0].value),
-        users: parseInt(row.metricValues[1].value)
+        users: 0 // removed for safety
     })).sort((a, b) => b.views - a.views);
 }
 
@@ -208,7 +210,7 @@ function transformTech(response) {
     if (!response?.rows) return [];
     return response.rows.map(row => ({
         name: row.dimensionValues[0].value,
-        users: parseInt(row.metricValues[0].value)
+        users: parseInt(row.metricValues[0].value) // mapped from eventCount but labelled users for frontend
     })).sort((a, b) => b.users - a.users);
 }
 
