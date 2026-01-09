@@ -136,7 +136,7 @@ export const Sidebar = React.memo(({ onClose }) => {
 
 const styles = StyleSheet.create({
     container: {
-        width: 280,
+        width: LAYOUT.drawerWidth,
         height: '100%',
         borderRightWidth: 1,
         display: 'flex',

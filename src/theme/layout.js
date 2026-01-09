@@ -28,4 +28,7 @@ export const LAYOUT = {
 
     // Standard Touch Targets
     touchTarget: 48,
+
+    // Component Dimensions
+    drawerWidth: 280,
 };

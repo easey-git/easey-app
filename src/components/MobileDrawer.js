@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDrawer } from '../context/DrawerContext';
 import { Sidebar } from './Sidebar';
 import { useResponsive } from '../hooks/useResponsive';
+import { LAYOUT } from '../theme/layout';
 
 export const MobileDrawer = React.memo(() => {
     const theme = useTheme();
@@ -14,7 +15,7 @@ export const MobileDrawer = React.memo(() => {
     const { isDesktop } = useResponsive();
 
     // Width + Buffer for shadow/elevation artifacts
-    const SIDEBAR_WIDTH = 280;
+    const SIDEBAR_WIDTH = LAYOUT.drawerWidth;
     const OFF_SCREEN = -SIDEBAR_WIDTH - 40;
 
     // Animation Values
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
         left: 0,
         top: 0,
         bottom: 0,
-        width: 280,
+        width: LAYOUT.drawerWidth,
         shadowColor: '#000',
         shadowOffset: { width: 4, height: 0 },
         shadowOpacity: 0.3,
