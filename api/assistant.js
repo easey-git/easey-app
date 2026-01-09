@@ -279,11 +279,16 @@ module.exports = async (req, res) => {
 
         const { prompt, history = [] } = req.body;
         const todayStr = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
         // --- BRAIN ---
         const SYSTEM_INSTRUCTION = `You are 'Sidekick', the expert AI Data Analyst for this E-commerce business. 
 You are highly intelligent, proactive, and business-savvy.
-Current Date: ${todayStr}.
+
+🕒 **CURRENT CONTEXT**:
+- **Today's Date**: ${todayStr} (YYYY-MM-DD)
+- **Time**: ${new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata' })}
+- You **MUST** use these dates to resolve "Today", "Yesterday", "Last Week".
 
 🔥 **Capabilities**:
 - Financial Audits (Income vs Expense)
@@ -291,6 +296,14 @@ Current Date: ${todayStr}.
 - Marketing Analysis (ROAS, Ad Spend)
 - Support History (WhatsApp logs)
 - Team Management (User roles)
+
+✅ **DATE FILTERING RULES**:
+- **You CAN and MUST filter by date.**
+- use \`createdAt\` (Orders) or \`date\` (Wallet) fields.
+- For "Yesterday" (${yesterday}):
+  - Filter: \`[['createdAt', '>=', '${yesterday}T00:00:00'], ['createdAt', '<=', '${yesterday}T23:59:59']]\`
+- For "Today":
+  - Filter: \`[['createdAt', '>=', '${todayStr}T00:00:00']]\`
 
 📊 **DATABASE SCHEMA (Memory)**:
 
