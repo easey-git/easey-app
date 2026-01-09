@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Image } from 'react-native';
 import { Text, Surface, ActivityIndicator, Icon, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog, ProgressBar } from 'react-native-paper';
-import { LineChart } from 'react-native-gifted-charts';
+import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getCachedAnalytics } from '../services/ga4Service';
@@ -12,7 +12,7 @@ import { AccessDenied } from '../components/AccessDenied';
 
 const StatsScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { hasPermission, isAdmin } = useAuth();
+    const { hasPermission } = useAuth();
 
     if (!hasPermission('access_analytics')) {
         return <AccessDenied title="Analytics Restricted" message="You need permission to view analytics." />;
@@ -24,7 +24,6 @@ const StatsScreen = ({ navigation }) => {
     const [todaysSales, setTodaysSales] = useState(0);
     const [activeCarts, setActiveCarts] = useState(0);
     const [abandonedCarts, setAbandonedCarts] = useState(0);
-    const [activeVisitorsData, setActiveVisitorsData] = useState({ activeVisitors: 0, details: [] });
     const [ga4Analytics, setGa4Analytics] = useState({
         overview: {
             activeUsers: 0,
@@ -35,7 +34,9 @@ const StatsScreen = ({ navigation }) => {
         trafficSources: [],
         devices: { desktop: 0, mobile: 0, tablet: 0 },
         locations: [],
-        topPages: []
+        topPages: [],
+        topEvents: [],
+        operatingSystems: []
     });
     const [ga4Error, setGa4Error] = useState(null);
     const [recentActivity, setRecentActivity] = useState([]);
@@ -61,39 +62,35 @@ const StatsScreen = ({ navigation }) => {
         const qOrders = query(
             collection(db, "orders"),
             orderBy("createdAt", "desc"),
-            limit(100) // Fetch last 100 orders for history
+            limit(100)
         );
 
         const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
             let todayTotal = 0;
-            const buckets = {}; // Map to group orders by 2-hour blocks
+            const buckets = {};
 
-            snapshot.docs.forEach((doc, index) => {
+            snapshot.docs.forEach((doc) => {
                 const data = doc.data();
                 const orderDate = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
                 const price = parseFloat(data.totalPrice || 0);
 
-                // Calculate today's total revenue (keep this metric for the card)
                 if (orderDate >= todayStart) {
                     todayTotal += price;
                 }
 
-                // Create a unique key for this 2-hour block (e.g., "Dec 18 2pm")
                 const hour = orderDate.getHours();
-                const bucketHour = Math.floor(hour / 2) * 2; // 0, 2, 4, ... 22
-
-                // Format: "18 Dec 2pm"
+                const bucketHour = Math.floor(hour / 2) * 2;
                 const dateStr = orderDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
                 const timeStr = new Date(orderDate.setHours(bucketHour, 0, 0, 0)).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).toLowerCase();
-                const key = `${dateStr} ${timeStr}`; // Unique key combining date and bucket time
+                const key = `${dateStr} ${timeStr}`;
 
                 if (!buckets[key]) {
                     buckets[key] = {
                         total: 0,
                         count: 0,
-                        timestamp: orderDate.setHours(bucketHour, 0, 0, 0), // For sorting
+                        timestamp: orderDate.setHours(bucketHour, 0, 0, 0),
                         label: timeStr,
-                        fullLabel: key // "18 Dec 2pm"
+                        fullLabel: key
                     };
                 }
 
@@ -101,10 +98,8 @@ const StatsScreen = ({ navigation }) => {
                 buckets[key].count += 1;
             });
 
-            // Convert buckets to array and sort chronologically (oldest to newest)
             const sortedBuckets = Object.values(buckets).sort((a, b) => a.timestamp - b.timestamp);
 
-            // Safety check: If no data, show empty placeholder for today
             if (sortedBuckets.length === 0) {
                 sortedBuckets.push({
                     total: 0,
@@ -116,8 +111,8 @@ const StatsScreen = ({ navigation }) => {
 
             setTodaysSales(todayTotal);
             setChartData({
-                labels: sortedBuckets.map(b => b.label), // Use short label "2pm" for axis
-                fullLabels: sortedBuckets.map(b => b.fullLabel), // Keep full label "18 Dec 2pm" for tooltip
+                labels: sortedBuckets.map(b => b.label),
+                fullLabels: sortedBuckets.map(b => b.fullLabel),
                 datasets: [{
                     data: sortedBuckets.map(b => b.total),
                     orderCounts: sortedBuckets.map(b => b.count),
@@ -132,21 +127,20 @@ const StatsScreen = ({ navigation }) => {
             limit(20)
         );
 
-        // Store docs in a ref to access them in the interval
         let currentDocs = [];
 
         const processDocs = (docs) => {
             const activities = [];
             let active = 0;
             let abandoned = 0;
-            const activeVisitorIds = new Set(); // Track unique active visitors
+            const activeVisitorIds = new Set();
+            const now = new Date();
 
             docs.forEach(doc => {
                 const data = doc.data();
                 const rawStage = data.latest_stage || '';
                 const displayStage = data.stage || data.eventType || rawStage;
                 const updatedAt = data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date();
-                const now = new Date();
                 const diffMinutes = Math.abs(now.getTime() - updatedAt.getTime()) / (1000 * 60);
 
                 const isOrdered = rawStage === 'ORDER_PLACED' || rawStage === 'PAYMENT_INITIATED' || rawStage === 'COMPLETED' || !!data.orderId;
@@ -160,18 +154,16 @@ const StatsScreen = ({ navigation }) => {
                     active++;
                 }
 
-                // Count unique active visitors (within last 5 minutes, not ordered)
                 if (diffMinutes <= 5 && !isOrdered) {
                     const visitorId = data.customerId || data.phone || data.email || doc.id;
                     activeVisitorIds.add(visitorId);
                 }
 
-                // Only show in feed if updated within last 5 minutes (gives 2 mins to see "Abandoned" status)
                 if (diffMinutes <= 5) {
                     activities.push({
                         id: doc.id,
                         ...data,
-                        status: displayStage, // Use readable stage for display
+                        status: displayStage,
                         jsDate: updatedAt
                     });
                 }
@@ -180,12 +172,10 @@ const StatsScreen = ({ navigation }) => {
             setActiveCarts(active);
             setAbandonedCarts(abandoned);
 
-            // Find the latest timestamp in the current activities
             const currentMaxTimestamp = activities.length > 0
                 ? Math.max(...activities.map(a => a.jsDate ? a.jsDate.getTime() : 0))
                 : 0;
 
-            // Play sound if we have a newer activity than before (and not first load)
             if (!isFirstLoadRef.current && currentMaxTimestamp > lastMaxTimestampRef.current) {
                 playSound('LIVE_FEED');
             }
@@ -202,7 +192,6 @@ const StatsScreen = ({ navigation }) => {
             processDocs(currentDocs);
         });
 
-        // Re-process every 30 seconds to update time-based status
         const intervalId = setInterval(() => {
             if (currentDocs.length > 0) {
                 processDocs(currentDocs);
@@ -216,31 +205,16 @@ const StatsScreen = ({ navigation }) => {
         };
     }, []);
 
-    // Fetch Comprehensive GA4 Analytics
+    // Fetch Comprehensive GA4 Analytics (Standardized Interval of 1 min for full refresh)
     useEffect(() => {
         const fetchGA4Analytics = async () => {
             try {
                 const data = await getCachedAnalytics();
-
-                // Ensure data has the expected structure
                 if (data && data.overview) {
                     setGa4Analytics(data);
                     setGa4Error(null);
-
-                    // Also update legacy format for backward compatibility
-                    const details = (data.locations || []).map(loc => ({
-                        city: loc.city,
-                        country: loc.country,
-                        device: 'unknown',
-                        count: loc.users
-                    }));
-                    setActiveVisitorsData({
-                        activeVisitors: data.overview.activeUsers || 0,
-                        details: details
-                    });
                 } else {
-                    // Data structure is invalid
-                    setGa4Error('Invalid data structure');
+                    setGa4Error('Invalid structure');
                 }
             } catch (error) {
                 console.error('Error fetching GA4 analytics:', error);
@@ -249,7 +223,7 @@ const StatsScreen = ({ navigation }) => {
         };
 
         fetchGA4Analytics();
-        const ga4Interval = setInterval(fetchGA4Analytics, 30000);
+        const ga4Interval = setInterval(fetchGA4Analytics, 60000);
         return () => clearInterval(ga4Interval);
     }, []);
 
@@ -257,6 +231,15 @@ const StatsScreen = ({ navigation }) => {
         setRefreshing(true);
         setTimeout(() => setRefreshing(false), 1000);
     }, []);
+
+    // Format helpers
+    const formatDuration = (seconds) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}m ${s}s`;
+    };
+
+    const pieColors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316'];
 
     if (loading) {
         return (
@@ -267,372 +250,271 @@ const StatsScreen = ({ navigation }) => {
     }
 
     return (
-        <CRMLayout title="Analytics" navigation={navigation} scrollable={true} fullWidth={true}>
-            {/* Key Metrics - Clean & Open Horizontal Scroll */}
-            <View style={{ marginBottom: 24 }}>
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: 16, gap: 32 }}
-                    style={{ paddingVertical: 16 }}
-                >
-                    {/* Admin Only Stats: Revenue & Active Carts */}
-                    {hasPermission('view_financial_stats') && (
-                        <>
-                            {/* Total Revenue Card */}
-                            <View>
-                                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>REVENUE</Text>
-                                <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
-                                    ₹{todaysSales.toLocaleString()}
-                                </Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                    <Icon source="chart-line" size={14} color={theme.colors.primary} />
-                                    <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Today</Text>
-                                </View>
+        <CRMLayout title="Overview" navigation={navigation} scrollable={true} fullWidth={true}>
+            {/* 1. HERO METRICS */}
+            <View style={styles.sectionContainer}>
+                <View style={styles.gridContainer}>
+                    {/* Revenue */}
+                    <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={1}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <View style={[styles.iconBox, { backgroundColor: theme.colors.primaryContainer }]}>
+                                <Icon source="currency-inr" size={20} color={theme.colors.onPrimaryContainer} />
                             </View>
+                            <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.primary }}>REVENUE</Text>
+                        </View>
+                        <Text variant="displaySmall" style={{ fontWeight: 'bold' }}>₹{todaysSales.toLocaleString()}</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Today's Sales</Text>
+                    </Surface>
 
-                            {/* Active Carts Card */}
-                            <View>
-                                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>ACTIVE CARTS</Text>
-                                <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
-                                    {activeCarts}
-                                </Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
-                                    <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>Live</Text>
-                                </View>
+                    {/* Active Visitors */}
+                    <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={1}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <View style={[styles.iconBox, { backgroundColor: '#dcfce7' }]}>
+                                <Icon source="account-group" size={20} color="#166534" />
                             </View>
-                        </>
-                    )}
-
-                    {/* Active Visitors Card - Enhanced */}
-                    <View>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>VISITORS</Text>
-                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                            <Text variant="labelMedium" style={{ marginLeft: 8, color: '#166534' }}>VISITORS</Text>
+                        </View>
+                        <Text variant="displaySmall" style={{ fontWeight: 'bold' }}>
                             {ga4Analytics?.overview?.activeUsers ?? 0}
                         </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            {ga4Error ? (
-                                <>
-                                    <Icon source="alert-circle" size={14} color={theme.colors.error} />
-                                    <Text style={{ color: theme.colors.error, fontSize: 10, fontWeight: 'bold', marginLeft: 4 }}>GA4 Error</Text>
-                                </>
-                            ) : (ga4Analytics?.locations?.length ?? 0) > 0 ? (
-                                <>
-                                    <Icon source="map-marker" size={14} color="#f59e0b" />
-                                    <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }} numberOfLines={1}>
-                                        {ga4Analytics.locations[0].city}
-                                    </Text>
-                                </>
-                            ) : (
-                                <>
-                                    <Icon source="clock-outline" size={14} color="#f59e0b" />
-                                    <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Live</Text>
-                                </>
-                            )}
+                        {/* Pulse Dot */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#22c55e', marginRight: 4 }} />
+                            <Text variant="bodySmall" style={{ color: '#22c55e', fontWeight: 'bold' }}>Live on Site</Text>
                         </View>
-                    </View>
+                    </Surface>
+                </View>
 
-                    {/* Page Views Card */}
-                    <View>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>PAGE VIEWS</Text>
-                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
-                            {ga4Analytics?.overview?.pageViews ?? 0}
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Icon source="eye" size={14} color="#3b82f6" />
-                            <Text style={{ color: '#3b82f6', fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Last 30 min</Text>
+                <View style={[styles.gridContainer, { marginTop: 12 }]}>
+                    {/* Active Carts */}
+                    <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={1}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <View style={[styles.iconBox, { backgroundColor: '#ffedd5' }]}>
+                                <Icon source="cart-outline" size={20} color="#c2410c" />
+                            </View>
+                            <Text variant="labelMedium" style={{ marginLeft: 8, color: '#c2410c' }}>ACTIVE CARTS</Text>
                         </View>
-                    </View>
+                        <Text variant="displaySmall" style={{ fontWeight: 'bold' }}>{activeCarts}</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Potential Orders</Text>
+                    </Surface>
 
-                    {/* Engagement Card */}
-                    <View>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>AVG SESSION</Text>
-                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
-                            {Math.floor((ga4Analytics?.overview?.avgSessionDuration ?? 0) / 60)}:{String((ga4Analytics?.overview?.avgSessionDuration ?? 0) % 60).padStart(2, '0')}
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Icon source="timer-sand" size={14} color="#8b5cf6" />
-                            <Text style={{ color: '#8b5cf6', fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Minutes</Text>
+                    {/* Events / Engagement */}
+                    <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={1}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <View style={[styles.iconBox, { backgroundColor: '#f3e8ff' }]}>
+                                <Icon source="cursor-default-click-outline" size={20} color="#7e22ce" />
+                            </View>
+                            <Text variant="labelMedium" style={{ marginLeft: 8, color: '#7e22ce' }}>EVENTS</Text>
                         </View>
-                    </View>
-
-                    {/* Abandoned Carts Card */}
-                    <View>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>ABANDONED</Text>
-                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
-                            {abandonedCarts}
+                        <Text variant="displaySmall" style={{ fontWeight: 'bold' }}>
+                            {ga4Analytics?.overview?.eventCount ?? 0}
                         </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <Icon source="cart-off" size={14} color={theme.colors.error} />
-                            <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Action Needed</Text>
-                        </View>
-                    </View>
-                </ScrollView>
+                        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Last 30m Actions</Text>
+                    </Surface>
+                </View>
             </View>
 
-            {/* GA4 Analytics Breakdown - New Section */}
-            {!ga4Error && (ga4Analytics?.overview?.activeUsers ?? 0) > 0 && (
-                <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 16 }}>Live Analytics</Text>
+            {/* 2. SALES TREND CHART */}
+            <Surface style={[styles.chartContainer, { backgroundColor: theme.colors.surface }]} elevation={0}>
+                <View style={{ padding: 16 }}>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Sales Performance</Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Hourly breakdown of today's revenue</Text>
+                </View>
+                <LineChart
+                    data={(chartData.datasets[0]?.data || [0]).map((value, index) => ({
+                        value: value,
+                        label: chartData.labels?.[index] || '',
+                        labelTextStyle: { color: theme.colors.outline, fontSize: 10 },
+                    }))}
+                    height={180}
+                    width={screenWidth - 40}
+                    thickness={3}
+                    color={theme.colors.primary}
+                    startFillColor={theme.colors.primary}
+                    endFillColor={theme.colors.background}
+                    startOpacity={0.2}
+                    endOpacity={0.0}
+                    spacing={60}
+                    initialSpacing={20}
+                    noOfSections={4}
+                    yAxisColor="transparent"
+                    xAxisColor="transparent"
+                    yAxisTextStyle={{ color: theme.colors.outline, fontSize: 10 }}
+                    rulesType="dashed"
+                    rulesColor={theme.colors.outlineVariant}
+                    hideDataPoints={false}
+                    dataPointsColor={theme.colors.primary}
+                    curved
+                    areaChart
+                    pointerConfig={{
+                        pointerStripHeight: 160,
+                        pointerStripColor: theme.colors.primary,
+                        pointerColor: theme.colors.primary,
+                        radius: 6,
+                        pointerLabelWidth: 100,
+                        pointerLabelHeight: 90,
+                        activatePointersOnLongPress: true,
+                        autoAdjustPointerLabelPosition: true,
+                        pointerLabelComponent: items => (
+                            <View style={{ height: 90, width: 100, justifyContent: 'center', backgroundColor: theme.colors.inverseSurface, borderRadius: 8, padding: 8 }}>
+                                <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 14, fontWeight: 'bold', textAlign: 'center' }}>
+                                    ₹{Math.round(items[0].value).toLocaleString()}
+                                </Text>
+                            </View>
+                        ),
+                    }}
+                />
+            </Surface>
 
-                    {/* Devices Breakdown */}
-                    <Surface style={{ borderRadius: 12, padding: 16, marginBottom: 16, backgroundColor: theme.colors.surface }} elevation={0}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Devices</Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                {(ga4Analytics?.devices?.desktop ?? 0) + (ga4Analytics?.devices?.mobile ?? 0) + (ga4Analytics?.devices?.tablet ?? 0)} total
-                            </Text>
+            {/* 3. USER DEMOGRAPHICS & TECH (Horizontal Scroll) */}
+            <View style={{ marginTop: 24, paddingLeft: 16 }}>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 12 }}>Audience Insights</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingRight: 16 }}>
+
+                    {/* Device Breakdown */}
+                    <Surface style={[styles.insightCard, { backgroundColor: theme.colors.surface }]} elevation={0}>
+                        <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 16 }}>Devices</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <PieChart
+                                data={[
+                                    { value: ga4Analytics.devices.mobile, color: '#10b981', text: 'M' },
+                                    { value: ga4Analytics.devices.desktop, color: '#3b82f6', text: 'D' },
+                                    { value: ga4Analytics.devices.tablet, color: '#f59e0b', text: 'T' }
+                                ]}
+                                donut
+                                radius={45}
+                                innerRadius={30}
+                                showText
+                                textColor="white"
+                                textSize={10}
+                            />
+                            <View style={{ marginLeft: 20 }}>
+                                <View style={styles.legendRow}>
+                                    <View style={[styles.dot, { backgroundColor: '#10b981' }]} />
+                                    <Text variant="bodySmall">Mobile ({ga4Analytics.devices.mobile})</Text>
+                                </View>
+                                <View style={styles.legendRow}>
+                                    <View style={[styles.dot, { backgroundColor: '#3b82f6' }]} />
+                                    <Text variant="bodySmall">Desktop ({ga4Analytics.devices.desktop})</Text>
+                                </View>
+                                <View style={styles.legendRow}>
+                                    <View style={[styles.dot, { backgroundColor: '#f59e0b' }]} />
+                                    <Text variant="bodySmall">Tablet ({ga4Analytics.devices.tablet})</Text>
+                                </View>
+                            </View>
                         </View>
-
-                        {/* Desktop */}
-                        {(ga4Analytics?.devices?.desktop ?? 0) > 0 && (
-                            <View style={{ marginBottom: 8 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Icon source="monitor" size={16} color={theme.colors.primary} />
-                                        <Text variant="bodyMedium" style={{ marginLeft: 8, color: theme.colors.onSurface }}>Desktop</Text>
-                                    </View>
-                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                        {ga4Analytics?.devices?.desktop ?? 0}
-                                    </Text>
-                                </View>
-                                <ProgressBar
-                                    progress={(ga4Analytics?.devices?.desktop ?? 0) / ((ga4Analytics?.devices?.desktop ?? 0) + (ga4Analytics?.devices?.mobile ?? 0) + (ga4Analytics?.devices?.tablet ?? 0))}
-                                    color={theme.colors.primary}
-                                    style={{ height: 6, borderRadius: 3 }}
-                                />
-                            </View>
-                        )}
-
-                        {/* Mobile */}
-                        {(ga4Analytics?.devices?.mobile ?? 0) > 0 && (
-                            <View style={{ marginBottom: 8 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Icon source="cellphone" size={16} color="#10b981" />
-                                        <Text variant="bodyMedium" style={{ marginLeft: 8, color: theme.colors.onSurface }}>Mobile</Text>
-                                    </View>
-                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                        {ga4Analytics?.devices?.mobile ?? 0}
-                                    </Text>
-                                </View>
-                                <ProgressBar
-                                    progress={(ga4Analytics?.devices?.mobile ?? 0) / ((ga4Analytics?.devices?.desktop ?? 0) + (ga4Analytics?.devices?.mobile ?? 0) + (ga4Analytics?.devices?.tablet ?? 0))}
-                                    color="#10b981"
-                                    style={{ height: 6, borderRadius: 3 }}
-                                />
-                            </View>
-                        )}
-
-                        {/* Tablet */}
-                        {(ga4Analytics?.devices?.tablet ?? 0) > 0 && (
-                            <View>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Icon source="tablet" size={16} color="#f59e0b" />
-                                        <Text variant="bodyMedium" style={{ marginLeft: 8, color: theme.colors.onSurface }}>Tablet</Text>
-                                    </View>
-                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                        {ga4Analytics?.devices?.tablet ?? 0}
-                                    </Text>
-                                </View>
-                                <ProgressBar
-                                    progress={(ga4Analytics?.devices?.tablet ?? 0) / ((ga4Analytics?.devices?.desktop ?? 0) + (ga4Analytics?.devices?.mobile ?? 0) + (ga4Analytics?.devices?.tablet ?? 0))}
-                                    color="#f59e0b"
-                                    style={{ height: 6, borderRadius: 3 }}
-                                />
-                            </View>
-                        )}
                     </Surface>
 
                     {/* Traffic Sources */}
-                    {ga4Analytics.trafficSources.length > 0 && (
-                        <Surface style={{ borderRadius: 12, padding: 16, marginBottom: 16, backgroundColor: theme.colors.surface }} elevation={0}>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 12 }}>Traffic Sources</Text>
-                            {ga4Analytics.trafficSources.slice(0, 5).map((source, index) => (
-                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: index < ga4Analytics.trafficSources.length - 1 ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}>
-                                    <View style={{ flex: 1 }}>
-                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                            {source.source}
-                                        </Text>
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                                            {source.medium} • {source.pageViews} views
-                                        </Text>
+                    <Surface style={[styles.insightCard, { backgroundColor: theme.colors.surface }]} elevation={0}>
+                        <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 16 }}>Traffic Sources</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <PieChart
+                                data={ga4Analytics.trafficSources.length > 0 ? ga4Analytics.trafficSources.map((s, i) => ({
+                                    value: s.users,
+                                    color: pieColors[i % pieColors.length],
+                                })) : [{ value: 1, color: theme.colors.surfaceVariant }]}
+                                radius={45}
+                            />
+                            <View style={{ marginLeft: 20, maxWidth: 120 }}>
+                                {ga4Analytics.trafficSources.slice(0, 3).map((source, index) => (
+                                    <View key={index} style={styles.legendRow}>
+                                        <View style={[styles.dot, { backgroundColor: pieColors[index % pieColors.length] }]} />
+                                        <Text variant="bodySmall" numberOfLines={1}>{source.source}</Text>
                                     </View>
-                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-                                        {source.users}
-                                    </Text>
-                                </View>
-                            ))}
-                        </Surface>
-                    )}
+                                ))}
+                                {ga4Analytics.trafficSources.length === 0 && <Text variant="bodySmall">No data</Text>}
+                            </View>
+                        </View>
+                    </Surface>
 
-                    {/* Top Locations */}
-                    {ga4Analytics.locations.length > 0 && (
-                        <Surface style={{ borderRadius: 12, padding: 16, marginBottom: 16, backgroundColor: theme.colors.surface }} elevation={0}>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 12 }}>Top Locations</Text>
-                            {ga4Analytics.locations.slice(0, 5).map((location, index) => (
-                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: index < Math.min(ga4Analytics.locations.length, 5) - 1 ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}>
-                                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                                        <Icon source="map-marker" size={16} color="#f59e0b" />
-                                        <View style={{ marginLeft: 8 }}>
-                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                                {location.city}
-                                            </Text>
-                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                                {location.country}
-                                            </Text>
-                                        </View>
+                    {/* Operating Systems (New Feature) */}
+                    <Surface style={[styles.insightCard, { backgroundColor: theme.colors.surface, width: 220 }]} elevation={0}>
+                        <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 8 }}>Tech Stack</Text>
+                        <ScrollView style={{ maxHeight: 100 }}>
+                            {ga4Analytics.operatingSystems && ga4Analytics.operatingSystems.length > 0 ? (
+                                ga4Analytics.operatingSystems.map((os, index) => (
+                                    <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <Text variant="bodySmall">{os.name}</Text>
+                                        <Text variant="bodySmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{os.users}</Text>
                                     </View>
-                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-                                        {location.users}
-                                    </Text>
-                                </View>
-                            ))}
-                        </Surface>
-                    )}
+                                ))
+                            ) : (
+                                <Text variant="bodySmall" style={{ color: theme.colors.outline }}>No OS data available</Text>
+                            )}
+                        </ScrollView>
+                    </Surface>
 
-                    {/* Top Pages */}
-                    {ga4Analytics.topPages.length > 0 && (
-                        <Surface style={{ borderRadius: 12, padding: 16, backgroundColor: theme.colors.surface }} elevation={0}>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 12 }}>Top Pages</Text>
-                            {ga4Analytics.topPages.slice(0, 5).map((page, index) => (
-                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: index < Math.min(ga4Analytics.topPages.length, 5) - 1 ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}>
-                                    <View style={{ flex: 1 }}>
-                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1}>
-                                            {page.page || 'Homepage'}
-                                        </Text>
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                                            {page.users} visitors
-                                        </Text>
-                                    </View>
-                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-                                        {page.views}
-                                    </Text>
-                                </View>
-                            ))}
-                        </Surface>
-                    )}
-                </View>
-            )}
-
-            {/* Chart Section - Minimalist */}
-            <View style={{ marginBottom: 24, paddingLeft: 0 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 }}>
-                    <View>
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Sales History</Text>
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                            Last 100 orders • 2-hr intervals
-                        </Text>
-                    </View>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingLeft: 0 }}>
-                    <LineChart
-                        data={(chartData.datasets[0]?.data || [0]).map((value, index) => ({
-                            value: value,
-                            label: chartData.labels?.[index] || '',
-                            fullLabel: chartData.fullLabels?.[index] || '',
-                            orderCount: chartData.datasets[0]?.orderCounts?.[index] || 0,
-                            labelTextStyle: { color: theme.colors.onSurfaceVariant, fontSize: 10 },
-                        }))}
-                        height={220}
-                        width={Math.max(screenWidth, chartData.labels.length * 60)}
-                        scrollable={true}
-                        curved
-                        areaChart
-                        animateOnDataChange={false}
-                        color={theme.colors.primary}
-                        thickness={3}
-                        startFillColor={theme.colors.primary}
-                        endFillColor={theme.colors.background}
-                        startOpacity={0.2}
-                        endOpacity={0.0}
-                        spacing={50}
-                        backgroundColor={'transparent'}
-                        hideDataPoints={false}
-                        dataPointsHeight={8}
-                        dataPointsWidth={8}
-                        dataPointsColor={theme.colors.primary}
-                        dataPointsRadius={4}
-                        textColor={theme.colors.onSurface}
-                        textFontSize={11}
-                        textShiftY={-8}
-                        textShiftX={-10}
-                        yAxisColor="transparent"
-                        xAxisColor="transparent"
-                        yAxisTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                        xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                        rulesType="dashed"
-                        rulesColor={theme.colors.outlineVariant}
-                        rulesThickness={0.5}
-                        showVerticalLines={false}
-                        initialSpacing={20}
-                        endSpacing={40}
-                        noOfSections={4}
-                        maxValue={Math.max(...chartData.datasets[0].data) * 1.2}
-                        yAxisLabelPrefix="₹"
-                        formatYLabel={(value) => {
-                            if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-                            return value.toString();
-                        }}
-                        pointerConfig={{
-                            pointerStripHeight: 180,
-                            pointerStripColor: theme.colors.primary,
-                            pointerStripWidth: 2,
-                            pointerColor: theme.colors.primary,
-                            radius: 6,
-                            pointerLabelWidth: 100,
-                            pointerLabelHeight: 90,
-                            activatePointersOnLongPress: false,
-                            autoAdjustPointerLabelPosition: true,
-                            pointerLabelComponent: items => {
-                                const point = items[0];
-                                const orderCount = point.orderCount || 0;
-                                const fullLabel = point.fullLabel || point.label || '';
-                                const parts = fullLabel.split(' ');
-                                const datePart = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : fullLabel;
-                                const timePart = parts.length >= 3 ? parts[2] : '';
-
-                                return (
-                                    <View
-                                        style={{
-                                            height: 100,
-                                            width: 110,
-                                            justifyContent: 'center',
-                                            backgroundColor: theme.colors.inverseSurface,
-                                            borderRadius: 12,
-                                            padding: 12,
-                                        }}>
-                                        <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
-                                            {datePart}
-                                        </Text>
-                                        <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 11, textAlign: 'center', marginTop: 2, opacity: 0.8 }}>
-                                            {timePart}
-                                        </Text>
-                                        <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 6 }}>
-                                            ₹{Math.round(items[0].value).toLocaleString()}
-                                        </Text>
-                                        <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 11, textAlign: 'center', marginTop: 4, opacity: 0.9 }}>
-                                            {orderCount} {orderCount === 1 ? 'Order' : 'Orders'}
-                                        </Text>
-                                    </View>
-                                );
-                            },
-                        }}
-                    />
                 </ScrollView>
             </View>
 
-            {/* Recent Activity List - Edge to Edge */}
-            <View style={{ paddingBottom: 40 }}>
+            {/* 4. USER BEHAVIOR & LISTS */}
+            <View style={{ paddingHorizontal: 16, marginTop: 24, gap: 16 }}>
+
+                {/* Top Events (New Feature) */}
+                <Surface style={styles.listCard} elevation={0}>
+                    <View style={styles.cardHeader}>
+                        <Icon source="flash" size={18} color="#f59e0b" />
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 8 }}>Top Events</Text>
+                    </View>
+                    {ga4Analytics.topEvents && ga4Analytics.topEvents.length > 0 ? (
+                        ga4Analytics.topEvents.slice(0, 5).map((event, index) => (
+                            <View key={index} style={styles.listItem}>
+                                <Text variant="bodyMedium" style={{ flex: 1 }}>{event.name}</Text>
+                                <Chip compact style={{ height: 24 }} textStyle={{ fontSize: 10, lineHeight: 12 }}>{event.count}</Chip>
+                            </View>
+                        ))
+                    ) : (
+                        <Text style={{ padding: 16, color: theme.colors.outline }}>No events recorded</Text>
+                    )}
+                </Surface>
+
+                {/* Top Pages */}
+                <Surface style={styles.listCard} elevation={0}>
+                    <View style={styles.cardHeader}>
+                        <Icon source="file-document" size={18} color="#3b82f6" />
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 8 }}>Popular Pages</Text>
+                    </View>
+                    {ga4Analytics.topPages.length > 0 ? (
+                        ga4Analytics.topPages.slice(0, 5).map((page, index) => (
+                            <View key={index} style={styles.listItem}>
+                                <Text variant="bodyMedium" numberOfLines={1} style={{ flex: 1, marginRight: 8 }}>{page.page}</Text>
+                                <Text variant="labelSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{page.views} views</Text>
+                            </View>
+                        ))
+                    ) : (
+                        <Text style={{ padding: 16, color: theme.colors.outline }}>No page views</Text>
+                    )}
+                </Surface>
+
+                {/* Top Locations */}
+                <Surface style={styles.listCard} elevation={0}>
+                    <View style={styles.cardHeader}>
+                        <Icon source="earth" size={18} color="#10b981" />
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 8 }}>Top Locations</Text>
+                    </View>
+                    {ga4Analytics.locations.length > 0 ? (
+                        ga4Analytics.locations.slice(0, 5).map((loc, index) => (
+                            <View key={index} style={styles.listItem}>
+                                <Text variant="bodyMedium" style={{ flex: 1 }}>{loc.city}, {loc.country}</Text>
+                                <Text variant="labelSmall" style={{ fontWeight: 'bold' }}>{loc.users} users</Text>
+                            </View>
+                        ))
+                    ) : (
+                        <Text style={{ padding: 16, color: theme.colors.outline }}>No location data</Text>
+                    )}
+                </Surface>
+
+            </View>
+
+            {/* 5. LIVE FEEDS (Firebase) */}
+            <View style={{ marginTop: 24, paddingBottom: 40 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 }}>
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Live Feed</Text>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Live Checkout Feed</Text>
                     <Button
-                        mode="text"
                         compact
+                        mode="text"
                         onPress={() => navigation.navigate('DatabaseManager', { collection: 'checkouts' })}
-                        textColor={theme.colors.primary}
                     >
                         History
                     </Button>
@@ -641,34 +523,41 @@ const StatsScreen = ({ navigation }) => {
                 {recentActivity.map((item) => (
                     <React.Fragment key={item.id}>
                         <List.Item
-                            title={item.customerName || item.first_name || item.phone || item.phone_number || 'Visitor'}
-                            titleStyle={{ fontWeight: 'bold', color: theme.colors.onSurface }}
-                            style={{ paddingHorizontal: 16 }}
-                            description={() => {
-                                const displayItems = item.items || item.line_items || [];
-                                return (
-                                    <View>
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                            {displayItems.length > 0 ? displayItems[0].name || displayItems[0].title : 'Browsing'}
-                                        </Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                            <Chip
-                                                mode="flat"
-                                                compact
-                                                style={{ backgroundColor: item.status === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer, height: 20, borderRadius: 4, paddingHorizontal: 0 }}
-                                                textStyle={{ fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 8, color: item.status === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer, fontWeight: 'bold' }}
-                                            >
-                                                {item.status || 'Active'}
-                                            </Chip>
-                                            <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
-                                                • {item.jsDate ? item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                );
-                            }}
-                            left={props => <Avatar.Text {...props} size={40} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.surfaceVariant }} color={theme.colors.onSurfaceVariant} />}
-                            right={props => <Text {...props} variant="titleMedium" style={{ alignSelf: 'center', fontWeight: 'bold', color: theme.colors.onSurface }}>₹{item.totalPrice || item.total_price || item.amount || 0}</Text>}
+                            title={item.customerName || item.first_name || item.phone || 'Visitor'}
+                            titleStyle={{ fontWeight: 'bold', fontSize: 15 }}
+                            descriptionStyle={{ fontSize: 13 }}
+                            style={{ paddingHorizontal: 16, backgroundColor: theme.colors.background }}
+                            description={() => (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                    <Chip
+                                        compact
+                                        style={{
+                                            backgroundColor: item.status === 'ABANDONED' ? '#fee2e2' : '#dcfce7',
+                                            height: 20
+                                        }}
+                                        textStyle={{
+                                            fontSize: 10,
+                                            lineHeight: 10,
+                                            color: item.status === 'ABANDONED' ? '#b91c1c' : '#15803d',
+                                            marginVertical: 0,
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {item.status || 'Active'}
+                                    </Chip>
+                                    <Text style={{ fontSize: 11, marginLeft: 8, color: theme.colors.outline }}>
+                                        {item.jsDate ? item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                    </Text>
+                                </View>
+                            )}
+                            left={props => <Avatar.Text {...props} size={42} label={(item.customerName || 'G').charAt(0).toUpperCase()} />}
+                            right={props => (
+                                <View style={{ justifyContent: 'center', alignItems: 'flex-end' }}>
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>
+                                        ₹{item.totalPrice || item.total_price || item.amount || 0}
+                                    </Text>
+                                </View>
+                            )}
                             onPress={() => {
                                 setSelectedDoc(item);
                                 setModalVisible(true);
@@ -679,162 +568,112 @@ const StatsScreen = ({ navigation }) => {
                 ))}
             </View>
 
-            {/* Document Details Dialog */}
+            {/* Document Details Modal (Unchanged Layout) */}
             <Portal>
-                <Dialog
-                    visible={modalVisible}
-                    onDismiss={() => setModalVisible(false)}
-                    style={{ maxHeight: '85%' }}
-                >
+                <Dialog visible={modalVisible} onDismiss={() => setModalVisible(false)} style={{ maxHeight: '85%' }}>
                     <Dialog.Title>Checkout Details</Dialog.Title>
                     <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0 }}>
-                        <ScrollView>
+                        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 8 }}>
                             {selectedDoc && (
-                                <View style={{ paddingHorizontal: 24 }}>
-                                    {/* Customer Info */}
+                                <View>
                                     <View style={{ marginBottom: 16 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Customer</Text>
-                                        <Text variant="bodyLarge">{selectedDoc.customerName || selectedDoc.first_name || selectedDoc.phone || selectedDoc.phone_number || 'Visitor'}</Text>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Customer</Text>
+                                        <Text variant="bodyLarge">{selectedDoc.customerName || selectedDoc.first_name || selectedDoc.phone || 'Visitor'}</Text>
                                     </View>
-
-                                    {selectedDoc.email && (
-                                        <View style={{ marginBottom: 16 }}>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Email</Text>
-                                            <Text variant="bodyMedium">{selectedDoc.email}</Text>
-                                        </View>
-                                    )}
-
-                                    {(selectedDoc.phone || selectedDoc.phone_number) && (
-                                        <View style={{ marginBottom: 16 }}>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Phone</Text>
-                                            <Text variant="bodyMedium">{selectedDoc.phone || selectedDoc.phone_number}</Text>
-                                        </View>
-                                    )}
-
-                                    {/* Status */}
                                     <View style={{ marginBottom: 16 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Status</Text>
-                                        <Chip
-                                            mode="flat"
-                                            compact
-                                            style={{
-                                                backgroundColor: selectedDoc.status === 'ABANDONED' ? theme.colors.errorContainer : theme.colors.primaryContainer,
-                                                alignSelf: 'flex-start'
-                                            }}
-                                            textStyle={{
-                                                color: selectedDoc.status === 'ABANDONED' ? theme.colors.onErrorContainer : theme.colors.onPrimaryContainer,
-                                                fontWeight: 'bold'
-                                            }}
-                                        >
-                                            {selectedDoc.status || 'Active'}
-                                        </Chip>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Status</Text>
+                                        <Chip compact style={{ alignSelf: 'flex-start' }}>{selectedDoc.status}</Chip>
                                     </View>
-
-                                    {/* Amount */}
                                     <View style={{ marginBottom: 16 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Amount</Text>
-                                        <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || selectedDoc.total_price || selectedDoc.amount || 0}</Text>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Total Amount</Text>
+                                        <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || 0}</Text>
                                     </View>
-
-                                    {/* Items */}
-                                    {(selectedDoc.items || selectedDoc.line_items) && (selectedDoc.items || selectedDoc.line_items).length > 0 && (
-                                        <View style={{ marginBottom: 16 }}>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>Items</Text>
+                                    {(selectedDoc.items || selectedDoc.line_items) && (
+                                        <View>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.outline, marginBottom: 8 }}>Items</Text>
                                             {(selectedDoc.items || selectedDoc.line_items).map((item, index) => (
-                                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: index < selectedDoc.items.length - 1 ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}>
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text variant="bodyMedium">{item.name || 'Unknown Item'}</Text>
-                                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Qty: {item.quantity || 1}</Text>
-                                                    </View>
-                                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>₹{item.price || 0}</Text>
+                                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                                                    <Text variant="bodyMedium" style={{ flex: 1 }}>{item.name || item.title}</Text>
+                                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>x{item.quantity}</Text>
                                                 </View>
                                             ))}
                                         </View>
                                     )}
-
-                                    {/* Address */}
-                                    {(selectedDoc.city || selectedDoc.state || selectedDoc.pincode) && (
-                                        <View style={{ marginBottom: 16 }}>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Location</Text>
-                                            <Text variant="bodyMedium">
-                                                {[selectedDoc.city, selectedDoc.state, selectedDoc.pincode].filter(Boolean).join(', ')}
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    {/* Source */}
-                                    {selectedDoc.source && (
-                                        <View style={{ marginBottom: 16 }}>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Source</Text>
-                                            <Text variant="bodyMedium">{selectedDoc.source}</Text>
-                                        </View>
-                                    )}
-
-                                    {/* Timestamp */}
-                                    {selectedDoc.jsDate && (
-                                        <View style={{ marginBottom: 16 }}>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Last Updated</Text>
-                                            <Text variant="bodyMedium">
-                                                {selectedDoc.jsDate.toLocaleString()}
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    {/* Checkout ID */}
-                                    <View style={{ marginBottom: 16 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>Checkout ID</Text>
-                                        <Text variant="bodySmall" style={{ fontFamily: 'monospace', color: theme.colors.onSurfaceVariant }}>{selectedDoc.id}</Text>
-                                    </View>
                                 </View>
                             )}
                         </ScrollView>
                     </Dialog.ScrollArea>
                     <Dialog.Actions>
                         <Button onPress={() => setModalVisible(false)}>Close</Button>
-                        <Button onPress={() => {
-                            setModalVisible(false);
-                            navigation.navigate('DatabaseManager', { collection: 'checkouts' });
-                        }}>View in Database</Button>
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
 
-        </CRMLayout >
+        </CRMLayout>
     );
 };
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { justifyContent: 'center', alignItems: 'center' },
-    content: { flex: 1 },
-    metricsScroll: {
-        paddingVertical: 8,
-    },
-    metricsScrollContent: {
-        paddingHorizontal: 4,
-        gap: 8,
-    },
-    metricsRow: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    metricCard: {
+    sectionContainer: { marginTop: 16, paddingHorizontal: 16 },
+    gridContainer: { flexDirection: 'row', gap: 12 },
+    card: {
         flex: 1,
-        minWidth: 120,
-        maxWidth: 180,
-        padding: 12,
-        borderRadius: 12,
-        borderWidth: 1,
+        borderRadius: 16,
+        padding: 16,
+        justifyContent: 'center'
     },
-    chartSection: {
-        marginBottom: 16,
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
+    iconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    listSection: {
-        borderTopWidth: 1,
-        paddingBottom: 20,
+    chartContainer: {
+        margin: 16,
+        borderRadius: 16,
+        paddingBottom: 16,
+        overflow: 'hidden'
     },
+    insightCard: {
+        borderRadius: 16,
+        padding: 16,
+        paddingRight: 24,
+        minWidth: 280,
+    },
+    legendRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6
+    },
+    dot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 6
+    },
+    listCard: {
+        borderRadius: 16,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255,255,255,0.05)' // subtle transparency if dark mode, else default surface
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        paddingBottom: 8
+    },
+    listItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderTopWidth: 0.5,
+        borderTopColor: 'rgba(128,128,128, 0.2)'
+    }
 });
 
 export default StatsScreen;

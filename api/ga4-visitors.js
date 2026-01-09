@@ -110,7 +110,9 @@ module.exports = async (req, res) => {
             trafficSourceResponse,
             deviceResponse,
             geoResponse,
-            contentResponse
+            contentResponse,
+            eventResponse,
+            techResponse
         ] = await Promise.all([
             // 1. Overview Metrics
             analyticsDataClient.runRealtimeReport({
@@ -174,6 +176,30 @@ module.exports = async (req, res) => {
                     { name: 'activeUsers' }
                 ],
                 limit: 10
+            }),
+
+            // 6. Top Events
+            analyticsDataClient.runRealtimeReport({
+                property: `properties/${propertyId}`,
+                dimensions: [
+                    { name: 'eventName' }
+                ],
+                metrics: [
+                    { name: 'eventCount' }
+                ],
+                limit: 10
+            }),
+
+            // 7. Tech Specs (OS)
+            analyticsDataClient.runRealtimeReport({
+                property: `properties/${propertyId}`,
+                dimensions: [
+                    { name: 'operatingSystem' }
+                ],
+                metrics: [
+                    { name: 'activeUsers' }
+                ],
+                limit: 5
             })
         ]);
 
@@ -260,6 +286,29 @@ module.exports = async (req, res) => {
         }
         topPages.sort((a, b) => b.views - a.views);
 
+        // Process Top Events
+        const topEvents = [];
+        if (eventResponse[0].rows) {
+            eventResponse[0].rows.forEach(row => {
+                const name = row.dimensionValues[0].value;
+                const count = parseInt(row.metricValues[0].value, 10);
+                // Filter out common automatic events if desired, or keep all
+                topEvents.push({ name, count });
+            });
+        }
+        topEvents.sort((a, b) => b.count - a.count);
+
+        // Process Tech Specs (OS)
+        const operatingSystems = [];
+        if (techResponse[0].rows) {
+            techResponse[0].rows.forEach(row => {
+                const name = row.dimensionValues[0].value;
+                const users = parseInt(row.metricValues[0].value, 10);
+                operatingSystems.push({ name, users });
+            });
+        }
+        operatingSystems.sort((a, b) => b.users - a.users);
+
         // Calculate average session duration (in seconds)
         const avgSessionDuration = parseInt(activeUsers) > 0
             ? Math.round(parseInt(engagementDuration) / parseInt(activeUsers))
@@ -290,6 +339,10 @@ module.exports = async (req, res) => {
 
             // Top Content
             topPages: topPages.slice(0, 5), // Top 5
+
+            // User Behavior
+            topEvents: topEvents.slice(0, 10), // Top 10 Events
+            operatingSystems: operatingSystems, // All OS found
 
             // Metadata
             timestamp: new Date().toISOString(),
@@ -330,6 +383,8 @@ module.exports = async (req, res) => {
             devices: { desktop: 0, mobile: 0, tablet: 0 },
             locations: [],
             topPages: [],
+            topEvents: [],
+            operatingSystems: [],
             timestamp: new Date().toISOString()
         });
     } finally {

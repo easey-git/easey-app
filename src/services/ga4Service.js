@@ -37,7 +37,10 @@ export const getComprehensiveAnalytics = async () => {
             trafficSources: [],
             devices: { desktop: 0, mobile: 0, tablet: 0 },
             locations: [],
+            locations: [],
             topPages: [],
+            topEvents: [],
+            operatingSystems: [],
             error: error.message
         };
     }
@@ -93,7 +96,10 @@ let cachedData = {
     trafficSources: [],
     devices: { desktop: 0, mobile: 0, tablet: 0 },
     locations: [],
-    topPages: []
+    locations: [],
+    topPages: [],
+    topEvents: [],
+    operatingSystems: []
 };
 let lastFetchTime = 0;
 const CACHE_DURATION = 30000; // 30 seconds
