@@ -101,17 +101,15 @@ async function fetchOverview(client, propertyId) {
 }
 
 async function fetchTraffic(client, propertyId) {
-    // Session dimensions are strictly limited in Realtime.
-    // We will attempt to use a VERY standard User dimension, but if it fails,
-    // we fallback to returning empty structure rather than erroring out.
-    // 'firstUserSource' is the most standard user-scoped dimension.
+    // 'firstUserSource' is often empty for returning users in Realtime.
+    // 'source' (Event Scoped) is the most reliable way to see "where is the current activity coming from?".
+    // We pair it with 'eventCount' which is 100% compatible.
     return client.runRealtimeReport({
         property: `properties/${propertyId}`,
         dimensions: [
-            { name: 'firstUserSource' }
-            // Removed Medium to simplify query
+            { name: 'source' }
         ],
-        metrics: [{ name: 'activeUsers' }],
+        metrics: [{ name: 'eventCount' }],
         limit: 10
     }).then(r => r[0]).catch(error => {
         // Silent fallback for Traffic
@@ -173,7 +171,7 @@ function transformTraffic(response) {
     if (!response?.rows) return [];
     return response.rows.map(row => ({
         source: row.dimensionValues[0].value === '(direct)' ? 'Direct' : row.dimensionValues[0].value,
-        medium: 'Referral', // Simplified since we removed medium dimension
+        medium: 'Activity', // Changed label to reflect event-based nature
         users: parseInt(row.metricValues[0].value)
     })).sort((a, b) => b.users - a.users);
 }
