@@ -225,12 +225,16 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             <View style={styles.statsGrid}>
                 <Surface style={[styles.statCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
                     <Avatar.Icon size={40} icon="whatsapp" style={{ backgroundColor: '#25D366' }} />
-                    <Text variant="titleLarge" style={{ fontWeight: 'bold', marginTop: 8 }}>{codOrders.length + abandonedCarts.length}</Text>
+                    <Text variant="titleLarge" style={{ fontWeight: 'bold', marginTop: 8 }} numberOfLines={1} adjustsFontSizeToFit>
+                        {codOrders.length + abandonedCarts.length}
+                    </Text>
                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Active Targets</Text>
                 </Surface>
                 <Surface style={[styles.statCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
                     <Avatar.Icon size={40} icon="cash-check" style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.primary} />
-                    <Text variant="titleLarge" style={{ fontWeight: 'bold', marginTop: 8 }}>{codOrders.filter(o => o.verificationStatus === 'approved').length}</Text>
+                    <Text variant="titleLarge" style={{ fontWeight: 'bold', marginTop: 8 }} numberOfLines={1} adjustsFontSizeToFit>
+                        {codOrders.filter(o => o.verificationStatus === 'approved').length}
+                    </Text>
                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Verified Orders</Text>
                 </Surface>
             </View>
@@ -414,17 +418,21 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     );
 
     return (
-        <CRMLayout title="WhatsApp Manager" navigation={navigation}>
+        <CRMLayout title="WhatsApp Manager" navigation={navigation} scrollable={false}>
             <View style={styles.segmentContainer}>
-                <SegmentedButtons
-                    value={tab}
-                    onValueChange={setTab}
-                    buttons={[
-                        { value: 'overview', label: 'Overview' },
-                        { value: 'cod', label: 'COD Verify' },
-                        { value: 'abandoned', label: 'Recovery' },
-                    ]}
-                />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+                    <SegmentedButtons
+                        value={tab}
+                        onValueChange={setTab}
+                        density="small"
+                        buttons={[
+                            { value: 'overview', label: 'Overview' },
+                            { value: 'cod', label: 'COD Verify' },
+                            { value: 'abandoned', label: 'Recovery' },
+                        ]}
+                        style={{ minWidth: 320 }}
+                    />
+                </ScrollView>
             </View>
 
             {tab === 'overview' && renderOverview()}
@@ -518,7 +526,9 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu }) => {
                 <View style={{ flex: 1 }}>
                     <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order #{order.orderNumber}</Text>
                     <Text variant="bodyMedium">{order.customerName}</Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>₹{order.totalPrice} • {order.city}</Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1} adjustsFontSizeToFit>
+                        ₹{order.totalPrice} • {order.city}
+                    </Text>
                     <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
                         {order.updatedAt?.toDate ? order.updatedAt.toDate().toLocaleString() : ''}
                     </Text>
@@ -560,7 +570,9 @@ const AbandonedCartItem = React.memo(({ item, theme, onOpenChat }) => (
                     {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </Text>
             </View>
-            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>₹{item.totalPrice}</Text>
+            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }} numberOfLines={1} adjustsFontSizeToFit>
+                ₹{item.totalPrice}
+            </Text>
         </View>
 
         <View style={{ marginVertical: 8 }}>
@@ -583,17 +595,17 @@ const AbandonedCartItem = React.memo(({ item, theme, onOpenChat }) => (
 ));
 
 const styles = StyleSheet.create({
-    segmentContainer: { padding: 16 },
-    tabContent: { flex: 1, paddingHorizontal: 16 },
-    statsGrid: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-    statCard: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
-    chartCard: { padding: 16, borderRadius: 12, marginBottom: 16, alignItems: 'center' },
-    listCard: { padding: 16, borderRadius: 12, marginBottom: 16 },
+    segmentContainer: { padding: 12 }, // Reduced from 16
+    tabContent: { flex: 1, paddingHorizontal: 12 }, // Reduced from 16
+    statsGrid: { flexDirection: 'row', gap: 8, marginBottom: 12 }, // Reduced gap & margin
+    statCard: { flex: 1, padding: 12, borderRadius: 16, alignItems: 'center' }, // Reduced padding, rounded 16
+    chartCard: { padding: 12, borderRadius: 16, marginBottom: 12, alignItems: 'center' }, // Reduced padding/margin
+    listCard: { padding: 12, borderRadius: 16, marginBottom: 12 }, // Reduced padding/margin
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     listItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#eee' },
-    actionCard: { padding: 16, borderRadius: 12, marginBottom: 12 },
-    cardActions: { flexDirection: 'row', justifyContent: 'flex-start', marginTop: 12 },
-    infoBanner: { flexDirection: 'row', padding: 12, borderRadius: 8, marginBottom: 16, alignItems: 'center' }
+    actionCard: { padding: 12, borderRadius: 16, marginBottom: 12 }, // Reduced padding/margin
+    cardActions: { flexDirection: 'row', justifyContent: 'flex-start', marginTop: 8 }, // Reduced margin
+    infoBanner: { flexDirection: 'row', padding: 12, borderRadius: 12, marginBottom: 12, alignItems: 'center' } // Rounded 12 -> 16 consistent? Keeping 12 or 16. Let's do 12 for banner or 16. Let's stick to 12 for inner elements? Meta used 16 for cards. I'll use 12 for padding.
 });
 
 export default WhatsAppManagerScreen;

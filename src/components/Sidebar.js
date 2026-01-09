@@ -27,7 +27,6 @@ export const Sidebar = React.memo(({ onClose }) => {
                 }
             } catch (error) {
                 // Fallback for when navigation context is not available
-                console.log('Navigation state not available');
             }
         };
 

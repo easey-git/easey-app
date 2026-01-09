@@ -286,7 +286,7 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                         <Surface style={[styles.limitCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                                 <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Account Spend Limit</Text>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                     ₹{accountData.limits.spendCap.toLocaleString('en-IN')}
                                 </Text>
                             </View>
@@ -307,14 +307,14 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                                         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                                             Used: {((accountData.limits.spendCap - accountData.limits.remainingSpendCap) / accountData.limits.spendCap * 100).toFixed(0)}%
                                         </Text>
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: 'bold' }}>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: 'bold', flex: 1, textAlign: 'right' }} numberOfLines={1} adjustsFontSizeToFit>
                                             ₹{accountData.limits.remainingSpendCap.toLocaleString('en-IN')} remaining
                                         </Text>
                                     </View>
                                 </>
                             )}
                         </Surface>
-                    </View>
+                    </View >
                 </>
             )}
             {/* Spending Overview */}
@@ -328,7 +328,7 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                         <Icon source="calendar-today" size={20} color={theme.colors.primary} />
                         <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>Today</Text>
                     </View>
-                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                         ₹{accountData.spending?.today?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </Text>
                 </Surface>
@@ -338,7 +338,7 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                         <Icon source="calendar-month" size={20} color={theme.colors.secondary} />
                         <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>This Month</Text>
                     </View>
-                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                         ₹{accountData.spending?.thisMonth?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </Text>
                 </Surface>
@@ -349,7 +349,7 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                     <Icon source="chart-timeline-variant" size={24} color={theme.colors.tertiary} />
                     <Text variant="titleMedium" style={{ marginLeft: 12, color: theme.colors.onSurface }}>Lifetime Spend</Text>
                 </View>
-                <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4 }}>
+                <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>
                     ₹{accountData.spending?.lifetime?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                 </Text>
             </Surface>
@@ -509,21 +509,21 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                     <View style={styles.metricsRow}>
                         <View style={styles.metricItem}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Spend</Text>
-                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }} numberOfLines={1} adjustsFontSizeToFit>
                                 ₹{campaignsData.summary.spend?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                             </Text>
                         </View>
                         <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
                         <View style={styles.metricItem}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>ROAS</Text>
-                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }} numberOfLines={1} adjustsFontSizeToFit>
                                 {campaignsData.summary.roas?.toFixed(2)}x
                             </Text>
                         </View>
                         <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
                         <View style={styles.metricItem}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Purchases</Text>
-                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                            <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }} numberOfLines={1} adjustsFontSizeToFit>
                                 {campaignsData.summary.purchases}
                             </Text>
                         </View>
@@ -617,25 +617,25 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                             <View style={{ flex: 1, minWidth: 80 }}>
                                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Spend</Text>
-                                <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                     ₹{campaign.performance.spend?.toLocaleString('en-IN')}
                                 </Text>
                             </View>
                             <View style={{ flex: 1, minWidth: 80 }}>
                                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>ROAS</Text>
-                                <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }} numberOfLines={1} adjustsFontSizeToFit>
                                     {campaign.performance.roas?.toFixed(2)}x
                                 </Text>
                             </View>
                             <View style={{ flex: 1, minWidth: 80 }}>
                                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Purchases</Text>
-                                <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                     {campaign.performance.purchases}
                                 </Text>
                             </View>
                             <View style={{ flex: 1, minWidth: 80 }}>
                                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>CPM</Text>
-                                <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                     ₹{campaign.performance.cpm}
                                 </Text>
                             </View>
@@ -750,17 +750,20 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData, datePreset, setD
 
             {/* Period Selector */}
             <View style={{ marginBottom: 16 }}>
-                <SegmentedButtons
-                    value={datePreset}
-                    onValueChange={setDatePreset}
-                    buttons={[
-                        { value: 'today', label: 'Today' },
-                        { value: 'yesterday', label: 'Yesterday' },
-                        { value: 'last_7d', label: 'Last 7d' },
-                        { value: 'this_month', label: 'Month' },
-                    ]}
-                    style={{ marginBottom: 8 }}
-                />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+                    <SegmentedButtons
+                        value={datePreset}
+                        onValueChange={setDatePreset}
+                        density="small"
+                        buttons={[
+                            { value: 'today', label: 'Today' },
+                            { value: 'yesterday', label: 'Yesterday' },
+                            { value: 'last_7d', label: 'Last 7d' },
+                            { value: 'this_month', label: 'Month' },
+                        ]}
+                        style={{ marginBottom: 8, minWidth: 380 }} // Ensure enough width for 'Yesterday'
+                    />
+                </ScrollView>
             </View>
 
             {/* Period Info */}
@@ -768,13 +771,13 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData, datePreset, setD
                 <Surface style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                         <Icon source="calendar-range" size={20} color={theme.colors.primary} />
-                        <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant }}>
+                        <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSurfaceVariant, flex: 1 }} numberOfLines={1} adjustsFontSizeToFit>
                             Period: {datePreset === 'today' ? 'Today' :
                                 datePreset === 'yesterday' ? 'Yesterday' :
                                     datePreset === 'last_7d' ? 'Last 7 Days' : 'This Month'}
                         </Text>
                     </View>
-                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                         {new Date(analyticsData.period.since).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} - {new Date(analyticsData.period.until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </Text>
                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
@@ -794,21 +797,21 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData, datePreset, setD
                         <View style={styles.metricsRow}>
                             <View style={styles.metricItem}>
                                 <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Spend</Text>
-                                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }} numberOfLines={1} adjustsFontSizeToFit>
                                     ₹{analyticsData.summary.spend?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                 </Text>
                             </View>
                             <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
                             <View style={styles.metricItem}>
                                 <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Revenue</Text>
-                                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }} numberOfLines={1} adjustsFontSizeToFit>
                                     ₹{analyticsData.summary.revenue?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                 </Text>
                             </View>
                             <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
                             <View style={styles.metricItem}>
                                 <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>ROAS</Text>
-                                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }} numberOfLines={1} adjustsFontSizeToFit>
                                     {analyticsData.summary.roas?.toFixed(2)}x
                                 </Text>
                             </View>
@@ -819,14 +822,14 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData, datePreset, setD
                     <View style={styles.statsGrid}>
                         <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>Impressions</Text>
-                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                 {analyticsData.summary.impressions?.toLocaleString('en-IN')}
                             </Text>
                         </Surface>
 
                         <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>Clicks</Text>
-                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                 {analyticsData.summary.clicks?.toLocaleString('en-IN')}
                             </Text>
                         </Surface>
@@ -835,14 +838,14 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData, datePreset, setD
                     <View style={styles.statsGrid}>
                         <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>CPM</Text>
-                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                 ₹{analyticsData.summary.cpm?.toFixed(2)}
                             </Text>
                         </Surface>
 
                         <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>CTR</Text>
-                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                 {analyticsData.summary.ctr?.toFixed(2)}%
                             </Text>
                         </Surface>
@@ -882,19 +885,19 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData, datePreset, setD
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                                 <View style={{ flex: 1, minWidth: 80 }}>
                                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>ROAS</Text>
-                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }} numberOfLines={1} adjustsFontSizeToFit>
                                         {item.roas?.toFixed(2)}x
                                     </Text>
                                 </View>
                                 <View style={{ flex: 1, minWidth: 80 }}>
                                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Spend</Text>
-                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                         ₹{item.spend?.toLocaleString('en-IN')}
                                     </Text>
                                 </View>
                                 <View style={{ flex: 1, minWidth: 80 }}>
                                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Revenue</Text>
-                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                         ₹{item.revenue?.toLocaleString('en-IN')}
                                     </Text>
                                 </View>
@@ -918,19 +921,19 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData, datePreset, setD
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                                 <View style={{ flex: 1, minWidth: 80 }}>
                                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Spend</Text>
-                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                         ₹{Math.round(data.spend)?.toLocaleString('en-IN')}
                                     </Text>
                                 </View>
                                 <View style={{ flex: 1, minWidth: 80 }}>
                                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>ROAS</Text>
-                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }} numberOfLines={1} adjustsFontSizeToFit>
                                         {data.roas}x
                                     </Text>
                                 </View>
                                 <View style={{ flex: 1, minWidth: 80 }}>
                                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Purchases</Text>
-                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
                                         {data.purchases}
                                     </Text>
                                 </View>
@@ -975,36 +978,36 @@ const styles = StyleSheet.create({
         minWidth: '100%',
     },
     content: {
-        padding: 16,
+        padding: 12, // Reduced from 16
         paddingBottom: 32,
     },
     card: {
-        padding: 16,
+        padding: 12, // Reduced from 16
         borderRadius: 16,
-        marginBottom: 16,
+        marginBottom: 12, // Reduced margin
     },
     statsGrid: {
         flexDirection: 'row',
-        gap: 12,
-        marginBottom: 16,
+        gap: 8, // Reduced gap from 12
+        marginBottom: 12, // Reduced margin
     },
     statCard: {
         flex: 1,
-        padding: 16,
+        padding: 12, // Reduced from 16
         borderRadius: 16,
     },
     errorCard: {
-        padding: 16,
+        padding: 12, // Reduced from 16
         borderRadius: 12,
-        marginBottom: 16,
+        marginBottom: 12,
     },
     alertCard: {
-        padding: 16,
+        padding: 12, // Reduced from 16
         borderRadius: 12,
         borderLeftWidth: 4,
     },
     limitCard: {
-        padding: 16,
+        padding: 12, // Reduced from 16
         borderRadius: 12,
         borderWidth: 1,
         marginBottom: 12,
@@ -1025,14 +1028,14 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     badge: {
-        paddingHorizontal: 8,
+        paddingHorizontal: 6, // Reduced from 8
         paddingVertical: 2,
         borderRadius: 4,
         borderWidth: 1,
         alignSelf: 'flex-start',
     },
     badgeText: {
-        fontSize: 11,
+        fontSize: 10, // Reduced from 11
         fontWeight: '700',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
@@ -1041,12 +1044,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 16,
+        marginBottom: 12, // Reduced from 16
     },
     summaryCard: {
-        padding: 20,
+        padding: 16, // Reduced from 20
         borderRadius: 16,
-        marginBottom: 20,
+        marginBottom: 16, // Reduced from 20
     },
     metricsRow: {
         flexDirection: 'row',
@@ -1056,11 +1059,12 @@ const styles = StyleSheet.create({
     metricItem: {
         flex: 1,
         alignItems: 'center',
+        paddingHorizontal: 2, // Ensure no heavy internal padding
     },
     metricDivider: {
         width: 1,
-        height: 40,
-        marginHorizontal: 8,
+        height: 32, // Reduced height
+        marginHorizontal: 4, // Reduced margin
     },
     loadingContainer: {
         flex: 1,
@@ -1068,7 +1072,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     campaignCard: {
-        padding: 16,
+        padding: 12, // Reduced from 16
         borderRadius: 12,
         marginBottom: 12,
     },

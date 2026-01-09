@@ -57,7 +57,7 @@ const HomeScreen = ({ navigation }) => {
             });
             setWorkQueue({ pending, confirmed });
         }, (error) => {
-            console.log("WorkQueue Error:", error.code);
+            // Silently handle error
         });
         return () => unsubscribe();
     }, []);
@@ -124,7 +124,7 @@ const HomeScreen = ({ navigation }) => {
             setStats(prev => ({ ...prev, activeCarts: activeCount }));
             if (snapshot.size > 0) setConnectionStatus(prev => ({ ...prev, shiprocket: true }));
         }, (error) => {
-            console.log("Carts Stats Error:", error.code);
+            // Silently handle error
         });
 
         return () => { unsubOrders(); unsubCarts(); };

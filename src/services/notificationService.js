@@ -69,7 +69,6 @@ export async function registerForPushNotificationsAsync(userId, role) {
     const messaging = getMessaging();
 
     if (!messaging) {
-        console.log("Messaging not initialized (Web or Expo Go)");
         return null;
     }
 
@@ -105,7 +104,6 @@ export async function registerForPushNotificationsAsync(userId, role) {
     }
 
     if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notification!');
         return null;
     }
 
