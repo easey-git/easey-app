@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, FlatList, TouchableOpacity } from 'react-native';
-import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Button, SegmentedButtons, DataTable, FAB, Menu, IconButton, Portal, Dialog, TextInput } from 'react-native-paper';
+import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Button, SegmentedButtons, DataTable, FAB, Menu, IconButton, Portal, Dialog, TextInput, Switch } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
@@ -604,35 +604,13 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                             </TouchableOpacity>
                         </View>
 
-                        {/* Action Menu (Simplified) */}
-                        <Menu
-                            visible={menuVisible[campaign.id]}
-                            onDismiss={() => setMenuVisible({ ...menuVisible, [campaign.id]: false })}
-                            anchor={
-                                <IconButton
-                                    icon="dots-vertical"
-                                    size={20}
-                                    onPress={() => setMenuVisible({ ...menuVisible, [campaign.id]: true })}
-                                />
-                            }
-                        >
-                            <Menu.Item
-                                onPress={() => {
-                                    setMenuVisible({ ...menuVisible, [campaign.id]: false });
-                                    // Make sure toggle function name matches state
-                                    // Assuming handleStatusToggle or equivalent exists, using the one visible in previous context if possible, 
-                                    // otherwise sticking to what was likely there.
-                                    // The previous view showed: toggleCampaignStatus(campaign.id, campaign.status);
-                                    if (typeof toggleCampaignStatus === 'function') {
-                                        toggleCampaignStatus(campaign.id, campaign.status);
-                                    } else {
-                                        alert('Status toggle function not found');
-                                    }
-                                }}
-                                leadingIcon={campaign.status === 'ACTIVE' ? 'pause' : 'play'}
-                                title={campaign.status === 'ACTIVE' ? 'Pause' : 'Resume'}
-                            />
-                        </Menu>
+                        {/* Direct Toggle Switch */}
+                        <Switch
+                            value={campaign.status === 'ACTIVE'}
+                            onValueChange={() => toggleCampaignStatus(campaign.id, campaign.status)}
+                            color={theme.colors.primary}
+                            style={{ alignSelf: 'center' }}
+                        />
                     </View>
 
                     {campaign.performance && (
