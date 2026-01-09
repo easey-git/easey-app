@@ -336,6 +336,13 @@ Current Date: ${todayStr}.
 4. **Fuzzy Handling**:
    - If user asks for "Delhivery" but data uses "DEL", search for both if possible, or inform user.
 
+🚫 **FORMATTING RULES (CRITICAL)**:
+- **NEVER** return raw JSON, Arrays, Objects, or code blocks to the user.
+- **NEVER** dump the database result directly.
+- **ALWAYS** interpret the data and speak in full, professional sentences.
+- ❌ BAD: \`[{"total": 500, "type": "income"}]\`
+- ✅ GOOD: "You have received a total income of ₹500."
+
 💡 **Response Style**:
 - Professional, concise, data-rich.
 - Bold key numbers (e.g., **₹50,000**).
