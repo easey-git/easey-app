@@ -41,6 +41,8 @@ const StatsScreen = ({ navigation }) => {
     });
     const [ga4Error, setGa4Error] = useState(null);
     const [recentActivity, setRecentActivity] = useState([]);
+    const [rawOrders, setRawOrders] = useState([]);
+    const [rawCheckouts, setRawCheckouts] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
@@ -68,6 +70,7 @@ const StatsScreen = ({ navigation }) => {
 
         const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
             let todayTotal = 0;
+            setRawOrders(snapshot.docs);
             const buckets = {};
 
             snapshot.docs.forEach((doc) => {
@@ -128,81 +131,95 @@ const StatsScreen = ({ navigation }) => {
             limit(100)
         );
 
-        let currentDocs = [];
+        const unsubscribeCheckouts = onSnapshot(qCheckouts, (snapshot) => {
+            setRawCheckouts(snapshot.docs);
 
-        const processDocs = (docs) => {
-            const activities = [];
+            // Calc Active Carts (Simplified)
             let active = 0;
             const now = new Date();
-
-            docs.forEach(doc => {
+            snapshot.docs.forEach(doc => {
                 const data = doc.data();
-                const rawStage = data.latest_stage || '';
-                const displayStage = data.stage || data.eventType || rawStage;
-                const updatedAt = data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date();
-                const diffMinutes = Math.abs(now.getTime() - updatedAt.getTime()) / (1000 * 60);
-
-                const isOrdered = rawStage === 'ORDER_PLACED' || rawStage === 'PAYMENT_INITIATED' || rawStage === 'COMPLETED' || !!data.orderId;
-                const isAbandoned = !isOrdered && (rawStage === 'CHECKOUT_ABANDONED' || data.eventType === 'ABANDONED' || diffMinutes > 10);
-
-                if (isOrdered) {
-                    // Converted
-                } else if (isAbandoned) {
-                    // Abandoned
-                } else {
-                    active++;
-                }
-
-                // Intelligent Auto-Dismiss: Truly Real-Time (last 5 mins)
-                if (diffMinutes <= 5) {
-                    activities.push({
-                        id: doc.id,
-                        ...data,
-                        status: displayStage,
-                        jsDate: updatedAt
-                    });
-                }
+                const diff = (now - (data.updatedAt?.toDate ? data.updatedAt.toDate() : now)) / (1000 * 60);
+                if (diff < 30) active++; // Active in last 30m
             });
-
             setActiveCarts(active);
-
-            const currentMaxTimestamp = activities.length > 0
-                ? Math.max(...activities.map(a => a.jsDate ? a.jsDate.getTime() : 0))
-                : 0;
-
-            if (!isFirstLoadRef.current && currentMaxTimestamp > lastMaxTimestampRef.current) {
-                playSound('LIVE_FEED');
-            }
-
-            lastMaxTimestampRef.current = currentMaxTimestamp;
-            isFirstLoadRef.current = false;
-
-            // Animate List Updates
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-
-            // Show all activities (up to query limit)
-            setRecentActivity(activities);
             setLoading(false);
-        };
-
-        const unsubscribeCheckouts = onSnapshot(qCheckouts, (snapshot) => {
-            currentDocs = snapshot.docs;
-            processDocs(currentDocs);
         });
-
-        // Update every second for millisecond-precision "live" feel
-        const intervalId = setInterval(() => {
-            if (currentDocs.length > 0) {
-                processDocs(currentDocs);
-            }
-        }, 1000);
 
         return () => {
             unsubscribeOrders();
             unsubscribeCheckouts();
-            clearInterval(intervalId);
         };
     }, []);
+
+    // NEW: Combined Feed Processor (Orders + Checkouts)
+    useEffect(() => {
+        const updateFeed = () => {
+            const now = new Date();
+            const combined = [];
+            const WINDOW_MINUTES = 2; // Strict 2 min window
+
+            // 1. Process Orders
+            if (rawOrders) {
+                rawOrders.forEach(doc => {
+                    const data = doc.data();
+                    const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+                    const diff = (now - date) / 1000 / 60;
+                    if (diff <= WINDOW_MINUTES) {
+                        combined.push({
+                            id: doc.id,
+                            ...data,
+                            status: 'ORDER PLACED',
+                            jsDate: date,
+                            customerName: data.customerName || 'Customer',
+                            totalPrice: data.totalPrice,
+                            isOrder: true
+                        });
+                    }
+                });
+            }
+
+            // 2. Process Checkouts (Active/Abandoned)
+            if (rawCheckouts) {
+                rawCheckouts.forEach(doc => {
+                    const data = doc.data();
+                    const date = data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date();
+                    const diff = (now - date) / 1000 / 60;
+
+                    if (diff <= WINDOW_MINUTES) {
+                        const stage = data.eventType === 'ABANDONED' ? 'ABANDONED' : (data.stage || 'ACTIVE');
+                        combined.push({
+                            id: doc.id,
+                            ...data,
+                            status: stage,
+                            jsDate: date,
+                            isOrder: false
+                        });
+                    }
+                });
+            }
+
+            // 3. Sort & Set
+            combined.sort((a, b) => b.jsDate - a.jsDate);
+
+            // Audio Cue
+            const currentMax = combined.length > 0 ? combined[0].jsDate.getTime() : 0;
+            if (!isFirstLoadRef.current && currentMax > lastMaxTimestampRef.current) {
+                playSound('LIVE_FEED');
+            }
+            lastMaxTimestampRef.current = currentMax;
+            isFirstLoadRef.current = false;
+
+            // Animation
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+            setRecentActivity(combined);
+        };
+
+        const interval = setInterval(updateFeed, 1000);
+        updateFeed();
+
+        return () => clearInterval(interval);
+    }, [rawOrders, rawCheckouts]);
 
     // Fetch Comprehensive GA4 Analytics (Standardized Interval of 1 min for full refresh)
     useEffect(() => {
@@ -505,7 +522,7 @@ const StatsScreen = ({ navigation }) => {
                 </View>
 
                 {recentActivity.map((item) => (
-                    <React.Fragment key={item.id}>
+                    <View key={item.id} style={{ overflow: 'hidden' }}>
                         <List.Item
                             title={item.customerName || item.first_name || item.phone || 'Visitor'}
                             titleStyle={{ fontWeight: 'bold', fontSize: 15 }}
@@ -543,7 +560,7 @@ const StatsScreen = ({ navigation }) => {
                             }}
                         />
                         <Divider style={{ marginLeft: 72 }} />
-                    </React.Fragment>
+                    </View>
                 ))}
             </View>
 
