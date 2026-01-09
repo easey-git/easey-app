@@ -3,53 +3,17 @@ const admin = require("firebase-admin");
 const cors = require('cors')({ origin: true });
 
 // ---------------------------------------------------------
-// CONFIGURATION & CONSTANTS
+// 1. CONFIGURATION & HIGH-PERFORMANCE SETTINGS
 // ---------------------------------------------------------
 const CONFIG = {
-    TIMEZONE: 'Asia/Kolkata', // Business operates in IST
+    TIMEZONE: 'Asia/Kolkata',
     LOCALE: 'en-IN',
     MAX_LIMIT: 500,
-    DEFAULT_LIMIT: 10
+    DEFAULT_LIMIT: 20
 };
 
-const ALLOWED_COLLECTIONS = [
-    'orders', 'checkouts', 'wallet_transactions',
-    'campaigns', 'whatsapp_messages', 'users', 'system'
-];
-
 // ---------------------------------------------------------
-// SCHEMAS (Single Source of Truth)
-// ---------------------------------------------------------
-const DB_SCHEMA = `
-1. **orders** (Sales):
-   - Fields: orderNumber (num), totalPrice (num), status (str), customerName, phoneNormalized, city, state, createdAt (ISO timestamp).
-   - Key Filter: 'createdAt' for dates.
-
-2. **checkouts** (Abandoned Carts):
-   - Fields: eventType ('ABANDONED', 'order_placed'), total_price, email, phoneNormalized, updatedAt (ISO timestamp).
-   - Key Filter: 'updatedAt' for recency.
-
-3. **wallet_transactions** (Finance):
-   - Fields: amount (num), type ('income', 'expense'), category, description, date (ISO timestamp).
-   - Key Filter: 'date'.
-   - rule: NEVER sum income and expense together.
-
-4. **campaigns** (Marketing):
-   - Fields: name, status, spend (num), revenue (num), impressions.
-   - metric: ROAS = revenue / spend.
-
-5. **whatsapp_messages** (Support):
-   - Fields: body, phoneNormalized, direction ('inbound', 'outbound'), timestamp.
-
-6. **users** (Team):
-   - Fields: email, role, displayName.
-
-7. **system** (Team Board):
-   - Doc: 'team_board'. Fields: content, lastEditedBy.
-`;
-
-// ---------------------------------------------------------
-// INITIALIZATION
+// 2. INITIALIZATION
 // ---------------------------------------------------------
 if (!admin.apps.length) {
     try {
@@ -74,207 +38,253 @@ try {
 }
 
 // ---------------------------------------------------------
-// STANDARD HELPERS
+// 3. INTELLIGENT HELPERS (The "Brain" Utilities)
 // ---------------------------------------------------------
-
-/**
- * Get standard business date context
- */
 const getDateContext = () => {
     const now = new Date();
+    const fmt = (d) => d.toLocaleDateString('en-CA', { timeZone: CONFIG.TIMEZONE }); // YYYY-MM-DD
 
-    // Formatters
-    const fmtDate = new Intl.DateTimeFormat('en-CA', {
-        timeZone: CONFIG.TIMEZONE,
-        year: 'numeric', month: '2-digit', day: '2-digit'
-    });
-    const fmtTime = new Intl.DateTimeFormat(CONFIG.LOCALE, {
-        timeZone: CONFIG.TIMEZONE,
-        hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true
-    });
-
-    // Calculate relative dates properly using midnight-today reference
-    const todayStr = fmtDate.format(now); // YYYY-MM-DD
-
-    // Create Date object for "Today 00:00" in target timezone to subtract days safely
-    // simple math: just subtract 24h from now is risky for boundaries.
-    // Better: Helper to subtract days from the string date
-    const getShiftedDate = (days) => {
+    // Calculate Shifts in IST
+    const getShifted = (days) => {
         const d = new Date(now.toLocaleString('en-US', { timeZone: CONFIG.TIMEZONE }));
         d.setDate(d.getDate() - days);
-        return fmtDate.format(d);
+        return fmt(d);
     };
 
     return {
-        today: todayStr,
-        yesterday: getShiftedDate(1),
-        lastWeekStart: getShiftedDate(7),
-        currentTime: fmtTime.format(now),
+        today: fmt(now),
+        yesterday: getShifted(1),
+        startOfWeek: getShifted(now.getDay()), // Sunday
+        startOfMonth: getShifted(now.getDate() - 1),
         timezone: CONFIG.TIMEZONE
     };
 };
 
-/**
- * Sanitize and Type-Cast Filter Values
- */
-const sanitizeFilterValue = (field, value) => {
-    if (value === null || value === undefined) return value; // Let firestore handle or error
-
-    // Numeric Fields
-    const numberFields = ['orderNumber', 'amount', 'totalPrice', 'count', 'spend', 'revenue', 'item_count'];
-    if (numberFields.includes(field) && !isNaN(value) && value !== '') {
-        return Number(value);
-    }
-
-    // Boolean Fields
-    if (['adminEdited', 'whatsappSent'].includes(field)) {
-        if (String(value).toLowerCase() === 'true') return true;
-        if (String(value).toLowerCase() === 'false') return false;
-    }
-
-    // Date Strings: Ensure valid ISO or leave as string (Firestore handles ISO strings well)
-    // We strictly use ISO strings (YYYY-MM-DD) for comparisons in Firestore queries from AI
-
-    return value;
+const formatCurrency = (amount) => {
+    return new Intl.NumberFormat(CONFIG.LOCALE, { style: 'currency', currency: 'INR' }).format(amount);
 };
 
-const applyFilters = (ref, filters) => {
-    let queryRef = ref;
-    if (!filters || !Array.isArray(filters)) return queryRef;
+// ---------------------------------------------------------
+// 4. "SUPER TOOLS" (Business Logic Layer)
+// ---------------------------------------------------------
+const DATA_TOOLS = {
 
-    for (const filter of filters) {
-        if (!Array.isArray(filter) || filter.length !== 3) continue;
-        const [field, op, rawVal] = filter;
-        const val = sanitizeFilterValue(field, rawVal);
-        queryRef = queryRef.where(field, op, val);
-    }
-    return queryRef;
-};
+    /**
+     * 📊 getFinancialReport
+     * Calculates Income, Expense, and Net Profit in parallel.
+     * Prevents AI from doing bad math or multiple round-trips.
+     */
+    getFinancialReport: async (args, { permissions }) => {
+        if (!permissions.includes('access_wallet')) throw new Error("Permission Denied: Wallet");
 
-const convertTimestamps = (data) => {
-    const res = { ...data };
-    for (const k in res) {
-        const v = res[k];
-        if (v && typeof v === 'object' && v._seconds) {
-            res[k] = new Date(v._seconds * 1000).toISOString();
-        } else if (v && v.toDate && typeof v.toDate === 'function') {
-            res[k] = v.toDate().toISOString();
+        const { startDate, endDate, category } = args;
+        const walletRef = db.collection('wallet_transactions');
+
+        // Base Query
+        let q = walletRef.where('date', '>=', startDate + 'T00:00:00')
+            .where('date', '<=', endDate + 'T23:59:59');
+
+        if (category) q = q.where('category', '==', category);
+
+        // Fetch ALL transactions in range (up to safe limit) to aggregate accurately
+        // Note: For massive scale, we'd use aggregation queries, but for <500 items, client-side math is smarter for categorization.
+        const snapshot = await q.limit(1000).get();
+
+        const stats = {
+            total_income: 0,
+            total_expense: 0,
+            net_profit: 0,
+            transaction_count: snapshot.size,
+            breakdown: {}
+        };
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const amt = Number(data.amount) || 0;
+
+            if (data.type === 'income') {
+                stats.total_income += amt;
+            } else if (data.type === 'expense') {
+                stats.total_expense += amt;
+                // Track expense categories
+                const cat = data.category || 'Uncategorized';
+                stats.breakdown[cat] = (stats.breakdown[cat] || 0) + amt;
+            }
+        });
+
+        stats.net_profit = stats.total_income - stats.total_expense;
+
+        // Return highly readable summary
+        return {
+            ...stats,
+            formatted: `Income: ${formatCurrency(stats.total_income)} | Expense: ${formatCurrency(stats.total_expense)} | Net: ${formatCurrency(stats.net_profit)}`
+        };
+    },
+
+    /**
+     * 👤 getCustomer360
+     * Aggregates EVERYTHING about a customer by Phone Number.
+     * Links Orders + Cart + Support Chat.
+     */
+    getCustomer360: async (args, { permissions, isAdmin }) => {
+        if (!isAdmin && !permissions.includes('access_orders')) throw new Error("Permission Denied: Customer Data");
+
+        const { phone } = args;
+        if (!phone) throw new Error("Phone number required for 360 view");
+
+        // Normalize phone (remove +91, spaces)
+        // Fuzzy match strategy: search for the last 10 digits
+        const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+
+        // Run Parallel Queries
+        const [ordersSnap, cartsSnap, chatsSnap] = await Promise.all([
+            db.collection('orders').where('phoneNormalized', '>=', cleanPhone).limit(20).get(),
+            db.collection('checkouts').where('phoneNormalized', '>=', cleanPhone).limit(5).get(),
+            db.collection('whatsapp_messages').where('phoneNormalized', '>=', cleanPhone).limit(10).get()
+        ]);
+
+        const orders = ordersSnap.docs.map(d => d.data()).filter(d => d.phoneNormalized?.includes(cleanPhone));
+        const carts = cartsSnap.docs.map(d => d.data()).filter(d => d.phoneNormalized?.includes(cleanPhone));
+        const chats = chatsSnap.docs.map(d => d.data()).filter(d => d.phoneNormalized?.includes(cleanPhone));
+
+        // Calculate Metrics
+        const totalSpend = orders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
+        const ltv = formatCurrency(totalSpend);
+
+        return {
+            customer_profile: {
+                found: orders.length > 0 || carts.length > 0,
+                phone: cleanPhone,
+                lifetime_value: ltv,
+                total_orders: orders.length,
+                pending_carts: carts.length,
+            },
+            recent_orders: orders.slice(0, 3).map(o => ({
+                id: o.orderNumber, status: o.status, total: o.totalPrice, date: o.createdAt
+            })),
+            recent_abandoned_carts: carts.map(c => ({
+                items: c.items?.length, total: c.total_price, date: c.updatedAt
+            })),
+            last_support_message: chats.length ? chats[chats.length - 1].body : "None"
+        };
+    },
+
+    /**
+     * 🔍 searchGlobal
+     * Smart Search across Collections. 
+     * Handles "Find Rohit" or "Order #1234"
+     */
+    searchGlobal: async (args, { permissions }) => {
+        const { query } = args;
+        const results = [];
+
+        // Is it an Order ID?
+        if (!isNaN(query)) {
+            const orderSnap = await db.collection('orders').where('orderNumber', '==', Number(query)).get();
+            if (!orderSnap.empty) results.push({ type: 'ORDER', data: orderSnap.docs[0].data() });
         }
-    }
-    return res;
-};
 
-// ---------------------------------------------------------
-// DATA TOOLS
-// ---------------------------------------------------------
-const tools = {
+        // Is it a Name? Search Orders (Case sensitive usually, require exact match or assume exact)
+        // Note: Firestore lacks native fuzzy search. We use inequality scan for "starts with"
+        const nameSnap = await db.collection('orders')
+            .where('customerName', '>=', query)
+            .where('customerName', '<=', query + '\uf8ff')
+            .limit(5).get();
+
+        nameSnap.forEach(doc => results.push({ type: 'CUSTOMER_ORDER', data: doc.data() }));
+
+        // Is it a Campaign?
+        if (permissions.includes('access_campaigns')) {
+            const campSnap = await db.collection('campaigns')
+                .where('name', '>=', query)
+                .where('name', '<=', query + '\uf8ff')
+                .limit(3).get();
+            campSnap.forEach(doc => results.push({ type: 'CAMPAIGN', data: doc.data() }));
+        }
+
+        return {
+            match_count: results.length,
+            results: results
+        };
+    },
+
+    // --- Legacy Low-Level Access (for ad-hoc queries) ---
     queryFirestore: async (args, { permissions, isAdmin }) => {
-        const { collection, filters, limit = CONFIG.DEFAULT_LIMIT, orderBy } = args;
-
-        // Permission Check
+        const { collection, filters, limit = 10, orderBy } = args;
+        // Basic permission mapping check (simplified)
         const accessMap = {
             'orders': 'access_orders', 'checkouts': 'access_orders',
             'wallet_transactions': 'access_wallet', 'campaigns': 'access_campaigns',
             'whatsapp_messages': 'access_whatsapp', 'users': 'ADMIN', 'system': 'ADMIN'
         };
-        const requiredPerm = accessMap[collection];
-
-        if (!isAdmin && requiredPerm !== 'ADMIN' && !permissions.includes(requiredPerm)) {
-            throw new Error(`Access Denied: Missing ${requiredPerm}`);
-        }
-        if (requiredPerm === 'ADMIN' && !isAdmin) {
-            throw new Error(`Access Denied: Admin only`);
-        }
-
-        // Special Case
-        if (collection === 'system') {
-            const doc = await db.collection('system').doc('team_board').get();
-            return doc.exists ? [{ id: 'team_board', ...convertTimestamps(doc.data()) }] : [];
-        }
+        const needed = accessMap[collection];
+        if (!isAdmin && (!needed || !permissions.includes(needed))) throw new Error("Access Denied");
 
         let ref = db.collection(collection);
-        ref = applyFilters(ref, filters);
-
-        if (orderBy && orderBy.length > 0) {
-            ref = ref.orderBy(orderBy[0], orderBy[1] || 'desc');
+        if (filters && Array.isArray(filters)) {
+            for (const [f, op, v] of filters) ref = ref.where(f, op, v);
         }
-
-        const safeLimit = Math.min(limit, CONFIG.MAX_LIMIT);
-        ref = ref.limit(safeLimit);
-
-        const snapshot = await ref.get();
-        if (snapshot.empty) return [];
-        return snapshot.docs.map(d => ({ id: d.id, ...convertTimestamps(d.data()) }));
-    },
-
-    aggregateFirestore: async (args, { permissions, isAdmin }) => {
-        const { collection, filters, aggregationType, field } = args;
-
-        // Basic permission check (same as query)
-        const accessMap = {
-            'orders': 'access_orders', 'checkouts': 'access_orders',
-            'wallet_transactions': 'access_wallet', 'campaigns': 'access_campaigns'
-        };
-        if (!isAdmin && !permissions.includes(accessMap[collection])) {
-            throw new Error("Access Denied");
-        }
-
-        let ref = db.collection(collection);
-        ref = applyFilters(ref, filters);
-
-        if (aggregationType === 'count') {
-            const snap = await ref.count().get();
-            return { count: snap.data().count };
-        }
-
-        if (['sum', 'average'].includes(aggregationType)) {
-            if (!field) throw new Error("Field required for math aggregation");
-            const aggField = aggregationType === 'sum'
-                ? admin.firestore.AggregateField.sum(field)
-                : admin.firestore.AggregateField.average(field);
-            const snap = await ref.aggregate({ result: aggField }).get();
-            return { [aggregationType]: snap.data().result || 0 };
-        }
-
-        throw new Error("Invalid aggregation type");
+        if (orderBy) ref = ref.orderBy(orderBy[0], orderBy[1] || 'desc');
+        const snap = await ref.limit(limit).get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
 };
 
-const GEMINI_TOOLS = [{
+// ---------------------------------------------------------
+// 5. TOOL DEFINITIONS (Gemini Spec)
+// ---------------------------------------------------------
+const GEMINI_TOOLS_DEF = [{
     functionDeclarations: [
         {
-            name: "queryFirestore",
-            description: "Retrieve records from database. Use for lists, search, or details.",
+            name: "getFinancialReport",
+            description: "Get Income, Expense, and Net Profit for a date range. Accurate for money questions.",
             parametersJsonSchema: {
                 type: "object",
                 properties: {
-                    collection: { type: "string", enum: ALLOWED_COLLECTIONS },
-                    filters: { type: "array", description: "Array of [field, operator, value]. Date values must be ISO strings." },
-                    limit: { type: "number" },
-                    orderBy: { type: "array", items: { type: "string" } }
+                    startDate: { type: "string", description: "YYYY-MM-DD" },
+                    endDate: { type: "string", description: "YYYY-MM-DD" },
+                    category: { type: "string", description: "Optional category filter" }
                 },
-                required: ["collection"]
+                required: ["startDate", "endDate"]
             }
         },
         {
-            name: "aggregateFirestore",
-            description: "Calculate totals. Use for 'How many', 'Total amount', 'Average'.",
+            name: "getCustomer360",
+            description: "Get full profile (LTV, orders, carts) of a customer by Phone Number.",
+            parametersJsonSchema: {
+                type: "object",
+                properties: { phone: { type: "string" } },
+                required: ["phone"]
+            }
+        },
+        {
+            name: "searchGlobal",
+            description: "Search for Orders, Customers, or Campaigns by Name or ID.",
+            parametersJsonSchema: {
+                type: "object",
+                properties: { query: { type: "string" } },
+                required: ["query"]
+            }
+        },
+        {
+            name: "queryFirestore",
+            description: "Fallback: Direct database query for specific lists not covered by other tools.",
             parametersJsonSchema: {
                 type: "object",
                 properties: {
-                    collection: { type: "string", enum: ALLOWED_COLLECTIONS },
+                    collection: { type: "string" },
                     filters: { type: "array" },
-                    aggregationType: { type: "string", enum: ["count", "sum", "average"] },
-                    field: { type: "string", description: "Field to calculate on (e.g., 'totalPrice', 'amount')" }
+                    limit: { type: "number" },
+                    orderBy: { type: "array" }
                 },
-                required: ["collection", "aggregationType"]
+                required: ["collection"]
             }
         }
     ]
 }];
 
 // ---------------------------------------------------------
-// MAIN HANDLER
+// 6. MAIN HANDLER
 // ---------------------------------------------------------
 module.exports = async (req, res) => {
     await new Promise(resolve => cors(req, res, resolve));
@@ -282,46 +292,51 @@ module.exports = async (req, res) => {
     if (!ai) return res.status(500).json({ error: 'System configuration error' });
 
     try {
-        // 1. Authenticate
         const authHeader = req.headers.authorization;
         if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-
         const token = authHeader.split('Bearer ')[1];
         const decoded = await admin.auth().verifyIdToken(token);
+
+        // Fetch Admin Status
         const userDoc = await db.collection('users').doc(decoded.uid).get();
         const userData = userDoc.data() || {};
-
         const userContext = {
             uid: decoded.uid,
             isAdmin: userData.role === 'admin',
             permissions: userData.permissions || []
         };
 
-        // 2. Prepare Context
         const { prompt, history = [] } = req.body;
         const dateCtx = getDateContext();
 
-        const SYSTEM_PROMPT = `You are 'Sidekick', a professional Business Data Analyst.
-You have direct read-access to the company's live database.
+        // 🧠 SENIOR ANALYST PROMPT
+        const SYSTEM_PROMPT = `You are 'Sidekick Pro', a Senior E-commerce Analyst.
 
-🌍 **Operational Context**:
-- **Date**: ${dateCtx.today} (YYYY-MM-DD)
-- **Time**: ${dateCtx.currentTime} (${dateCtx.timezone})
-- **Yesterday**: ${dateCtx.yesterday}
-- **Last Week**: ${dateCtx.lastWeekStart}
+🌍 **Temporal Awareness (IST)**:
+- Today: ${dateCtx.today} | Yesterday: ${dateCtx.yesterday}
+- Context: You operate in Indian Standard Time (IST).
 
-📂 **Data Schema**:
-${DB_SCHEMA}
+🛠️ **Strategic Playbooks**:
+1. **Profitability Analysis**:
+   - Use \`getFinancialReport\`. 
+   - Always report "Net Profit". If negative, flag it with 🔴.
+   
+2. **Customer Support / Lookup**:
+   - Use \`getCustomer360\` if searched by Phone.
+   - Use \`searchGlobal\` if searched by Name or ID.
+   - Report: "Lifetime Value (LTV)" and "Start Date".
 
-⚖️ **Operational Rules**:
-1. **Precise Dates**: When user asks for "Today" or "Yesterday", ALWAYS apply a filter range (YYYY-MM-DDT00:00:00 to 23:59:59).
-2. **Financial Accuracy**: Income and Expenses are separate streams. Never mix them.
-3. **No Raw Data**: Summarize findings in natural language. Do not output JSON.
-4. **Be Proactive**: If ROAS is low, say it. If sales are high, highlight it.
+3. **Performance Audit**:
+   - Calculate ROAS = (Campaign Revenue / Spend).
+   - Good ROAS is > 4.0. Bad is < 2.0.
 
-Answer the user's request now.`;
+4. **Formatting**:
+   - Use structured, professional summaries.
+   - 🚫 No Raw JSON. 🚫 No Markdown Code Blocks.
+   
+Your goal is to provide **Actionable Business Intelligence**, not just data rows.`;
 
-        // 3. Chat Interaction Loop
+        // Execution Logic (Standard Agent Loop)
         const chatHistory = [
             ...history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
             { role: 'user', parts: [{ text: prompt }] }
@@ -330,22 +345,26 @@ Answer the user's request now.`;
         let response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
             contents: chatHistory,
-            config: { systemInstruction: SYSTEM_PROMPT, tools: GEMINI_TOOLS }
+            config: { systemInstruction: SYSTEM_PROMPT, tools: GEMINI_TOOLS_DEF }
         });
 
-        // 4. Tool Execution Loop
-        while (response.functionCalls?.length > 0) {
+        // Loop for multi-step reasoning
+        let depth = 0;
+        while (response.functionCalls?.length > 0 && depth < 5) {
+            depth++;
             const call = response.functionCalls[0];
-            const ToolFunction = tools[call.name];
+            const ToolFunction = DATA_TOOLS[call.name];
 
             let result;
             try {
                 if (ToolFunction) {
+                    console.log(`[AI-Ops] Executing ${call.name}`);
                     result = await ToolFunction(call.args, userContext);
                 } else {
-                    result = { error: "Function not found" };
+                    result = { error: `Tool ${call.name} not available` };
                 }
             } catch (err) {
+                console.error(`[AI-Ops] Tool Error: ${err.message}`);
                 result = { error: err.message };
             }
 
@@ -355,15 +374,14 @@ Answer the user's request now.`;
             response = await ai.models.generateContent({
                 model: 'gemini-2.0-flash-exp',
                 contents: chatHistory,
-                config: { systemInstruction: SYSTEM_PROMPT, tools: GEMINI_TOOLS }
+                config: { systemInstruction: SYSTEM_PROMPT, tools: GEMINI_TOOLS_DEF }
             });
         }
 
-        // 5. Final Response
         res.json({ text: response.text });
 
     } catch (error) {
-        console.error('API Error:', error);
-        res.status(500).json({ error: error.message || 'Internal Server Error' });
+        console.error('API Critical Failure:', error);
+        res.status(500).json({ error: error.message });
     }
 };
