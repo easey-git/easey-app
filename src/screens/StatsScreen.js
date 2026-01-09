@@ -134,15 +134,31 @@ const StatsScreen = ({ navigation }) => {
         const unsubscribeCheckouts = onSnapshot(qCheckouts, (snapshot) => {
             setRawCheckouts(snapshot.docs);
 
-            // Calc Active Carts (Simplified)
-            let active = 0;
+            // Industry Standard Active Cart Calculation
             const now = new Date();
+            const uniqueSessions = new Set();
+
             snapshot.docs.forEach(doc => {
                 const data = doc.data();
-                const diff = (now - (data.updatedAt?.toDate ? data.updatedAt.toDate() : now)) / (1000 * 60);
-                if (diff < 30) active++; // Active in last 30m
+
+                // 1. Time Check (30m window standard for "Active")
+                const lastActive = data.updatedAt?.toDate ? data.updatedAt.toDate() : now;
+                const diffMinutes = (now - lastActive) / (1000 * 60);
+                if (diffMinutes > 30) return;
+
+                // 2. Status Check (Exclude explicit Abandoned)
+                if (data.eventType === 'ABANDONED' || data.latest_stage === 'CHECKOUT_ABANDONED') return;
+
+                // 3. Identity Resolution (Deduplication)
+                // Use the most specific ID available to group events
+                const uniqueId = data.cart_token || data.checkout_token || data.id || data.cart_id || data.phoneNormalized || data.email || doc.id;
+
+                if (uniqueId) {
+                    uniqueSessions.add(uniqueId);
+                }
             });
-            setActiveCarts(active);
+
+            setActiveCarts(uniqueSessions.size);
             setLoading(false);
         });
 
