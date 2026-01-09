@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Image, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Text, Surface, ActivityIndicator, Icon, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog, ProgressBar } from 'react-native-paper';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
-import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, limit, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getCachedAnalytics } from '../services/ga4Service';
 import { useSound } from '../context/SoundContext';
@@ -124,7 +124,8 @@ const StatsScreen = ({ navigation }) => {
         // 2. Listen to CHECKOUTS for Active/Abandoned counts & Feed
         const qCheckouts = query(
             collection(db, "checkouts"),
-            orderBy("updatedAt", "desc")
+            orderBy("updatedAt", "desc"),
+            limit(100)
         );
 
         let currentDocs = [];
@@ -152,13 +153,15 @@ const StatsScreen = ({ navigation }) => {
                     active++;
                 }
 
-                // Add to feed regardless of time to ensure history is visible
-                activities.push({
-                    id: doc.id,
-                    ...data,
-                    status: displayStage,
-                    jsDate: updatedAt
-                });
+                // Intelligent Auto-Dismiss: Truly Real-Time (last 5 mins)
+                if (diffMinutes <= 5) {
+                    activities.push({
+                        id: doc.id,
+                        ...data,
+                        status: displayStage,
+                        jsDate: updatedAt
+                    });
+                }
             });
 
             setActiveCarts(active);
@@ -187,11 +190,12 @@ const StatsScreen = ({ navigation }) => {
             processDocs(currentDocs);
         });
 
+        // Update every second for millisecond-precision "live" feel
         const intervalId = setInterval(() => {
             if (currentDocs.length > 0) {
                 processDocs(currentDocs);
             }
-        }, 30000);
+        }, 1000);
 
         return () => {
             unsubscribeOrders();
@@ -232,6 +236,25 @@ const StatsScreen = ({ navigation }) => {
         const m = Math.floor(seconds / 60);
         const s = seconds % 60;
         return `${m}m ${s}s`;
+    };
+
+    const getRelativeTime = (date) => {
+        if (!date) return '';
+        const now = new Date();
+        const diffSeconds = Math.floor((now - date) / 1000);
+        if (diffSeconds < 15) return 'Just now';
+        if (diffSeconds < 60) return `${diffSeconds}s ago`;
+        if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const getStageConfig = (status) => {
+        const s = (status || '').toUpperCase();
+        if (s.includes('ABANDONED')) return { icon: 'cart-off', color: theme.colors.error, bg: theme.colors.errorContainer };
+        if (s.includes('ORDER') || s.includes('COMPLETED')) return { icon: 'check-circle', color: theme.colors.primary, bg: theme.colors.primaryContainer };
+        if (s.includes('PAYMENT')) return { icon: 'credit-card', color: '#2563eb', bg: '#dbeafe' };
+        if (s.includes('SHIP')) return { icon: 'truck', color: '#d97706', bg: '#fef3c7' };
+        return { icon: 'cart-outline', color: theme.colors.secondary, bg: theme.colors.secondaryContainer };
     };
 
     if (loading) {
@@ -489,25 +512,20 @@ const StatsScreen = ({ navigation }) => {
                             descriptionStyle={{ fontSize: 13 }}
                             style={{ paddingHorizontal: 16, backgroundColor: theme.colors.background }}
                             description={() => (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                    <Chip
-                                        compact
-                                        style={{
-                                            backgroundColor: item.status === 'ABANDONED' ? '#fee2e2' : '#dcfce7',
-                                            height: 20
-                                        }}
-                                        textStyle={{
-                                            fontSize: 10,
-                                            lineHeight: 10,
-                                            color: item.status === 'ABANDONED' ? '#b91c1c' : '#15803d',
-                                            marginVertical: 0,
-                                            fontWeight: 'bold'
-                                        }}
-                                    >
-                                        {item.status || 'Active'}
-                                    </Chip>
-                                    <Text style={{ fontSize: 11, marginLeft: 8, color: theme.colors.outline }}>
-                                        {item.jsDate ? item.jsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+                                    {(() => {
+                                        const config = getStageConfig(item.status);
+                                        return (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: config.bg, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                                <Icon source={config.icon} size={12} color={config.color} />
+                                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: config.color, marginLeft: 4, textTransform: 'uppercase' }}>
+                                                    {item.status || 'Active'}
+                                                </Text>
+                                            </View>
+                                        );
+                                    })()}
+                                    <Text style={{ fontSize: 11, marginLeft: 8, color: theme.colors.outline, fontStyle: 'italic' }}>
+                                        {getRelativeTime(item.jsDate)}
                                     </Text>
                                 </View>
                             )}
