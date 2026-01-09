@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Image } from 'react-native';
+import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Image, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Text, Surface, ActivityIndicator, Icon, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog, ProgressBar } from 'react-native-paper';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
@@ -9,6 +9,10 @@ import { useSound } from '../context/SoundContext';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const StatsScreen = ({ navigation }) => {
     const theme = useTheme();
@@ -120,8 +124,7 @@ const StatsScreen = ({ navigation }) => {
         // 2. Listen to CHECKOUTS for Active/Abandoned counts & Feed
         const qCheckouts = query(
             collection(db, "checkouts"),
-            orderBy("updatedAt", "desc"),
-            limit(20)
+            orderBy("updatedAt", "desc")
         );
 
         let currentDocs = [];
@@ -149,14 +152,13 @@ const StatsScreen = ({ navigation }) => {
                     active++;
                 }
 
-                if (diffMinutes <= 5) {
-                    activities.push({
-                        id: doc.id,
-                        ...data,
-                        status: displayStage,
-                        jsDate: updatedAt
-                    });
-                }
+                // Add to feed regardless of time to ensure history is visible
+                activities.push({
+                    id: doc.id,
+                    ...data,
+                    status: displayStage,
+                    jsDate: updatedAt
+                });
             });
 
             setActiveCarts(active);
@@ -172,6 +174,10 @@ const StatsScreen = ({ navigation }) => {
             lastMaxTimestampRef.current = currentMaxTimestamp;
             isFirstLoadRef.current = false;
 
+            // Animate List Updates
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+            // Show all activities (up to query limit)
             setRecentActivity(activities);
             setLoading(false);
         };
@@ -541,19 +547,25 @@ const StatsScreen = ({ navigation }) => {
                                     </View>
                                     <View style={{ marginBottom: 16 }}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Total Amount</Text>
-                                        <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || 0}</Text>
+                                        <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || selectedDoc.cart?.totalPrice || selectedDoc.total_price || 0}</Text>
                                     </View>
-                                    {(selectedDoc.items || selectedDoc.line_items) && (
-                                        <View>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.outline, marginBottom: 8 }}>Items</Text>
-                                            {(selectedDoc.items || selectedDoc.line_items).map((item, index) => (
-                                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-                                                    <Text variant="bodyMedium" style={{ flex: 1 }}>{item.name || item.title}</Text>
-                                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>x{item.quantity}</Text>
+                                    {(() => {
+                                        const items = selectedDoc.items || selectedDoc.line_items || selectedDoc.cart?.items || [];
+                                        if (items.length > 0) {
+                                            return (
+                                                <View>
+                                                    <Text variant="labelSmall" style={{ color: theme.colors.outline, marginBottom: 8 }}>Items</Text>
+                                                    {items.map((item, index) => (
+                                                        <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                                                            <Text variant="bodyMedium" style={{ flex: 1 }}>{item.name || item.title || 'Unknown Item'}</Text>
+                                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>x{item.quantity || 1}</Text>
+                                                        </View>
+                                                    ))}
                                                 </View>
-                                            ))}
-                                        </View>
-                                    )}
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </View>
                             )}
                         </ScrollView>
