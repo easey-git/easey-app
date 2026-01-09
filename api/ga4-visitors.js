@@ -114,19 +114,19 @@ module.exports = async (req, res) => {
             eventResponse,
             techResponse
         ] = await Promise.all([
-            // 1. Overview Metrics
+            // 1. Overview Metrics (Simplified to compatible metrics)
             analyticsDataClient.runRealtimeReport({
                 property: `properties/${propertyId}`,
                 metrics: [
                     { name: 'activeUsers' },
                     { name: 'screenPageViews' },
-                    { name: 'eventCount' },
-                    { name: 'userEngagementDuration' }
+                    { name: 'eventCount' }
                 ],
                 returnPropertyQuota: true // Enable quota monitoring
             }),
 
             // 2. Traffic Sources
+            // NOTE: 'screenPageViews' is incompatible with session dimensions in Data API
             analyticsDataClient.runRealtimeReport({
                 property: `properties/${propertyId}`,
                 dimensions: [
@@ -134,8 +134,7 @@ module.exports = async (req, res) => {
                     { name: 'sessionMedium' }
                 ],
                 metrics: [
-                    { name: 'activeUsers' },
-                    { name: 'screenPageViews' }
+                    { name: 'activeUsers' }
                 ],
                 limit: 10
             }),
@@ -213,13 +212,6 @@ module.exports = async (req, res) => {
                     console.warn(`[GA4 Warning] Daily quota at ${dailyUsage.toFixed(1)}%`);
                 }
             }
-
-            if (quota.tokensPerHour) {
-                const hourlyUsage = (quota.tokensPerHour.consumed / (quota.tokensPerHour.consumed + quota.tokensPerHour.remaining)) * 100;
-                if (hourlyUsage > 80) {
-                    console.warn(`[GA4 Warning] Hourly quota at ${hourlyUsage.toFixed(1)}%`);
-                }
-            }
         }
 
         // Process Overview Metrics
@@ -227,7 +219,7 @@ module.exports = async (req, res) => {
         const activeUsers = overviewData.rows?.[0]?.metricValues[0]?.value || '0';
         const pageViews = overviewData.rows?.[0]?.metricValues[1]?.value || '0';
         const events = overviewData.rows?.[0]?.metricValues[2]?.value || '0';
-        const engagementDuration = overviewData.rows?.[0]?.metricValues[3]?.value || '0';
+        // const engagementDuration = overviewData.rows?.[0]?.metricValues[3]?.value || '0'; // Removed
 
         // Process Traffic Sources
         const trafficSources = [];
@@ -236,13 +228,13 @@ module.exports = async (req, res) => {
                 const source = row.dimensionValues[0].value;
                 const medium = row.dimensionValues[1].value;
                 const users = parseInt(row.metricValues[0].value, 10);
-                const views = parseInt(row.metricValues[1].value, 10);
+                // pageViews removed from traffic report
 
                 trafficSources.push({
                     source: source === '(direct)' ? 'Direct' : source,
                     medium: medium === '(none)' ? 'None' : medium,
                     users,
-                    pageViews: views
+                    pageViews: 0 // Placeholder
                 });
             });
         }
@@ -292,7 +284,6 @@ module.exports = async (req, res) => {
             eventResponse[0].rows.forEach(row => {
                 const name = row.dimensionValues[0].value;
                 const count = parseInt(row.metricValues[0].value, 10);
-                // Filter out common automatic events if desired, or keep all
                 topEvents.push({ name, count });
             });
         }
@@ -309,11 +300,6 @@ module.exports = async (req, res) => {
         }
         operatingSystems.sort((a, b) => b.users - a.users);
 
-        // Calculate average session duration (in seconds)
-        const avgSessionDuration = parseInt(activeUsers) > 0
-            ? Math.round(parseInt(engagementDuration) / parseInt(activeUsers))
-            : 0;
-
         // Build comprehensive response
         const analytics = {
             // Overview
@@ -321,11 +307,11 @@ module.exports = async (req, res) => {
                 activeUsers: parseInt(activeUsers),
                 pageViews: parseInt(pageViews),
                 events: parseInt(events),
-                avgSessionDuration: avgSessionDuration
+                avgSessionDuration: 0 // Simplification as direct duration meta is flaky in realtime
             },
 
             // Traffic Sources
-            trafficSources: trafficSources.slice(0, 5), // Top 5
+            trafficSources: trafficSources.slice(0, 5),
 
             // Devices
             devices: {
@@ -335,14 +321,14 @@ module.exports = async (req, res) => {
             },
 
             // Geographic
-            locations: locations.slice(0, 10), // Top 10
+            locations: locations.slice(0, 10),
 
             // Top Content
-            topPages: topPages.slice(0, 5), // Top 5
+            topPages: topPages.slice(0, 5),
 
             // User Behavior
-            topEvents: topEvents.slice(0, 10), // Top 10 Events
-            operatingSystems: operatingSystems, // All OS found
+            topEvents: topEvents.slice(0, 10),
+            operatingSystems: operatingSystems,
 
             // Metadata
             timestamp: new Date().toISOString(),
@@ -364,11 +350,7 @@ module.exports = async (req, res) => {
             errorResetTime = Date.now();
         }
 
-        if (errorCount > 10) {
-            console.error(`[GA4 Critical] High error rate: ${errorCount} errors in last hour`);
-        }
-
-        console.error('GA4 API Error:', error.message);
+        console.error('GA4 API Error Details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
 
         // Return graceful error response with empty data
         return res.status(500).json({
