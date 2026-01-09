@@ -31,12 +31,10 @@ const StatsScreen = ({ navigation }) => {
             events: 0,
             avgSessionDuration: 0
         },
-        trafficSources: [],
         devices: { desktop: 0, mobile: 0, tablet: 0 },
         locations: [],
         topPages: [],
-        topEvents: [],
-        operatingSystems: []
+        topEvents: []
     });
     const [ga4Error, setGa4Error] = useState(null);
     const [recentActivity, setRecentActivity] = useState([]);
@@ -239,8 +237,6 @@ const StatsScreen = ({ navigation }) => {
         return `${m}m ${s}s`;
     };
 
-    const pieColors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316'];
-
     if (loading) {
         return (
             <View style={[styles.container, styles.center, { backgroundColor: theme.colors.background }]}>
@@ -366,86 +362,43 @@ const StatsScreen = ({ navigation }) => {
                 />
             </Surface>
 
-            {/* 3. USER DEMOGRAPHICS & TECH (Horizontal Scroll) */}
-            <View style={{ marginTop: 24, paddingLeft: 16 }}>
+            {/* 3. USER DEMOGRAPHICS */}
+            <View style={{ marginTop: 24, paddingHorizontal: 16 }}>
                 <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 12 }}>Audience Insights</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingRight: 16 }}>
 
-                    {/* Device Breakdown */}
-                    <Surface style={[styles.insightCard, { backgroundColor: theme.colors.surface }]} elevation={0}>
-                        <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 16 }}>Devices</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <PieChart
-                                data={[
-                                    { value: ga4Analytics.devices.mobile, color: '#10b981', text: 'M' },
-                                    { value: ga4Analytics.devices.desktop, color: '#3b82f6', text: 'D' },
-                                    { value: ga4Analytics.devices.tablet, color: '#f59e0b', text: 'T' }
-                                ]}
-                                donut
-                                radius={45}
-                                innerRadius={30}
-                                showText
-                                textColor="white"
-                                textSize={10}
-                            />
-                            <View style={{ marginLeft: 20 }}>
-                                <View style={styles.legendRow}>
-                                    <View style={[styles.dot, { backgroundColor: '#10b981' }]} />
-                                    <Text variant="bodySmall">Mobile ({ga4Analytics.devices.mobile})</Text>
-                                </View>
-                                <View style={styles.legendRow}>
-                                    <View style={[styles.dot, { backgroundColor: '#3b82f6' }]} />
-                                    <Text variant="bodySmall">Desktop ({ga4Analytics.devices.desktop})</Text>
-                                </View>
-                                <View style={styles.legendRow}>
-                                    <View style={[styles.dot, { backgroundColor: '#f59e0b' }]} />
-                                    <Text variant="bodySmall">Tablet ({ga4Analytics.devices.tablet})</Text>
-                                </View>
+                {/* Device Breakdown - Centered & Full Width */}
+                <Surface style={[styles.insightCard, { backgroundColor: theme.colors.surface, width: '100%', alignItems: 'center' }]} elevation={0}>
+                    <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingHorizontal: 10 }}>
+                        <Text variant="titleSmall" style={{ fontWeight: 'bold' }}>Devices</Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10 }}>
+                        <PieChart
+                            data={[
+                                { value: ga4Analytics.devices.mobile || 1, color: '#10b981' },
+                                { value: ga4Analytics.devices.desktop || 1, color: '#3b82f6' },
+                                { value: ga4Analytics.devices.tablet || 1, color: '#f59e0b' }
+                            ]}
+                            donut
+                            radius={70}
+                            innerRadius={50}
+                        />
+                        <View style={{ marginLeft: 40 }}>
+                            <View style={[styles.legendRow, { marginBottom: 12 }]}>
+                                <View style={[styles.dot, { backgroundColor: '#10b981', width: 12, height: 12, borderRadius: 6 }]} />
+                                <Text variant="bodyMedium">Mobile ({ga4Analytics.devices.mobile})</Text>
+                            </View>
+                            <View style={[styles.legendRow, { marginBottom: 12 }]}>
+                                <View style={[styles.dot, { backgroundColor: '#3b82f6', width: 12, height: 12, borderRadius: 6 }]} />
+                                <Text variant="bodyMedium">Desktop ({ga4Analytics.devices.desktop})</Text>
+                            </View>
+                            <View style={[styles.legendRow, { marginBottom: 12 }]}>
+                                <View style={[styles.dot, { backgroundColor: '#f59e0b', width: 12, height: 12, borderRadius: 6 }]} />
+                                <Text variant="bodyMedium">Tablet ({ga4Analytics.devices.tablet})</Text>
                             </View>
                         </View>
-                    </Surface>
-
-                    {/* Traffic Sources */}
-                    <Surface style={[styles.insightCard, { backgroundColor: theme.colors.surface }]} elevation={0}>
-                        <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 16 }}>Traffic Sources</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <PieChart
-                                data={ga4Analytics.trafficSources.length > 0 ? ga4Analytics.trafficSources.map((s, i) => ({
-                                    value: s.users,
-                                    color: pieColors[i % pieColors.length],
-                                })) : [{ value: 1, color: theme.colors.surfaceVariant }]}
-                                radius={45}
-                            />
-                            <View style={{ marginLeft: 20, maxWidth: 120 }}>
-                                {ga4Analytics.trafficSources.slice(0, 3).map((source, index) => (
-                                    <View key={index} style={styles.legendRow}>
-                                        <View style={[styles.dot, { backgroundColor: pieColors[index % pieColors.length] }]} />
-                                        <Text variant="bodySmall" numberOfLines={1}>{source.source}</Text>
-                                    </View>
-                                ))}
-                                {ga4Analytics.trafficSources.length === 0 && <Text variant="bodySmall">No data</Text>}
-                            </View>
-                        </View>
-                    </Surface>
-
-                    {/* Operating Systems (New Feature) */}
-                    <Surface style={[styles.insightCard, { backgroundColor: theme.colors.surface, width: 220 }]} elevation={0}>
-                        <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 8 }}>Tech Stack</Text>
-                        <ScrollView style={{ maxHeight: 100 }}>
-                            {ga4Analytics.operatingSystems && ga4Analytics.operatingSystems.length > 0 ? (
-                                ga4Analytics.operatingSystems.map((os, index) => (
-                                    <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                                        <Text variant="bodySmall">{os.name}</Text>
-                                        <Text variant="bodySmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{os.users}</Text>
-                                    </View>
-                                ))
-                            ) : (
-                                <Text variant="bodySmall" style={{ color: theme.colors.outline }}>No OS data available</Text>
-                            )}
-                        </ScrollView>
-                    </Surface>
-
-                </ScrollView>
+                    </View>
+                </Surface>
             </View>
 
             {/* 4. USER BEHAVIOR & LISTS */}

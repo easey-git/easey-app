@@ -24,7 +24,7 @@ export const getComprehensiveAnalytics = async () => {
         }
 
         const data = await response.json();
-        return data; // Returns { overview, trafficSources, devices, locations, topPages, timestamp }
+        return data; // Returns { overview, devices, locations, topPages, topEvents, timestamp }
     } catch (error) {
         console.error('Error fetching GA4 analytics:', error);
         return {
@@ -34,13 +34,10 @@ export const getComprehensiveAnalytics = async () => {
                 events: 0,
                 avgSessionDuration: 0
             },
-            trafficSources: [],
             devices: { desktop: 0, mobile: 0, tablet: 0 },
-            locations: [],
             locations: [],
             topPages: [],
             topEvents: [],
-            operatingSystems: [],
             error: error.message
         };
     }
@@ -93,13 +90,10 @@ let cachedData = {
         events: 0,
         avgSessionDuration: 0
     },
-    trafficSources: [],
     devices: { desktop: 0, mobile: 0, tablet: 0 },
     locations: [],
-    locations: [],
     topPages: [],
-    topEvents: [],
-    operatingSystems: []
+    topEvents: []
 };
 let lastFetchTime = 0;
 const CACHE_DURATION = 30000; // 30 seconds

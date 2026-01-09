@@ -39,20 +39,16 @@ module.exports = async (req, res) => {
         // We fetch distinct dimensions independently to avoid API compatibility conflicts
         const [
             overview,
-            traffic,
             devices,
             geo,
             pages,
-            events,
-            tech
+            events
         ] = await Promise.all([
             fetchOverview(client, propertyId),
-            fetchTraffic(client, propertyId),
             fetchDevices(client, propertyId),
             fetchLocations(client, propertyId),
             fetchTopPages(client, propertyId),
-            fetchTopEvents(client, propertyId),
-            fetchTechStack(client, propertyId)
+            fetchTopEvents(client, propertyId)
         ]);
 
         // 5. Response Aggregation
@@ -62,12 +58,10 @@ module.exports = async (req, res) => {
                 screenPageViews: parseInt(overview.rows?.[0]?.metricValues?.[1]?.value || '0'),
                 eventCount: parseInt(overview.rows?.[0]?.metricValues?.[2]?.value || '0'),
             },
-            trafficSources: transformTraffic(traffic),
             devices: transformDevices(devices),
             locations: transformLocations(geo),
             topPages: transformPages(pages),
             topEvents: transformEvents(events),
-            operatingSystems: transformTech(tech),
             meta: {
                 timestamp: new Date().toISOString(),
                 quota: extractQuota(overview)
@@ -98,23 +92,6 @@ async function fetchOverview(client, propertyId) {
         ],
         returnPropertyQuota: true
     }).then(r => r[0]).catch(handlePartialError('Overview'));
-}
-
-async function fetchTraffic(client, propertyId) {
-    // 'firstUserSource' is often empty for returning users in Realtime.
-    // 'source' (Event Scoped) is the most reliable way to see "where is the current activity coming from?".
-    // We pair it with 'eventCount' which is 100% compatible.
-    return client.runRealtimeReport({
-        property: `properties/${propertyId}`,
-        dimensions: [
-            { name: 'source' }
-        ],
-        metrics: [{ name: 'eventCount' }],
-        limit: 10
-    }).then(r => r[0]).catch(error => {
-        // Silent fallback for Traffic
-        return { rows: [] };
-    });
 }
 
 async function fetchDevices(client, propertyId) {
@@ -152,29 +129,7 @@ async function fetchTopEvents(client, propertyId) {
     }).then(r => r[0]).catch(handlePartialError('Events'));
 }
 
-async function fetchTechStack(client, propertyId) {
-    // OS data is proving problematic. Using 'platform' is a safer alternative
-    // that distinguishes betwen Web, IOS, Android.
-    return client.runRealtimeReport({
-        property: `properties/${propertyId}`,
-        dimensions: [{ name: 'platform' }],
-        metrics: [{ name: 'activeUsers' }]
-    }).then(r => r[0]).catch(error => {
-        // Silent fallback for Tech
-        return { rows: [] };
-    });
-}
-
 // --- TRANSFORMERS ---
-
-function transformTraffic(response) {
-    if (!response?.rows) return [];
-    return response.rows.map(row => ({
-        source: row.dimensionValues[0].value === '(direct)' ? 'Direct' : row.dimensionValues[0].value,
-        medium: 'Activity', // Changed label to reflect event-based nature
-        users: parseInt(row.metricValues[0].value)
-    })).sort((a, b) => b.users - a.users);
-}
 
 function transformDevices(response) {
     const map = { desktop: 0, mobile: 0, tablet: 0 };
@@ -211,14 +166,6 @@ function transformEvents(response) {
         name: row.dimensionValues[0].value,
         count: parseInt(row.metricValues[0].value)
     })).sort((a, b) => b.count - a.count);
-}
-
-function transformTech(response) {
-    if (!response?.rows) return [];
-    return response.rows.map(row => ({
-        name: row.dimensionValues[0].value, // Will be "WEB", "ANDROID", etc.
-        users: parseInt(row.metricValues[0].value)
-    })).sort((a, b) => b.users - a.users);
 }
 
 function extractQuota(response) {
