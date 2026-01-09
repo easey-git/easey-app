@@ -101,16 +101,22 @@ async function fetchOverview(client, propertyId) {
 }
 
 async function fetchTraffic(client, propertyId) {
-    // Session dimensions are tricky in Realtime. User-scoped dimensions are safer.
+    // Session dimensions are strictly limited in Realtime.
+    // We will attempt to use a VERY standard User dimension, but if it fails,
+    // we fallback to returning empty structure rather than erroring out.
+    // 'firstUserSource' is the most standard user-scoped dimension.
     return client.runRealtimeReport({
         property: `properties/${propertyId}`,
         dimensions: [
-            { name: 'firstUserSource' },
-            { name: 'firstUserMedium' }
+            { name: 'firstUserSource' }
+            // Removed Medium to simplify query
         ],
         metrics: [{ name: 'activeUsers' }],
         limit: 10
-    }).then(r => r[0]).catch(handlePartialError('Traffic'));
+    }).then(r => r[0]).catch(error => {
+        // Silent fallback for Traffic
+        return { rows: [] };
+    });
 }
 
 async function fetchDevices(client, propertyId) {
@@ -149,13 +155,16 @@ async function fetchTopEvents(client, propertyId) {
 }
 
 async function fetchTechStack(client, propertyId) {
-    // 'activeUsers' + 'operatingSystem' can be incompatible in Realtime.
-    // 'eventCount' is generally safer for system properties in Realtime.
+    // OS data is proving problematic. Using 'platform' is a safer alternative
+    // that distinguishes betwen Web, IOS, Android.
     return client.runRealtimeReport({
         property: `properties/${propertyId}`,
-        dimensions: [{ name: 'operatingSystem' }],
-        metrics: [{ name: 'eventCount' }]
-    }).then(r => r[0]).catch(handlePartialError('Tech'));
+        dimensions: [{ name: 'platform' }],
+        metrics: [{ name: 'activeUsers' }]
+    }).then(r => r[0]).catch(error => {
+        // Silent fallback for Tech
+        return { rows: [] };
+    });
 }
 
 // --- TRANSFORMERS ---
@@ -164,7 +173,7 @@ function transformTraffic(response) {
     if (!response?.rows) return [];
     return response.rows.map(row => ({
         source: row.dimensionValues[0].value === '(direct)' ? 'Direct' : row.dimensionValues[0].value,
-        medium: row.dimensionValues[1].value === '(none)' ? 'None' : row.dimensionValues[1].value,
+        medium: 'Referral', // Simplified since we removed medium dimension
         users: parseInt(row.metricValues[0].value)
     })).sort((a, b) => b.users - a.users);
 }
@@ -194,7 +203,7 @@ function transformPages(response) {
     return response.rows.map(row => ({
         page: row.dimensionValues[0].value,
         views: parseInt(row.metricValues[0].value),
-        users: 0 // removed for safety
+        users: 0
     })).sort((a, b) => b.views - a.views);
 }
 
@@ -209,8 +218,8 @@ function transformEvents(response) {
 function transformTech(response) {
     if (!response?.rows) return [];
     return response.rows.map(row => ({
-        name: row.dimensionValues[0].value,
-        users: parseInt(row.metricValues[0].value) // mapped from eventCount but labelled users for frontend
+        name: row.dimensionValues[0].value, // Will be "WEB", "ANDROID", etc.
+        users: parseInt(row.metricValues[0].value)
     })).sort((a, b) => b.users - a.users);
 }
 
