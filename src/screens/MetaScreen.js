@@ -275,22 +275,48 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                 </View>
             )}
 
-            {/* Remaining Account Balance (calculated from spend_cap - amount_spent) */}
-            {accountData.limits?.remainingSpendCap !== null && (
-                <Surface style={[styles.card, { backgroundColor: theme.colors.secondaryContainer }]} elevation={0}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                        <Icon source="wallet" size={24} color={theme.colors.secondary} />
-                        <Text variant="labelMedium" style={{ marginLeft: 8, color: theme.colors.onSecondaryContainer }}>Remaining Balance</Text>
-                    </View>
-                    <Text variant="displaySmall" style={{ fontWeight: 'bold', color: theme.colors.onSecondaryContainer }}>
-                        ₹{accountData.limits.remainingSpendCap?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                    </Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSecondaryContainer, marginTop: 4 }}>
-                        Available account funds (Spend Cap - Spent)
-                    </Text>
-                </Surface>
-            )}
+            {/* Account Limits */}
+            {accountData.limits?.spendCap && (
+                <>
+                    <View style={{ marginBottom: 16 }}>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginBottom: 12 }}>
+                            Account Limits
+                        </Text>
 
+                        <Surface style={[styles.limitCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Account Spend Limit</Text>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                    ₹{accountData.limits.spendCap.toLocaleString('en-IN')}
+                                </Text>
+                            </View>
+                            {accountData.limits.remainingSpendCap !== null && (
+                                <>
+                                    <View style={styles.progressBar}>
+                                        <View
+                                            style={[
+                                                styles.progressFill,
+                                                {
+                                                    width: `${Math.max(0, Math.min(100, ((accountData.limits.spendCap - accountData.limits.remainingSpendCap) / accountData.limits.spendCap) * 100))}%`,
+                                                    backgroundColor: accountData.limits.remainingSpendCap < accountData.limits.spendCap * 0.1 ? theme.colors.error : theme.colors.primary
+                                                }
+                                            ]}
+                                        />
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                            Used: {((accountData.limits.spendCap - accountData.limits.remainingSpendCap) / accountData.limits.spendCap * 100).toFixed(0)}%
+                                        </Text>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: 'bold' }}>
+                                            ₹{accountData.limits.remainingSpendCap.toLocaleString('en-IN')} remaining
+                                        </Text>
+                                    </View>
+                                </>
+                            )}
+                        </Surface>
+                    </View>
+                </>
+            )}
             {/* Spending Overview */}
             <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginBottom: 12 }}>
                 Spending Overview
@@ -327,42 +353,6 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                     ₹{accountData.spending?.lifetime?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                 </Text>
             </Surface>
-
-            {/* Spending Limits */}
-            {accountData.limits?.spendCap && (
-                <>
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground, marginTop: 24, marginBottom: 12 }}>
-                        Spending Limits
-                    </Text>
-
-                    <Surface style={[styles.limitCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} elevation={0}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Spend Cap</Text>
-                            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                ₹{accountData.limits.spendCap.toLocaleString('en-IN')}
-                            </Text>
-                        </View>
-                        {accountData.limits.remainingSpendCap !== null && (
-                            <>
-                                <View style={styles.progressBar}>
-                                    <View
-                                        style={[
-                                            styles.progressFill,
-                                            {
-                                                width: `${Math.max(0, Math.min(100, ((accountData.limits.spendCap - accountData.limits.remainingSpendCap) / accountData.limits.spendCap) * 100))}%`,
-                                                backgroundColor: accountData.limits.remainingSpendCap < accountData.limits.spendCap * 0.1 ? theme.colors.error : theme.colors.primary
-                                            }
-                                        ]}
-                                    />
-                                </View>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                                    ₹{accountData.limits.remainingSpendCap.toLocaleString('en-IN')} remaining
-                                </Text>
-                            </>
-                        )}
-                    </Surface>
-                </>
-            )}
         </>
     );
 };
