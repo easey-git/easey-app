@@ -12,7 +12,7 @@ const API_BASE_URL = 'https://easey-app.vercel.app';
  */
 export const getComprehensiveAnalytics = async () => {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/ga4-visitors`, {
+        const response = await fetch(`${API_BASE_URL}/api/google-analytics`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
