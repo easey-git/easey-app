@@ -203,7 +203,69 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
         );
     }
 
-    // Default rendering (Orders, Checkouts, etc.) - LIST STYLE
+    // Special rendering for Checkouts (Compact & Industry Standard)
+    if (selectedCollection === 'checkouts') {
+        const isAbandoned = item.latest_stage === 'CHECKOUT_ABANDONED' || item.eventType === 'ABANDONED';
+        const isConverted = item.latest_stage === 'ORDER_PLACED';
+
+        const statusBg = isAbandoned ? theme.colors.errorContainer :
+            isConverted ? theme.colors.primaryContainer :
+                theme.colors.secondaryContainer;
+
+        const statusText = isAbandoned ? theme.colors.onErrorContainer :
+            isConverted ? theme.colors.onPrimaryContainer :
+                theme.colors.onSecondaryContainer;
+
+        return (
+            <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
+                <TouchableOpacity onPress={() => onPress(item)} onLongPress={() => onToggle(item.id)} delayLongPress={200}>
+                    <View style={[styles.cardContent, isMobile && styles.cardContentMobile]}>
+                        <Checkbox status={isSelected ? 'checked' : 'unchecked'} onPress={() => onToggle(item.id)} />
+
+                        {!isMobile && (
+                            <Avatar.Icon
+                                size={40}
+                                icon={isAbandoned ? "cart-remove" : isConverted ? "check-circle" : "cart-outline"}
+                                style={{ backgroundColor: statusBg, marginLeft: 4 }}
+                                color={statusText}
+                            />
+                        )}
+
+                        <View style={[styles.textContainer, isMobile && { marginLeft: 8 }]}>
+                            <View style={styles.rowBetween}>
+                                <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flex: 1, marginRight: 8 }} numberOfLines={1}>
+                                    {item.customerName || item.email || 'Guest Checkout'}
+                                </Text>
+                                {item.totalPrice > 0 && (
+                                    <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.primary, fontFamily: 'monospace' }}>
+                                        ₹{item.totalPrice}
+                                    </Text>
+                                )}
+                            </View>
+
+                            <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                                <Chip
+                                    mode="flat"
+                                    compact
+                                    style={[styles.chip, { backgroundColor: statusBg }]}
+                                    textStyle={{ fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold', color: statusText }}
+                                >
+                                    {item.latest_stage || 'ACTIVE'}
+                                </Chip>
+                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
+                                    {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleDateString() :
+                                        item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : ''}
+                                </Text>
+                            </View>
+                        </View>
+                        <IconButton icon="chevron-right" size={20} />
+                    </View>
+                </TouchableOpacity>
+            </Surface>
+        );
+    }
+
+    // Default rendering (Orders, etc.) - LIST STYLE
     return (
         <TouchableOpacity
             onPress={() => onPress(item)}
