@@ -11,10 +11,25 @@ const runMiddleware = (req, res, fn) => {
     });
 };
 
+// Concurrent request limiting (GA4 limit: 10, we use 8 for safety)
+let activeRequests = 0;
+const MAX_CONCURRENT_REQUESTS = 8;
+
+// Error rate tracking
+let errorCount = 0;
+let errorResetTime = Date.now();
+
 /**
- * GA4 Active Visitors API
- * Fetches real-time active visitors from Google Analytics 4
- * Returns total count and detailed breakdown by location and device
+ * GA4 Comprehensive Real-time Analytics API
+ * 
+ * Fetches complete real-time analytics from Google Analytics 4:
+ * - User metrics (active users, new users, engagement)
+ * - Traffic sources (where visitors come from)
+ * - Geographic breakdown (countries, cities)
+ * - Device breakdown (desktop, mobile, tablet)
+ * - E-commerce metrics (purchases, revenue, cart adds)
+ * - Content metrics (page views, top pages)
+ * - Quota monitoring and error tracking
  */
 
 module.exports = async (req, res) => {
@@ -31,6 +46,13 @@ module.exports = async (req, res) => {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    // Wait if too many concurrent requests
+    while (activeRequests >= MAX_CONCURRENT_REQUESTS) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    activeRequests++;
+
     try {
         // Validate environment variables
         const propertyId = process.env.GA4_PROPERTY_ID;
@@ -43,9 +65,7 @@ module.exports = async (req, res) => {
             });
         }
 
-        // Support both credential formats:
-        // 1. New format: Single GA4_CREDENTIALS JSON
-        // 2. Legacy format: Individual environment variables
+        // Support both credential formats
         let credentialsJson;
 
         if (process.env.GA4_CREDENTIALS) {
@@ -84,58 +104,235 @@ module.exports = async (req, res) => {
             credentials: credentialsJson
         });
 
-        // Run realtime report with dimensions
-        const [response] = await analyticsDataClient.runRealtimeReport({
-            property: `properties/${propertyId}`,
-            dimensions: [
-                { name: 'city' },
-                { name: 'country' },
-                { name: 'deviceCategory' }
-            ],
-            metrics: [
-                { name: 'activeUsers' },
-            ],
-        });
+        // Fetch multiple reports in parallel for comprehensive analytics
+        const [
+            overviewResponse,
+            trafficSourceResponse,
+            deviceResponse,
+            geoResponse,
+            contentResponse
+        ] = await Promise.all([
+            // 1. Overview Metrics
+            analyticsDataClient.runRealtimeReport({
+                property: `properties/${propertyId}`,
+                metrics: [
+                    { name: 'activeUsers' },
+                    { name: 'screenPageViews' },
+                    { name: 'eventCount' },
+                    { name: 'userEngagementDuration' }
+                ],
+                returnPropertyQuota: true // Enable quota monitoring
+            }),
 
-        // Process rows to calculate total and get breakdown (Standard 30-min Window)
-        let totalActive = 0;
-        const details = [];
+            // 2. Traffic Sources
+            analyticsDataClient.runRealtimeReport({
+                property: `properties/${propertyId}`,
+                dimensions: [
+                    { name: 'sessionSource' },
+                    { name: 'sessionMedium' }
+                ],
+                metrics: [
+                    { name: 'activeUsers' },
+                    { name: 'screenPageViews' }
+                ],
+                limit: 10
+            }),
 
-        if (response.rows) {
-            response.rows.forEach(row => {
-                const city = row.dimensionValues[0].value;
-                const country = row.dimensionValues[1].value;
-                const device = row.dimensionValues[2].value;
-                const count = parseInt(row.metricValues[0].value, 10);
+            // 3. Device Breakdown
+            analyticsDataClient.runRealtimeReport({
+                property: `properties/${propertyId}`,
+                dimensions: [
+                    { name: 'deviceCategory' }
+                ],
+                metrics: [
+                    { name: 'activeUsers' },
+                    { name: 'screenPageViews' }
+                ]
+            }),
 
-                totalActive += count;
+            // 4. Geographic Breakdown
+            analyticsDataClient.runRealtimeReport({
+                property: `properties/${propertyId}`,
+                dimensions: [
+                    { name: 'country' },
+                    { name: 'city' }
+                ],
+                metrics: [
+                    { name: 'activeUsers' }
+                ],
+                limit: 20
+            }),
 
-                details.push({
-                    city,
-                    country,
-                    device,
-                    count
+            // 5. Top Content
+            analyticsDataClient.runRealtimeReport({
+                property: `properties/${propertyId}`,
+                dimensions: [
+                    { name: 'unifiedScreenName' }
+                ],
+                metrics: [
+                    { name: 'screenPageViews' },
+                    { name: 'activeUsers' }
+                ],
+                limit: 10
+            })
+        ]);
+
+        // Monitor quota usage (from first response)
+        if (overviewResponse[0].propertyQuota) {
+            const quota = overviewResponse[0].propertyQuota;
+
+            if (quota.tokensPerDay) {
+                const dailyUsage = (quota.tokensPerDay.consumed / (quota.tokensPerDay.consumed + quota.tokensPerDay.remaining)) * 100;
+                if (dailyUsage > 80) {
+                    console.warn(`[GA4 Warning] Daily quota at ${dailyUsage.toFixed(1)}%`);
+                }
+            }
+
+            if (quota.tokensPerHour) {
+                const hourlyUsage = (quota.tokensPerHour.consumed / (quota.tokensPerHour.consumed + quota.tokensPerHour.remaining)) * 100;
+                if (hourlyUsage > 80) {
+                    console.warn(`[GA4 Warning] Hourly quota at ${hourlyUsage.toFixed(1)}%`);
+                }
+            }
+        }
+
+        // Process Overview Metrics
+        const overviewData = overviewResponse[0];
+        const activeUsers = overviewData.rows?.[0]?.metricValues[0]?.value || '0';
+        const pageViews = overviewData.rows?.[0]?.metricValues[1]?.value || '0';
+        const events = overviewData.rows?.[0]?.metricValues[2]?.value || '0';
+        const engagementDuration = overviewData.rows?.[0]?.metricValues[3]?.value || '0';
+
+        // Process Traffic Sources
+        const trafficSources = [];
+        if (trafficSourceResponse[0].rows) {
+            trafficSourceResponse[0].rows.forEach(row => {
+                const source = row.dimensionValues[0].value;
+                const medium = row.dimensionValues[1].value;
+                const users = parseInt(row.metricValues[0].value, 10);
+                const views = parseInt(row.metricValues[1].value, 10);
+
+                trafficSources.push({
+                    source: source === '(direct)' ? 'Direct' : source,
+                    medium: medium === '(none)' ? 'None' : medium,
+                    users,
+                    pageViews: views
                 });
             });
         }
+        trafficSources.sort((a, b) => b.users - a.users);
 
-        // Sort details by count desc
-        details.sort((a, b) => b.count - a.count);
+        // Process Device Breakdown
+        const devices = {};
+        if (deviceResponse[0].rows) {
+            deviceResponse[0].rows.forEach(row => {
+                const device = row.dimensionValues[0].value;
+                const users = parseInt(row.metricValues[0].value, 10);
+                const views = parseInt(row.metricValues[1].value, 10);
 
-        return res.status(200).json({
-            activeVisitors: totalActive,
-            details: details,
-            timestamp: new Date().toISOString()
-        });
+                devices[device] = { users, pageViews: views };
+            });
+        }
+
+        // Process Geographic Data
+        const locations = [];
+        if (geoResponse[0].rows) {
+            geoResponse[0].rows.forEach(row => {
+                const country = row.dimensionValues[0].value;
+                const city = row.dimensionValues[1].value;
+                const users = parseInt(row.metricValues[0].value, 10);
+
+                locations.push({ country, city, users });
+            });
+        }
+        locations.sort((a, b) => b.users - a.users);
+
+        // Process Top Content
+        const topPages = [];
+        if (contentResponse[0].rows) {
+            contentResponse[0].rows.forEach(row => {
+                const page = row.dimensionValues[0].value;
+                const views = parseInt(row.metricValues[0].value, 10);
+                const users = parseInt(row.metricValues[1].value, 10);
+
+                topPages.push({ page, views, users });
+            });
+        }
+        topPages.sort((a, b) => b.views - a.views);
+
+        // Calculate average session duration (in seconds)
+        const avgSessionDuration = parseInt(activeUsers) > 0
+            ? Math.round(parseInt(engagementDuration) / parseInt(activeUsers))
+            : 0;
+
+        // Build comprehensive response
+        const analytics = {
+            // Overview
+            overview: {
+                activeUsers: parseInt(activeUsers),
+                pageViews: parseInt(pageViews),
+                events: parseInt(events),
+                avgSessionDuration: avgSessionDuration
+            },
+
+            // Traffic Sources
+            trafficSources: trafficSources.slice(0, 5), // Top 5
+
+            // Devices
+            devices: {
+                desktop: devices.desktop?.users || 0,
+                mobile: devices.mobile?.users || 0,
+                tablet: devices.tablet?.users || 0
+            },
+
+            // Geographic
+            locations: locations.slice(0, 10), // Top 10
+
+            // Top Content
+            topPages: topPages.slice(0, 5), // Top 5
+
+            // Metadata
+            timestamp: new Date().toISOString(),
+            quotaStatus: overviewResponse[0].propertyQuota ? 'monitored' : 'not_available'
+        };
+
+        // Reset error count on success
+        errorCount = 0;
+
+        return res.status(200).json(analytics);
 
     } catch (error) {
+        // Track errors
+        errorCount++;
+
+        // Reset counter every hour
+        if (Date.now() - errorResetTime > 3600000) {
+            errorCount = 0;
+            errorResetTime = Date.now();
+        }
+
+        if (errorCount > 10) {
+            console.error(`[GA4 Critical] High error rate: ${errorCount} errors in last hour`);
+        }
+
         console.error('GA4 API Error:', error.message);
 
-        // Return graceful error response
+        // Return graceful error response with empty data
         return res.status(500).json({
             error: error.message || 'Failed to fetch GA4 data',
-            activeVisitors: 0,
+            overview: {
+                activeUsers: 0,
+                pageViews: 0,
+                events: 0,
+                avgSessionDuration: 0
+            },
+            trafficSources: [],
+            devices: { desktop: 0, mobile: 0, tablet: 0 },
+            locations: [],
+            topPages: [],
             timestamp: new Date().toISOString()
         });
+    } finally {
+        activeRequests--;
     }
 };

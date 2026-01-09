@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, RefreshControl } from 'react-native';
-import { Text, Surface, ActivityIndicator, Icon, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog } from 'react-native-paper';
+import { Text, Surface, ActivityIndicator, Icon, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog, ProgressBar } from 'react-native-paper';
 import { LineChart } from 'react-native-gifted-charts';
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { getCachedDetailedVisitors } from '../services/ga4Service';
+import { getCachedAnalytics } from '../services/ga4Service';
 import { useSound } from '../context/SoundContext';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +25,19 @@ const StatsScreen = ({ navigation }) => {
     const [activeCarts, setActiveCarts] = useState(0);
     const [abandonedCarts, setAbandonedCarts] = useState(0);
     const [activeVisitorsData, setActiveVisitorsData] = useState({ activeVisitors: 0, details: [] });
+    const [ga4Analytics, setGa4Analytics] = useState({
+        overview: {
+            activeUsers: 0,
+            pageViews: 0,
+            events: 0,
+            avgSessionDuration: 0
+        },
+        trafficSources: [],
+        devices: { desktop: 0, mobile: 0, tablet: 0 },
+        locations: [],
+        topPages: []
+    });
+    const [ga4Error, setGa4Error] = useState(null);
     const [recentActivity, setRecentActivity] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState(null);
@@ -203,19 +216,40 @@ const StatsScreen = ({ navigation }) => {
         };
     }, []);
 
-    // Fetch GA4 Active Visitors
+    // Fetch Comprehensive GA4 Analytics
     useEffect(() => {
-        const fetchGA4Visitors = async () => {
+        const fetchGA4Analytics = async () => {
             try {
-                const data = await getCachedDetailedVisitors();
-                setActiveVisitorsData(data);
+                const data = await getCachedAnalytics();
+
+                // Ensure data has the expected structure
+                if (data && data.overview) {
+                    setGa4Analytics(data);
+                    setGa4Error(null);
+
+                    // Also update legacy format for backward compatibility
+                    const details = (data.locations || []).map(loc => ({
+                        city: loc.city,
+                        country: loc.country,
+                        device: 'unknown',
+                        count: loc.users
+                    }));
+                    setActiveVisitorsData({
+                        activeVisitors: data.overview.activeUsers || 0,
+                        details: details
+                    });
+                } else {
+                    // Data structure is invalid
+                    setGa4Error('Invalid data structure');
+                }
             } catch (error) {
-                console.error('Error fetching GA4 visitors:', error);
+                console.error('Error fetching GA4 analytics:', error);
+                setGa4Error(error.message);
             }
         };
 
-        fetchGA4Visitors();
-        const ga4Interval = setInterval(fetchGA4Visitors, 30000);
+        fetchGA4Analytics();
+        const ga4Interval = setInterval(fetchGA4Analytics, 30000);
         return () => clearInterval(ga4Interval);
     }, []);
 
@@ -271,18 +305,23 @@ const StatsScreen = ({ navigation }) => {
                         </>
                     )}
 
-                    {/* Active Visitors Card */}
+                    {/* Active Visitors Card - Enhanced */}
                     <View>
                         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>VISITORS</Text>
                         <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
-                            {activeVisitorsData.activeVisitors}
+                            {ga4Analytics?.overview?.activeUsers ?? 0}
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            {activeVisitorsData.details?.length > 0 ? (
+                            {ga4Error ? (
+                                <>
+                                    <Icon source="alert-circle" size={14} color={theme.colors.error} />
+                                    <Text style={{ color: theme.colors.error, fontSize: 10, fontWeight: 'bold', marginLeft: 4 }}>GA4 Error</Text>
+                                </>
+                            ) : (ga4Analytics?.locations?.length ?? 0) > 0 ? (
                                 <>
                                     <Icon source="map-marker" size={14} color="#f59e0b" />
                                     <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }} numberOfLines={1}>
-                                        {activeVisitorsData.details[0].city}
+                                        {ga4Analytics.locations[0].city}
                                     </Text>
                                 </>
                             ) : (
@@ -291,6 +330,30 @@ const StatsScreen = ({ navigation }) => {
                                     <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Live</Text>
                                 </>
                             )}
+                        </View>
+                    </View>
+
+                    {/* Page Views Card */}
+                    <View>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>PAGE VIEWS</Text>
+                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                            {ga4Analytics?.overview?.pageViews ?? 0}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                            <Icon source="eye" size={14} color="#3b82f6" />
+                            <Text style={{ color: '#3b82f6', fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Last 30 min</Text>
+                        </View>
+                    </View>
+
+                    {/* Engagement Card */}
+                    <View>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 1 }}>AVG SESSION</Text>
+                        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ fontWeight: '900', marginTop: 4, color: theme.colors.onSurface }}>
+                            {Math.floor((ga4Analytics?.overview?.avgSessionDuration ?? 0) / 60)}:{String((ga4Analytics?.overview?.avgSessionDuration ?? 0) % 60).padStart(2, '0')}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                            <Icon source="timer-sand" size={14} color="#8b5cf6" />
+                            <Text style={{ color: '#8b5cf6', fontSize: 12, fontWeight: 'bold', marginLeft: 6 }}>Minutes</Text>
                         </View>
                     </View>
 
@@ -307,6 +370,152 @@ const StatsScreen = ({ navigation }) => {
                     </View>
                 </ScrollView>
             </View>
+
+            {/* GA4 Analytics Breakdown - New Section */}
+            {!ga4Error && (ga4Analytics?.overview?.activeUsers ?? 0) > 0 && (
+                <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 16 }}>Live Analytics</Text>
+
+                    {/* Devices Breakdown */}
+                    <Surface style={{ borderRadius: 12, padding: 16, marginBottom: 16, backgroundColor: theme.colors.surface }} elevation={0}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>Devices</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                {(ga4Analytics?.devices?.desktop ?? 0) + (ga4Analytics?.devices?.mobile ?? 0) + (ga4Analytics?.devices?.tablet ?? 0)} total
+                            </Text>
+                        </View>
+
+                        {/* Desktop */}
+                        {(ga4Analytics?.devices?.desktop ?? 0) > 0 && (
+                            <View style={{ marginBottom: 8 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Icon source="monitor" size={16} color={theme.colors.primary} />
+                                        <Text variant="bodyMedium" style={{ marginLeft: 8, color: theme.colors.onSurface }}>Desktop</Text>
+                                    </View>
+                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        {ga4Analytics?.devices?.desktop ?? 0}
+                                    </Text>
+                                </View>
+                                <ProgressBar
+                                    progress={(ga4Analytics?.devices?.desktop ?? 0) / ((ga4Analytics?.devices?.desktop ?? 0) + (ga4Analytics?.devices?.mobile ?? 0) + (ga4Analytics?.devices?.tablet ?? 0))}
+                                    color={theme.colors.primary}
+                                    style={{ height: 6, borderRadius: 3 }}
+                                />
+                            </View>
+                        )}
+
+                        {/* Mobile */}
+                        {(ga4Analytics?.devices?.mobile ?? 0) > 0 && (
+                            <View style={{ marginBottom: 8 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Icon source="cellphone" size={16} color="#10b981" />
+                                        <Text variant="bodyMedium" style={{ marginLeft: 8, color: theme.colors.onSurface }}>Mobile</Text>
+                                    </View>
+                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        {ga4Analytics?.devices?.mobile ?? 0}
+                                    </Text>
+                                </View>
+                                <ProgressBar
+                                    progress={(ga4Analytics?.devices?.mobile ?? 0) / ((ga4Analytics?.devices?.desktop ?? 0) + (ga4Analytics?.devices?.mobile ?? 0) + (ga4Analytics?.devices?.tablet ?? 0))}
+                                    color="#10b981"
+                                    style={{ height: 6, borderRadius: 3 }}
+                                />
+                            </View>
+                        )}
+
+                        {/* Tablet */}
+                        {(ga4Analytics?.devices?.tablet ?? 0) > 0 && (
+                            <View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Icon source="tablet" size={16} color="#f59e0b" />
+                                        <Text variant="bodyMedium" style={{ marginLeft: 8, color: theme.colors.onSurface }}>Tablet</Text>
+                                    </View>
+                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                        {ga4Analytics?.devices?.tablet ?? 0}
+                                    </Text>
+                                </View>
+                                <ProgressBar
+                                    progress={(ga4Analytics?.devices?.tablet ?? 0) / ((ga4Analytics?.devices?.desktop ?? 0) + (ga4Analytics?.devices?.mobile ?? 0) + (ga4Analytics?.devices?.tablet ?? 0))}
+                                    color="#f59e0b"
+                                    style={{ height: 6, borderRadius: 3 }}
+                                />
+                            </View>
+                        )}
+                    </Surface>
+
+                    {/* Traffic Sources */}
+                    {ga4Analytics.trafficSources.length > 0 && (
+                        <Surface style={{ borderRadius: 12, padding: 16, marginBottom: 16, backgroundColor: theme.colors.surface }} elevation={0}>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 12 }}>Traffic Sources</Text>
+                            {ga4Analytics.trafficSources.slice(0, 5).map((source, index) => (
+                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: index < ga4Analytics.trafficSources.length - 1 ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                            {source.source}
+                                        </Text>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                                            {source.medium} • {source.pageViews} views
+                                        </Text>
+                                    </View>
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                        {source.users}
+                                    </Text>
+                                </View>
+                            ))}
+                        </Surface>
+                    )}
+
+                    {/* Top Locations */}
+                    {ga4Analytics.locations.length > 0 && (
+                        <Surface style={{ borderRadius: 12, padding: 16, marginBottom: 16, backgroundColor: theme.colors.surface }} elevation={0}>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 12 }}>Top Locations</Text>
+                            {ga4Analytics.locations.slice(0, 5).map((location, index) => (
+                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: index < Math.min(ga4Analytics.locations.length, 5) - 1 ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}>
+                                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                                        <Icon source="map-marker" size={16} color="#f59e0b" />
+                                        <View style={{ marginLeft: 8 }}>
+                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                                {location.city}
+                                            </Text>
+                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                                {location.country}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                        {location.users}
+                                    </Text>
+                                </View>
+                            ))}
+                        </Surface>
+                    )}
+
+                    {/* Top Pages */}
+                    {ga4Analytics.topPages.length > 0 && (
+                        <Surface style={{ borderRadius: 12, padding: 16, backgroundColor: theme.colors.surface }} elevation={0}>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 12 }}>Top Pages</Text>
+                            {ga4Analytics.topPages.slice(0, 5).map((page, index) => (
+                                <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: index < Math.min(ga4Analytics.topPages.length, 5) - 1 ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1}>
+                                            {page.page || 'Homepage'}
+                                        </Text>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                                            {page.users} visitors
+                                        </Text>
+                                    </View>
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                                        {page.views}
+                                    </Text>
+                                </View>
+                            ))}
+                        </Surface>
+                    )}
+                </View>
+            )}
 
             {/* Chart Section - Minimalist */}
             <View style={{ marginBottom: 24, paddingLeft: 0 }}>
