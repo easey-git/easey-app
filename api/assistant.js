@@ -87,7 +87,6 @@ const DATA_TOOLS = {
         if (category) q = q.where('category', '==', category);
 
         // Fetch ALL transactions in range (up to safe limit) to aggregate accurately
-        // Note: For massive scale, we'd use aggregation queries, but for <500 items, client-side math is smarter for categorization.
         const snapshot = await q.limit(1000).get();
 
         const stats = {
@@ -227,6 +226,43 @@ const DATA_TOOLS = {
         if (orderBy) ref = ref.orderBy(orderBy[0], orderBy[1] || 'desc');
         const snap = await ref.limit(limit).get();
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    /**
+     * 📊 aggregateFirestore
+     * Performs server-side math (Count, Sum, Avg).
+     * Essential for "How many", "Total volume", etc.
+     */
+    aggregateFirestore: async (args, { permissions, isAdmin }) => {
+        const { collection, filters, aggregationType, field } = args;
+
+        // Basic permission check
+        const accessMap = {
+            'orders': 'access_orders', 'checkouts': 'access_orders',
+            'wallet_transactions': 'access_wallet', 'campaigns': 'access_campaigns'
+        };
+        const needed = accessMap[collection];
+        if (!isAdmin && (!needed || !permissions.includes(needed))) throw new Error("Access Denied");
+
+        let ref = db.collection(collection);
+        if (filters && Array.isArray(filters)) {
+            for (const [f, op, v] of filters) ref = ref.where(f, op, v);
+        }
+
+        if (aggregationType === 'count') {
+            const snap = await ref.count().get();
+            return { count: snap.data().count };
+        }
+
+        if (['sum', 'average'].includes(aggregationType)) {
+            if (!field) throw new Error("Field required for math aggregation");
+            const aggField = aggregationType === 'sum'
+                ? admin.firestore.AggregateField.sum(field)
+                : admin.firestore.AggregateField.average(field);
+            const snap = await ref.aggregate({ result: aggField }).get();
+            return { [aggregationType]: snap.data().result || 0 };
+        }
+        throw new Error("Invalid aggregationType");
     }
 };
 
@@ -267,8 +303,22 @@ const GEMINI_TOOLS_DEF = [{
             }
         },
         {
+            name: "aggregateFirestore",
+            description: "Calculate totals. Use for 'How many orders', 'Total revenue', 'Average price'.",
+            parametersJsonSchema: {
+                type: "object",
+                properties: {
+                    collection: { type: "string", enum: ['orders', 'checkouts', 'wallet_transactions', 'campaigns'] },
+                    filters: { type: "array" },
+                    aggregationType: { type: "string", enum: ["count", "sum", "average"] },
+                    field: { type: "string", description: "Field to calculate on (e.g., 'totalPrice')" }
+                },
+                required: ["collection", "aggregationType"]
+            }
+        },
+        {
             name: "queryFirestore",
-            description: "Fallback: Direct database query for specific lists not covered by other tools.",
+            description: "Direct database list fetch. Use for 'Show me orders from yesterday' or 'List campaigns'.",
             parametersJsonSchema: {
                 type: "object",
                 properties: {
@@ -326,9 +376,9 @@ module.exports = async (req, res) => {
    - Use \`searchGlobal\` if searched by Name or ID.
    - Report: "Lifetime Value (LTV)" and "Start Date".
 
-3. **Performance Audit**:
-   - Calculate ROAS = (Campaign Revenue / Spend).
-   - Good ROAS is > 4.0. Bad is < 2.0.
+3. **Counting & Basic Queries**:
+   - Use \`aggregateFirestore\` for "Total", "Average", or "Count".
+   - Use \`queryFirestore\` for simple lists (e.g. "Orders from yesterday").
 
 4. **Formatting**:
    - Use structured, professional summaries.
