@@ -105,7 +105,7 @@ const HomeScreen = ({ navigation }) => {
             setLoading(false);
             if (snapshot.size > 0) setConnectionStatus(prev => ({ ...prev, shopify: true }));
         }, (error) => {
-            console.log("Orders Stats Error:", error.code);
+            console.error("Orders Stats Error:", error.code);
             setLoading(false);
         });
 

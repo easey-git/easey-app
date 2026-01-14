@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList } from 'react-native';
+import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList, Alert } from 'react-native';
 import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip } from 'react-native-paper';
 import { BarChart } from 'react-native-gifted-charts';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit } from 'firebase/firestore';
@@ -174,7 +174,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     const handleSendVerification = async (order) => {
         if (!order.phone) {
-            alert("No phone number found for this order.");
+            Alert.alert("Error", "No phone number found for this order.");
             return;
         }
 
@@ -203,13 +203,13 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
             const data = await response.json();
             if (response.ok) {
-                alert("Verification message sent!");
+                Alert.alert("Success", "Verification message sent!");
             } else {
-                alert("Failed to send: " + (data.error || "Unknown error"));
+                Alert.alert("Error", "Failed to send: " + (data.error || "Unknown error"));
             }
         } catch (error) {
             console.error(error);
-            alert("Network error sending message.");
+            Alert.alert("Error", "Network error sending message.");
         } finally {
             setSendingId(null);
         }
@@ -305,7 +305,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             setMenuVisible(null);
         } catch (error) {
             console.error("Error updating status:", error);
-            alert("Failed to update status");
+            Alert.alert("Error", "Failed to update status");
         }
     };
 

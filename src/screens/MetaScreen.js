@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, FlatList, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Button, SegmentedButtons, DataTable, FAB, Menu, IconButton, Portal, Dialog, TextInput, Switch } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
@@ -380,10 +380,10 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                 fetchData(); // Refresh data
             } else {
                 const errorData = await response.json();
-                alert('Failed to update campaign: ' + (errorData.error || 'Unknown error'));
+                Alert.alert('Error', 'Failed to update campaign: ' + (errorData.error || 'Unknown error'));
             }
         } catch (error) {
-            alert('Error: ' + error.message);
+            Alert.alert('Error', error.message);
         }
     };
 
@@ -409,10 +409,10 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
             if (response.ok) {
                 setCurrentAdSets(data.adSets || []);
             } else {
-                alert('Failed to fetch Ad Sets');
+                Alert.alert('Error', 'Failed to fetch Ad Sets');
             }
         } catch (error) {
-            alert('Error fetching Ad Sets: ' + error.message);
+            Alert.alert('Error', 'Error fetching Ad Sets: ' + error.message);
         } finally {
             setLoadingAdSets(false);
         }
@@ -431,7 +431,7 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
 
         const amount = parseFloat(budgetInput);
         if (isNaN(amount) || amount <= 0) {
-            alert('Please enter a valid budget amount');
+            Alert.alert('Validation Error', 'Please enter a valid budget amount');
             return;
         }
 
@@ -459,17 +459,17 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                             ? { ...adSet, budget: { ...adSet.budget, [isLifetime ? 'lifetime' : 'daily']: amount } }
                             : adSet
                     ));
-                    alert('Ad Set budget updated');
+                    Alert.alert('Success', 'Ad Set budget updated');
                 } else {
                     setEditingItem(null);
                     fetchData(); // Refresh campaign list
                 }
             } else {
                 const errorData = await response.json();
-                alert('Failed to update budget: ' + (errorData.error || 'Unknown error'));
+                Alert.alert('Error', 'Failed to update budget: ' + (errorData.error || 'Unknown error'));
             }
         } catch (error) {
-            alert('Error: ' + error.message);
+            Alert.alert('Error', error.message);
         } finally {
             setUpdatingBudget(false);
         }
