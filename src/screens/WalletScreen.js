@@ -849,6 +849,9 @@ const styles = StyleSheet.create({
         margin: 20,
         padding: 24,
         borderRadius: 28,
+        width: '90%',
+        maxWidth: 450,
+        alignSelf: 'center',
     }
 });
 

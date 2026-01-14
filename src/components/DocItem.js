@@ -299,6 +299,22 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 {item.customerName || 'No Name'}
                             </Text>
                             {/* Price moved to Left (under Name) - applied Order # style (Small/Subtle) */}
+                            {/* Product Name Display */}
+                            {(() => {
+                                const products = item.items || item.line_items || item.cart?.items || [];
+                                if (products.length > 0) {
+                                    const firstProduct = products[0];
+                                    const productName = firstProduct.name || firstProduct.title || 'Unknown Product';
+                                    const extraCount = products.length - 1;
+                                    return (
+                                        <Text variant="bodyMedium" numberOfLines={1} style={{ color: theme.colors.secondary, marginTop: 2 }}>
+                                            {productName}{extraCount > 0 ? ` +${extraCount} more` : ''}
+                                        </Text>
+                                    );
+                                }
+                                return null;
+                            })()}
+
                             {item.totalPrice && (
                                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2, fontWeight: 'bold' }}>
                                     ₹{item.totalPrice}
