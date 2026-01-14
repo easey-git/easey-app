@@ -208,12 +208,22 @@ const HomeScreen = ({ navigation }) => {
     // --- MOBILE LAYOUT ---
     const MobileLayout = () => (
         <View style={{ gap: 16 }}>
+            {/* Welcome Section */}
+            <View>
+                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                    Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}
+                </Text>
+                <Text variant="bodyMedium" style={{ color: theme.colors.outline }}>
+                    Here's what's happening today.
+                </Text>
+            </View>
+
             {hasPermission('view_date_filters') && (
                 <SegmentedButtons
                     value={timeRange}
                     onValueChange={setTimeRange}
                     buttons={[{ value: 'today', label: 'Today' }, { value: 'week', label: '7 Days' }, { value: 'month', label: '30 Days' }]}
-                    style={{ marginBottom: 8 }}
+                    style={{ marginBottom: 0 }}
                     density="small"
                 />
             )}
@@ -251,7 +261,7 @@ const HomeScreen = ({ navigation }) => {
             showHeader={true}
 
             actions={
-                hasPermission('view_date_filters') && (
+                hasPermission('view_date_filters') && isDesktop && (
                     <SegmentedButtons
                         value={timeRange}
                         onValueChange={setTimeRange}
