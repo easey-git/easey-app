@@ -520,6 +520,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             title="Firebase"
             navigation={navigation}
             scrollable={false}
+            fullWidth={true}
             actions={
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     {/* Select All Checkbox */}
