@@ -517,7 +517,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
     return (
         <CRMLayout
-            title="Firebase"
+            title={selectedCollection.replace(/_/g, ' ').toUpperCase()}
             navigation={navigation}
             scrollable={false}
             fullWidth={true}
