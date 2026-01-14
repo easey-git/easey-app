@@ -170,6 +170,15 @@ const HomeScreen = ({ navigation }) => {
     // --- DESKTOP LAYOUT ---
     const DesktopLayout = () => (
         <View style={{ gap: 24, paddingTop: 24 }}>
+            {/* Welcome Section */}
+            <View>
+                <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                    Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}
+                </Text>
+                <Text variant="bodyMedium" style={{ color: theme.colors.outline }}>
+                    Here's what's happening today.
+                </Text>
+            </View>
 
 
             {/* Main Stats Row - 6 Columns */}
