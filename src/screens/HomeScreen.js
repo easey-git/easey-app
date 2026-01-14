@@ -169,22 +169,8 @@ const HomeScreen = ({ navigation }) => {
 
     // --- DESKTOP LAYOUT ---
     const DesktopLayout = () => (
-        <View style={{ gap: 24 }}>
-            {/* Header Row */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View>
-                    <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>Dashboard</Text>
-                    <Text variant="bodyMedium" style={{ color: theme.colors.outline }}>Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}</Text>
-                </View>
-                {hasPermission('view_date_filters') && (
-                    <SegmentedButtons
-                        value={timeRange}
-                        onValueChange={setTimeRange}
-                        buttons={[{ value: 'today', label: 'Today' }, { value: 'week', label: '7 Days' }, { value: 'month', label: '30 Days' }]}
-                        style={{ minWidth: 320 }}
-                    />
-                )}
-            </View>
+        <View style={{ gap: 24, paddingTop: 24 }}>
+
 
             {/* Main Stats Row - 6 Columns */}
             {/* Main Stats Row - 6 Columns */}
@@ -253,8 +239,19 @@ const HomeScreen = ({ navigation }) => {
             title="Overview"
             navigation={navigation}
             scrollable={true}
-            showHeader={!isDesktop}
+            showHeader={true}
 
+            actions={
+                hasPermission('view_date_filters') && (
+                    <SegmentedButtons
+                        value={timeRange}
+                        onValueChange={setTimeRange}
+                        buttons={[{ value: 'today', label: 'Today' }, { value: 'week', label: '7 Days' }, { value: 'month', label: '30 Days' }]}
+                        style={{ minWidth: 320 }}
+                        density="small"
+                    />
+                )
+            }
         >
             {isDesktop ? <DesktopLayout /> : <MobileLayout />}
         </CRMLayout>
