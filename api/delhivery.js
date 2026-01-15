@@ -28,8 +28,8 @@ export default async function handler(req, res) {
                 'accept-language': 'en',
                 'authorization': `Bearer ${token}`,
                 'content-type': 'application/json',
-                'origin': 'https://ucp.delhivery.com',
-                'referer': 'https://ucp.delhivery.com/',
+                'origin': 'https://one.delhivery.com',
+                'referer': 'https://one.delhivery.com/',
                 'x-hq-client-id': 'cms::client::53f3d783-ca97-11f0-8d4f-061927e1202d',
                 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
