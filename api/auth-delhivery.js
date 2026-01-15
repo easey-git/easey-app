@@ -2,7 +2,7 @@ import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
 export const config = {
-    maxDuration: 60, // Extend function duration to 60s
+    maxDuration: 60,
 };
 
 export default async function handler(req, res) {
@@ -10,15 +10,19 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    // Require specific internal secret to prevent abuse?
-    // For now, allow it to be called by the frontend (which is proxied)
-
     let browser = null;
+    let debugInfo = { logs: [] };
+
+    const log = (msg) => {
+        console.log(msg);
+        debugInfo.logs.push({ time: new Date().toISOString(), msg });
+    };
+
     try {
-        console.log("Launching Headless Browser for Auth Refresh...");
+        log("Launching Browser...");
 
         browser = await puppeteer.launch({
-            args: chromium.args,
+            args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath(),
             headless: chromium.headless,
@@ -27,81 +31,86 @@ export default async function handler(req, res) {
 
         const page = await browser.newPage();
 
-        // Setup Token Capture
+        // --- Intercept Token ---
         let capturedToken = null;
         await page.setRequestInterception(true);
         page.on('request', request => request.continue());
 
         page.on('response', async response => {
             const url = response.url();
-            if ((url.includes('shipments_search') || url.includes('list') || url.includes('token')) && !url.includes('.js')) {
+            // Broader capture: Any API call to 'api'
+            if (url.includes('/api/') && !url.includes('.js') && !url.includes('.css')) {
                 const headers = response.request().headers();
                 const auth = headers['authorization'] || headers['Authorization'];
                 if (auth && auth.startsWith('Bearer')) {
-                    console.log("Captured Token from:", url);
-                    capturedToken = auth;
+                    // Check if this is the UCP token (long JWT)
+                    if (url.includes('delhivery.com')) {
+                        capturedToken = auth;
+                        log(`Token Captured from: ${url}`);
+                    }
                 }
             }
         });
 
-        console.log("Navigating to Delhivery Login...");
-        await page.goto('https://one.delhivery.com/v2/login', { waitUntil: 'networkidle0' });
+        // --- Navigation Steps ---
 
-        // 1. Enter Email from ENV
+        // 1. Login Page
+        log("Goto Login...");
+        await page.goto('https://one.delhivery.com/v2/login', { waitUntil: 'networkidle2', timeout: 20000 });
+
+        // 2. Email
         const email = process.env.DELHIVERY_EMAIL;
         const password = process.env.DELHIVERY_PASSWORD;
+        if (!email || !password) throw new Error("Missing Credentials in Env");
 
-        if (!email || !password) {
-            throw new Error("Missing DELHIVERY_EMAIL or DELHIVERY_PASSWORD env vars");
-        }
-
-        console.log("Entering Email...");
-        const emailSelector = 'input[type="email"]';
-        await page.waitForSelector(emailSelector);
-        await page.type(emailSelector, email);
+        log("Typing Email...");
+        await page.waitForSelector('input[type="email"]');
+        await page.type('input[type="email"]', email);
         await page.keyboard.press('Enter');
 
-        // 2. Wait for Password Page
-        console.log("Waiting for Password Page...");
-        const passwordSelector = 'input[type="password"]';
-        try {
-            await page.waitForSelector(passwordSelector, { timeout: 15000 });
-        } catch (e) {
-            console.log("Password field not found immediately...");
-        }
-
-        // 3. Enter Password from ENV
-        console.log("Entering Password...");
-        await page.type(passwordSelector, password);
+        // 3. Password
+        log("Waiting for Password Field...");
+        await page.waitForSelector('input[type="password"]', { timeout: 15000 });
+        log("Typing Password...");
+        await page.type('input[type="password"]', password);
         await page.keyboard.press('Enter');
 
-        // 4. Wait for Dashboard Load
-        console.log("Waiting for Dashboard...");
+        // 4. Wait for Dashboard
+        log("Waiting for Dashboard Load...");
         try {
-            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 });
         } catch (e) {
-            console.log("Navigation timeout, checking if token was captured anyway...");
+            log("Navigation timeout - checking state...");
         }
+
+        // --- Result Check ---
+        const finalUrl = page.url();
+        const title = await page.title();
 
         if (capturedToken) {
-            console.log("Success! Token captured.");
-            return res.status(200).json({
-                success: true,
-                token: capturedToken
-            });
+            log("Success.");
+            return res.status(200).json({ success: true, token: capturedToken });
         } else {
+            // Failed
             return res.status(500).json({
                 success: false,
-                error: "Token not captured. Login might have failed."
+                error: "Token Not Captured",
+                debug: {
+                    url: finalUrl,
+                    title: title,
+                    envEmail: !!email,
+                    logs: debugInfo.logs
+                }
             });
         }
 
     } catch (error) {
-        console.error("Puppeteer Script Error:", error);
-        return res.status(500).json({ error: error.message });
+        return res.status(500).json({
+            error: error.message,
+            stack: error.stack,
+            debug: debugInfo
+        });
     } finally {
-        if (browser) {
-            await browser.close();
-        }
+        if (browser) await browser.close();
     }
 }
