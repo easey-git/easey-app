@@ -32,6 +32,31 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
             try {
                 const err = await response.json();
                 console.error("DEBUG: Delhivery Proxy Failed:", response.status, JSON.stringify(err));
+
+                // If 401 Unauthorized, attempt to Auto-Refresh Token
+                if (response.status === 401) {
+                    console.log("Attempting Auto-Refresh of Delhivery Token...");
+
+                    const refreshRes = await fetch('/api/auth-delhivery', {
+                        method: 'POST',
+                    }); // Takes 30s+
+
+                    if (refreshRes.ok) {
+                        const refreshData = await refreshRes.json();
+                        if (refreshData.token) {
+                            console.log("Token Refreshed Successfully!");
+                            // Update the token in memory for this session
+                            LOGISTICS_TOKENS.DELHIVERY_JWT = refreshData.token.replace('Bearer ', '');
+
+                            // Retry the Original Request with new token
+                            // Recursive call with same params
+                            return fetchDelhiveryOrders(status, page);
+                        }
+                    } else {
+                        console.error("Token Refresh Failed:", await refreshRes.text());
+                    }
+                }
+
             } catch (e) {
                 console.error("DEBUG: Delhivery Proxy Failed (non-JSON):", response.status);
             }
