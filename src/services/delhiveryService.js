@@ -86,7 +86,7 @@ export const fetchDelhiveryNDR = async (page = 1) => {
             "search_on": ["wbn", "oid"],
             "search_type": "CONTAINS",
             "search_term": "",
-            "page_size": 1000,
+            "page_size": 50,
             "page": page,
             "only_count": false,
             "filter_only_master_wbn": true,

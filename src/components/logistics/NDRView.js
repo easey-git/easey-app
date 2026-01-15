@@ -11,6 +11,7 @@ export const NDRView = () => {
     const [allOrders, setAllOrders] = useState([]);
 
     const [errorMsg, setErrorMsg] = useState(null);
+    const [debugData, setDebugData] = useState(null);
 
     useEffect(() => {
         loadOrders();
@@ -19,8 +20,10 @@ export const NDRView = () => {
     const loadOrders = async () => {
         setLoading(true);
         setErrorMsg(null);
+        setDebugData(null);
         try {
             const data = await fetchDelhiveryNDR();
+            setDebugData(data);
 
             if (data?.error) {
                 setErrorMsg(`API Error: ${data.status || ''} ${data.message}`);
@@ -134,6 +137,18 @@ export const NDRView = () => {
                 <Card style={{ margin: 16, backgroundColor: '#FFEBEE', borderColor: '#F44336' }} mode="outlined">
                     <Card.Content>
                         <Text style={{ color: '#D32F2F' }}>{errorMsg}</Text>
+                    </Card.Content>
+                </Card>
+            )}
+
+            {/* DEBUG: Show Raw Response if list is empty to diagnose */}
+            {(!allOrders || allOrders.length === 0) && !loading && !errorMsg && debugData && (
+                <Card style={{ margin: 16, backgroundColor: '#E3F2FD' }} mode="outlined">
+                    <Card.Title title="Debug: API Response" />
+                    <Card.Content>
+                        <Text variant="bodySmall" style={{ fontFamily: 'monospace' }}>
+                            {JSON.stringify(debugData, null, 2).substring(0, 1000)}
+                        </Text>
                     </Card.Content>
                 </Card>
             )}
