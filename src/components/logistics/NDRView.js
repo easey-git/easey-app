@@ -37,7 +37,7 @@ export const NDRView = () => {
                     id: pkg.order_number || 'N/A',
                     awb: pkg.awb_number || 'N/A',
                     date: pkg.updated_at ? new Date(pkg.updated_at).toLocaleDateString() : 'N/A',
-                    status: pkg.last_update || pkg.package_status_type || 'Unknown',
+                    status: pkg.package_status_type || pkg.shipment_status || 'Unknown',
                     location: pkg.billing_address?.city || 'N/A',
                     update: pkg.last_update || 'N/A',
                 }));
