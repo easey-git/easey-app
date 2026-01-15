@@ -112,6 +112,11 @@ export const DelhiveryView = () => {
             backgroundColor: theme.colors.surface,
             borderColor: theme.colors.outlineVariant
         }]}>
+            {/* Checkbox Column */}
+            <View style={{ width: 40, justifyContent: 'center' }}>
+                <Checkbox status="unchecked" color={theme.colors.primary} />
+            </View>
+
             {/* Order Details Column */}
             <View style={{ flex: 2, justifyContent: 'center' }}>
                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
@@ -151,6 +156,11 @@ export const DelhiveryView = () => {
                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>{item.pickup}</Text>
                 <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Pickup</Text>
             </View>
+
+            {/* Actions Column */}
+            <View style={{ width: 50, justifyContent: 'center', alignItems: 'flex-end' }}>
+                <IconButton icon="pencil-outline" size={20} iconColor={theme.colors.secondary} onPress={() => { }} />
+            </View>
         </View>
     );
 
@@ -166,6 +176,7 @@ export const DelhiveryView = () => {
                 </View>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                     <Button icon="cloud-download-outline" mode="outlined" style={styles.actionButton}>Export</Button>
+                    <Button icon="plus" mode="contained" buttonColor={theme.colors.primary} textColor={theme.colors.onPrimary} style={styles.actionButton}>Create</Button>
                 </View>
             </View>
 
@@ -196,10 +207,12 @@ export const DelhiveryView = () => {
 
             {/* List Header */}
             <Surface style={[styles.listHeader, { borderBottomColor: theme.colors.outlineVariant, backgroundColor: theme.colors.background }]} elevation={0}>
+                <View style={{ width: 40 }} />
                 <Text style={[styles.columnHeader, { flex: 2, color: theme.colors.outline }]}>ORDER DETAILS</Text>
                 <Text style={[styles.columnHeader, { flex: 1.5, color: theme.colors.outline }]}>DATE</Text>
                 <Text style={[styles.columnHeader, { flex: 1.5, color: theme.colors.outline }]}>STATUS</Text>
                 <Text style={[styles.columnHeader, { flex: 1.5, color: theme.colors.outline }]}>LOCATION</Text>
+                <View style={{ width: 50 }} />
             </Surface>
 
             {/* Main List */}
