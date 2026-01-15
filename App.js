@@ -16,6 +16,7 @@ import WhatsAppManagerScreen from './src/screens/WhatsAppManagerScreen';
 import MetaScreen from './src/screens/MetaScreen';
 import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
+import LogisticsScreen from './src/screens/LogisticsScreen';
 
 import AdminPanelScreen from './src/screens/AdminPanelScreen';
 
@@ -230,6 +231,11 @@ function AppStack() {
             <Stack.Screen
               name="Wallet"
               component={WalletScreen}
+            />
+            <Stack.Screen
+              name="Logistics"
+              component={LogisticsScreen}
+              options={{ title: 'Logistics' }}
             />
 
 

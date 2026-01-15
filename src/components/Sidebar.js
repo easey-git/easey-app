@@ -51,6 +51,7 @@ export const Sidebar = React.memo(({ onClose }) => {
     const menuItems = [
         { label: 'Dashboard', icon: 'view-dashboard', route: 'Home' }, // Always visible
         { label: 'Orders', icon: 'package-variant', route: 'DatabaseManager', params: { collection: 'orders' }, permission: 'access_orders' },
+        { label: 'Logistics', icon: 'truck-delivery', route: 'Logistics' },
         { label: 'Analytics', icon: 'chart-bar', route: 'Stats', permission: 'access_analytics' },
         { label: 'Wallet', icon: 'wallet-outline', route: 'Wallet', permission: 'access_wallet' },
         { label: 'WhatsApp', icon: 'whatsapp', route: 'WhatsAppManager', permission: 'access_whatsapp' },
