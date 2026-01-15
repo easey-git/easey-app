@@ -91,7 +91,7 @@ export const fetchDelhiveryNDR = async (page = 1) => {
             "only_count": false,
             "filter_only_master_wbn": true,
             "filter_shipment_type": ["NDR_AND_NPR"], // NDR Specific
-            "range_dispatch_count": [{ "op": "GTE", "value": 1 }, { "op": "LTE", "value": null }], // Specific from logs
+            // "range_dispatch_count": [{ "op": "GTE", "value": 1 }, { "op": "LTE", "value": null }], // Specific from logs
             "sorting": [{ "field": "updated_at", "direction": "DESC" }]
         };
 
