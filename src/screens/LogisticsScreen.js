@@ -3,14 +3,9 @@ import { View, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-nat
 import { Text, useTheme, Surface, Icon } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { DelhiveryView } from '../components/logistics/DelhiveryView';
+import { NDRView } from '../components/logistics/NDRView';
 
 // Placeholder components for future features
-const NDRView = () => (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text variant="titleMedium" style={{ color: '#666' }}>NDR Management Coming Soon</Text>
-    </View>
-);
-
 const WalletView = () => (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <Text variant="titleMedium" style={{ color: '#666' }}>Logistics Wallet Coming Soon</Text>

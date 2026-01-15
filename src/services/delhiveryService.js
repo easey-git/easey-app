@@ -77,6 +77,46 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
     }
 };
 
+export const fetchDelhiveryNDR = async (page = 1) => {
+    try {
+        const token = LOGISTICS_TOKENS.DELHIVERY_JWT;
+        if (!token) throw new Error("Delhivery Token not found");
+
+        const payload = {
+            "search_on": ["wbn", "oid"],
+            "search_type": "CONTAINS",
+            "search_term": "",
+            "page_size": 1000,
+            "page": page,
+            "only_count": false,
+            "filter_only_master_wbn": true,
+            "filter_shipment_type": ["NDR_AND_NPR"], // NDR Specific
+            "range_dispatch_count": [{ "op": "GTE", "value": 1 }, { "op": "LTE", "value": null }], // Specific from logs
+            "sorting": [{ "field": "updated_at", "direction": "DESC" }]
+        };
+
+        const response = await fetch(LOGISTICS_URLS.DELHIVERY_INTERNAL_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token, payload: payload })
+        });
+
+        if (!response.ok) {
+            // Re-use the same crude retry logic if needed, or just let the main one handle it if we genericize
+            // For now, simple return null
+            console.error("NDR Fetch Failed:", response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        return data;
+
+    } catch (error) {
+        console.error("Error fetching NDR orders:", error);
+        return null;
+    }
+};
+
 export const syncDelhiveryStatus = async (awb) => {
     // Used to update a specific order
     // ...
