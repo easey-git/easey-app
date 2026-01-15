@@ -104,6 +104,34 @@ export const fetchDelhiveryNDR = async (page = 1) => {
         if (!response.ok) {
             const errorText = await response.text();
             console.error("NDR Fetch Failed:", response.status, errorText);
+
+            // If 401 Unauthorized, attempt to Auto-Refresh Token
+            if (response.status === 401) {
+                console.log("Attempting Auto-Refresh of Delhivery Token (NDR)...");
+
+                try {
+                    const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', {
+                        method: 'POST',
+                    });
+
+                    if (refreshRes.ok) {
+                        const refreshData = await refreshRes.json();
+                        if (refreshData.token) {
+                            console.log("Token Refreshed Successfully! Retrying NDR Fetch...");
+                            // Update the token in memory for this session
+                            LOGISTICS_TOKENS.DELHIVERY_JWT = refreshData.token.replace('Bearer ', '');
+
+                            // Retry the Original Request with new token
+                            return fetchDelhiveryNDR(page);
+                        }
+                    } else {
+                        console.error("Token Refresh Failed:", await refreshRes.text());
+                    }
+                } catch (e) {
+                    console.error("Token refresh error:", e);
+                }
+            }
+
             return { error: true, status: response.status, message: errorText };
         }
 
