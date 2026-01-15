@@ -10,23 +10,6 @@ export const DelhiveryView = () => {
     const [loading, setLoading] = useState(false);
     const [allOrders, setAllOrders] = useState([]);
 
-    const STATUSES = [
-        "Ready To Ship",
-        "Ready for pickup",
-        "In-Transit",
-        "Out for delivery",
-        "Delivered",
-        "RTO - In Transit",
-        "RTO - Returned",
-        "Cancelled",
-        "Lost"
-    ];
-
-    // Normalize status for comparison (handles READY_FOR_PICKUP vs Ready for pickup)
-    const normalizeStatus = (status) => {
-        return status?.toUpperCase().replace(/[_\s-]/g, '') || '';
-    };
-
     useEffect(() => {
         loadOrders();
     }, []);
@@ -66,14 +49,11 @@ export const DelhiveryView = () => {
     const filteredOrders = React.useMemo(() => {
         let filtered = allOrders;
 
-        // Filter by status
+        // Filter by status - exact match
         if (selectedStatuses.length > 0) {
-            filtered = filtered.filter(order => {
-                const orderStatus = normalizeStatus(order.status);
-                return selectedStatuses.some(selectedStatus =>
-                    normalizeStatus(selectedStatus) === orderStatus
-                );
-            });
+            filtered = filtered.filter(order =>
+                selectedStatuses.includes(order.status)
+            );
         }
 
         // Filter by search query
@@ -87,6 +67,18 @@ export const DelhiveryView = () => {
 
         return filtered;
     }, [allOrders, selectedStatuses, searchQuery]);
+
+    const statusCounts = React.useMemo(() => {
+        const counts = {};
+        allOrders.forEach(order => {
+            const s = order.status;
+            if (s && s !== 'Unknown') {
+                counts[s] = (counts[s] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [allOrders]);
+
 
     const getStatusColor = (status) => {
         const s = status?.toUpperCase() || '';
@@ -140,7 +132,7 @@ export const DelhiveryView = () => {
                 style={styles.chipsContainer}
                 contentContainerStyle={styles.chipsContent}
             >
-                {STATUSES.map(status => (
+                {Object.keys(statusCounts).sort().map(status => (
                     <Chip
                         key={status}
                         selected={selectedStatuses.includes(status)}
@@ -148,7 +140,7 @@ export const DelhiveryView = () => {
                         style={styles.chip}
                         compact
                     >
-                        {status}
+                        {status} ({statusCounts[status]})
                     </Chip>
                 ))}
             </ScrollView>
