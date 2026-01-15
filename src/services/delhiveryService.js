@@ -5,8 +5,24 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
         const token = LOGISTICS_TOKENS.DELHIVERY_JWT; // Use the internal JWT
         if (!token) throw new Error("Delhivery Token not found");
 
+        const STATUS_DEFINITIONS = {
+            'Pending': ['MANIFESTED', 'IN_TRANSIT', 'PENDING', 'DISPATCHED', 'OUT_FOR_DELIVERY', 'PICKUP_SCHEDULED', 'READY_FOR_PICKUP', 'SHIPPED'],
+            'Ready to Ship': ['MANIFESTED', 'PICKUP_SCHEDULED'],
+            'Ready for Pickup': ['READY_FOR_PICKUP'],
+            'In-Transit': ['IN_TRANSIT', 'DISPATCHED', 'SHIPPED'],
+            'Out for Delivery': ['OUT_FOR_DELIVERY'],
+            'Delivered': ['DELIVERED'],
+            'RTO In-Transit': ['RTO'],
+            'RTO-Returned': ['RETURNED_TO_ORIGIN', 'RTO_DELIVERED'],
+            'Cancelled': ['CANCELLED'],
+            'Lost': ['LOST'],
+            'All': []
+        };
+
+        const filterStatuses = STATUS_DEFINITIONS[status] || [];
+
         const payload = {
-            "search_on": ["wbn"],
+            "search_on": ["wbn", "order_id"],
             "search_type": "CONTAINS",
             "search_term": "",
             "page_size": 50,
@@ -14,8 +30,13 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
             "only_count": false,
             "filter_only_master_wbn": true,
             "filter_shipment_type": ["FORWARD"],
+            // Sending generic 'filter_status' and specific 'filter_shipment_status' to cover bases
+            "filter_status": filterStatuses.length > 0 ? filterStatuses : undefined,
+            "filter_shipment_status": filterStatuses.length > 0 ? filterStatuses : undefined,
             "sorting": [{ "field": "manifested_at", "direction": "DESC" }]
         };
+
+        console.log("DEBUG: Sending Delhivery Payload:", JSON.stringify(payload));
 
         const response = await fetch(LOGISTICS_URLS.DELHIVERY_INTERNAL_URL, {
             method: 'POST',
