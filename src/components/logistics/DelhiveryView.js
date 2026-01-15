@@ -108,8 +108,6 @@ export const DelhiveryView = () => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-
-
             {/* Search */}
             <Searchbar
                 placeholder="Search by AWB or Order ID"
