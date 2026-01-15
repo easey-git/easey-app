@@ -1,6 +1,6 @@
 export const LOGISTICS_URLS = {
     DELHIVERY_API_BASE: "https://track.delhivery.com/api/v1",
-    DELHIVERY_INTERNAL_URL: '/api/proxy/delhivery-internal/forward_orders/hq_es_shipments_search/list',
+    DELHIVERY_INTERNAL_URL: '/api/delhivery',
 };
 
 export const LOGISTICS_TOKENS = {

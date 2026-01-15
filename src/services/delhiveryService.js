@@ -20,13 +20,12 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
         const response = await fetch(LOGISTICS_URLS.DELHIVERY_INTERNAL_URL, {
             method: 'POST',
             headers: {
-                'accept': 'application/json, text/plain, */*',
-                'accept-language': 'en',
-                'authorization': `Bearer ${token}`,
-                'content-type': 'application/json',
-                'x-hq-client-id': 'cms::client::53f3d783-ca97-11f0-8d4f-061927e1202d',
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({
+                token: token,
+                payload: payload
+            })
         });
 
         if (!response.ok) {
