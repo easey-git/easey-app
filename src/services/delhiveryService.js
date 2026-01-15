@@ -29,7 +29,12 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
         });
 
         if (!response.ok) {
-            console.warn("Delhivery API List call failed, status:", response.status);
+            try {
+                const err = await response.json();
+                console.error("DEBUG: Delhivery Proxy Failed:", response.status, JSON.stringify(err));
+            } catch (e) {
+                console.error("DEBUG: Delhivery Proxy Failed (non-JSON):", response.status);
+            }
             return null;
         }
 

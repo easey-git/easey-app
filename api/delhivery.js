@@ -1,8 +1,9 @@
 // Serverless function to proxy Delhivery requests with correct headers
 export default async function handler(req, res) {
+    const origin = req.headers.origin || '*';
     // Enable CORS for this function
     res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
@@ -17,6 +18,8 @@ export default async function handler(req, res) {
         if (!token) {
             return res.status(400).json({ error: "Missing token in request body" });
         }
+
+        console.log("Token received length:", token.length);
 
         const response = await fetch("https://ucp-app-gateway.delhivery.com/web/api/forward_orders/hq_es_shipments_search/list", {
             method: 'POST',
@@ -36,8 +39,9 @@ export default async function handler(req, res) {
         if (!response.ok) {
             console.error(`Delhivery Upstream Error: ${response.status} ${response.statusText}`);
             const text = await response.text();
-            // Pass the upstream error back
-            return res.status(response.status).send(text);
+            console.error("Upstream Error Body:", text);
+            // Pass the upstream error back as JSON
+            return res.status(response.status).json({ error: text || response.statusText, status: response.status });
         }
 
         const data = await response.json();
