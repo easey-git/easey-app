@@ -11,7 +11,7 @@ export const NDRView = () => {
     const [allOrders, setAllOrders] = useState([]);
 
     const [errorMsg, setErrorMsg] = useState(null);
-    const [debugData, setDebugData] = useState(null);
+
 
     useEffect(() => {
         loadOrders();
@@ -20,10 +20,10 @@ export const NDRView = () => {
     const loadOrders = async () => {
         setLoading(true);
         setErrorMsg(null);
-        setDebugData(null);
+
         try {
             const data = await fetchDelhiveryNDR();
-            setDebugData(data);
+
 
             if (data?.error) {
                 setErrorMsg(`API Error: ${data.status || ''} ${data.message}`);
@@ -31,7 +31,18 @@ export const NDRView = () => {
                 return;
             }
 
-            if (data?.data) {
+            // NDR API returns 'results' array, not 'data'
+            if (data?.results) {
+                const mapped = data.results.map(pkg => ({
+                    id: pkg.order_number || 'N/A',
+                    awb: pkg.awb_number || 'N/A',
+                    date: pkg.updated_at ? new Date(pkg.updated_at).toLocaleDateString() : 'N/A',
+                    status: pkg.last_update || pkg.package_status_type || 'Unknown',
+                    location: pkg.billing_address?.city || 'N/A',
+                    update: pkg.last_update || 'N/A',
+                }));
+                setAllOrders(mapped);
+            } else if (data?.data) {
                 const mapped = data.data.map(pkg => ({
                     id: pkg.oid || 'N/A',
                     awb: pkg.wbn || 'N/A',
@@ -141,17 +152,7 @@ export const NDRView = () => {
                 </Card>
             )}
 
-            {/* DEBUG: Show Raw Response if list is empty to diagnose */}
-            {(!allOrders || allOrders.length === 0) && !loading && !errorMsg && debugData && (
-                <Card style={{ margin: 16, backgroundColor: '#E3F2FD' }} mode="outlined">
-                    <Card.Title title="Debug: API Response" />
-                    <Card.Content>
-                        <Text variant="bodySmall" style={{ fontFamily: 'monospace' }}>
-                            {JSON.stringify(debugData, null, 2).substring(0, 1000)}
-                        </Text>
-                    </Card.Content>
-                </Card>
-            )}
+
 
             {/* Status Chips */}
             <ScrollView
