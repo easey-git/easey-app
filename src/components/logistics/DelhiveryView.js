@@ -36,20 +36,20 @@ export const DelhiveryView = () => {
                 console.log("DEBUG: Raw API Data received in View:", JSON.stringify(data)); // Force log
 
                 if (data) {
-                    // console.log("Keys in data:", Object.keys(data));
                     // Check for different possible response structures
-                    const packages = data.packages || data.data || data.shipments || [];
+                    // Debug logs showed structure: { result_count: 50, results: [...] }
+                    const packages = data.results || data.packages || data.data || [];
 
                     if (packages.length > 0) {
                         // Map API response to our UI model
                         const mappedOrders = packages.map(pkg => ({
-                            id: pkg.ref_id || pkg.waybill || 'N/A', // Use ref_id as Order ID if available
-                            awb: pkg.waybill || pkg.wbn || 'N/A',
-                            manifestDate: pkg.pickup_date || pkg.manifested_at || 'N/A',
-                            status: pkg.status || pkg.state || 'Unknown',
-                            pickup: pkg.origin || 'Warehouse',
-                            lastUpdate: pkg.expected_date || 'N/A',
-                            paymentMode: (pkg.cod_amount > 0 || pkg.pt === 'COD') ? 'COD' : 'Prepaid'
+                            id: pkg.order_number || pkg.ref_id || 'N/A',
+                            awb: pkg.awb_number || pkg.waybill || 'N/A',
+                            manifestDate: pkg.manifest_at ? new Date(pkg.manifest_at).toLocaleDateString() : 'N/A',
+                            status: pkg.shipment_status || pkg.status || 'Unknown',
+                            pickup: pkg.origin_address?.city || pkg.pickup_location_name || 'Warehouse',
+                            lastUpdate: pkg.last_update || 'N/A',
+                            paymentMode: pkg.payment_mode || 'Prepaid'
                         }));
                         setOrders(mappedOrders);
                     } else {
