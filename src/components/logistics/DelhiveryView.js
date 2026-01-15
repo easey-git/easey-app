@@ -33,21 +33,31 @@ export const DelhiveryView = () => {
                 // In a real app, we would pass the selectedStatuses and page to the API
                 // For now, we fetch generic data.
                 const data = await fetchDelhiveryOrders(selectedStatuses);
+                console.log("DEBUG: Raw API Data received in View:", JSON.stringify(data)); // Force log
 
-                if (data && data.packages) {
-                    // Map API response to our UI model
-                    const mappedOrders = data.packages.map(pkg => ({
-                        id: pkg.ref_id || pkg.waybill || 'N/A', // Use ref_id as Order ID if available
-                        awb: pkg.waybill,
-                        manifestDate: pkg.pickup_date ? new Date(pkg.pickup_date).toLocaleDateString() : 'N/A',
-                        status: pkg.status,
-                        pickup: pkg.origin || 'Warehouse', // Simplified
-                        lastUpdate: pkg.expected_date || 'N/A',
-                        paymentMode: pkg.cod_amount > 0 ? 'COD' : 'Prepaid'
-                    }));
-                    setOrders(mappedOrders);
+                if (data) {
+                    // console.log("Keys in data:", Object.keys(data));
+                    // Check for different possible response structures
+                    const packages = data.packages || data.data || data.shipments || [];
+
+                    if (packages.length > 0) {
+                        // Map API response to our UI model
+                        const mappedOrders = packages.map(pkg => ({
+                            id: pkg.ref_id || pkg.waybill || 'N/A', // Use ref_id as Order ID if available
+                            awb: pkg.waybill || pkg.wbn || 'N/A',
+                            manifestDate: pkg.pickup_date || pkg.manifested_at || 'N/A',
+                            status: pkg.status || pkg.state || 'Unknown',
+                            pickup: pkg.origin || 'Warehouse',
+                            lastUpdate: pkg.expected_date || 'N/A',
+                            paymentMode: (pkg.cod_amount > 0 || pkg.pt === 'COD') ? 'COD' : 'Prepaid'
+                        }));
+                        setOrders(mappedOrders);
+                    } else {
+                        console.log("API returned data but no packages found/mapped");
+                        setOrders([]);
+                    }
                 } else {
-                    console.log("No API data found");
+                    console.log("No API data found (null response)");
                     setOrders([]);
                 }
             } catch (err) {
