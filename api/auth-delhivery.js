@@ -31,8 +31,10 @@ export default async function handler(req, res) {
 
         const page = await browser.newPage();
 
-        // --- Intercept Token ---
+        // --- Intercept Token & Balance ---
         let capturedToken = null;
+        let capturedBalance = null;
+
         await page.setRequestInterception(true);
         page.on('request', request => request.continue());
 
@@ -43,12 +45,27 @@ export default async function handler(req, res) {
                 const headers = response.request().headers();
                 const auth = headers['authorization'] || headers['Authorization'];
                 if (auth && auth.startsWith('Bearer')) {
-                    // Check if this is the UCP token (long JWT)
                     if (url.includes('delhivery.com')) {
                         capturedToken = auth;
-                        log(`Token Captured from: ${url}`);
+                        // log(`Token Captured from: ${url}`);
                     }
                 }
+
+                // Capture Balance
+                try {
+                    if (url.includes('balance') || url.includes('wallet') || url.includes('summary') || url.includes('ledger') || url.includes('transaction')) {
+                        const json = await response.json().catch(() => null);
+                        if (json) {
+                            // Heuristics
+                            if (json.data?.balance !== undefined) capturedBalance = json.data.balance;
+                            else if (json.balance !== undefined) capturedBalance = json.balance;
+                            else if (json.available_balance !== undefined) capturedBalance = json.available_balance;
+                            else if (json.current_balance !== undefined) capturedBalance = json.current_balance;
+
+                            if (capturedBalance !== null) log(`Balance Captured: ${capturedBalance}`);
+                        }
+                    }
+                } catch (e) { }
             }
         });
 
@@ -83,13 +100,27 @@ export default async function handler(req, res) {
             log("Navigation timeout - checking state...");
         }
 
+        // 5. Navigate to Finances if Balance not captured yet
+        if (!capturedBalance) {
+            log("Navigating to Finances/Transactions to fetch balance...");
+            try {
+                await page.goto('https://one.delhivery.com/finances/unified/transactions', { waitUntil: 'networkidle2', timeout: 15000 });
+            } catch (e) {
+                log("Finances nav timeout");
+            }
+        }
+
         // --- Result Check ---
         const finalUrl = page.url();
         const title = await page.title();
 
         if (capturedToken) {
             log("Success.");
-            return res.status(200).json({ success: true, token: capturedToken });
+            return res.status(200).json({
+                success: true,
+                token: capturedToken,
+                balance: capturedBalance
+            });
         } else {
             // Failed
             return res.status(500).json({
