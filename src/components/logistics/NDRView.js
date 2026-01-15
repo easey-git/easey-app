@@ -170,17 +170,7 @@ export const NDRView = () => {
                 >
                     All ({allOrders.length})
                 </Chip>
-                {Object.keys(statusCounts).sort().map(status => (
-                    <Chip
-                        key={status}
-                        selected={selectedStatuses.includes(status)}
-                        onPress={() => toggleStatus(status)}
-                        style={styles.chip}
-                        compact
-                    >
-                        {status} ({statusCounts[status]})
-                    </Chip>
-                ))}
+
             </ScrollView>
 
             {/* Orders List */}
