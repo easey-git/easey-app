@@ -6,11 +6,11 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
         if (!token) throw new Error("Delhivery Token not found");
 
         const STATUS_DEFINITIONS = {
-            'Pending': ['MANIFESTED', 'IN_TRANSIT', 'PENDING', 'DISPATCHED', 'OUT_FOR_DELIVERY', 'PICKUP_SCHEDULED', 'READY_FOR_PICKUP', 'SHIPPED'],
+            'Pending': ['MANIFESTED', 'PICKUP_SCHEDULED', 'READY_FOR_PICKUP'],
             'Ready to Ship': ['MANIFESTED', 'PICKUP_SCHEDULED'],
             'Ready for Pickup': ['READY_FOR_PICKUP'],
-            'In-Transit': ['IN_TRANSIT', 'DISPATCHED', 'SHIPPED'],
-            'Out for Delivery': ['OUT_FOR_DELIVERY'],
+            'In-Transit': ['IN_TRANSIT', 'SHIPPED'],
+            'Out for Delivery': ['OUT_FOR_DELIVERY'], // This usually exists, keeping for now
             'Delivered': ['DELIVERED'],
             'RTO In-Transit': ['RTO'],
             'RTO-Returned': ['RETURNED_TO_ORIGIN', 'RTO_DELIVERED'],
@@ -30,8 +30,8 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
             "only_count": false,
             "filter_only_master_wbn": true,
             "filter_shipment_type": ["FORWARD"],
-            // Sending generic 'filter_status' and specific 'filter_shipment_status' to cover bases
-            "filter_status": filterStatuses.length > 0 ? filterStatuses : undefined,
+            // Removing generic 'filter_status' to avoid conflicts. Sending only specific key.
+            // "filter_status": filterStatuses.length > 0 ? filterStatuses : undefined,
             "filter_shipment_status": filterStatuses.length > 0 ? filterStatuses : undefined,
             "sorting": [{ "field": "manifested_at", "direction": "DESC" }]
         };
