@@ -91,7 +91,7 @@ export const fetchDelhiveryNDR = async (page = 1) => {
             "only_count": false,
             "filter_only_master_wbn": true,
             "filter_shipment_type": ["NDR_AND_NPR"], // NDR Specific
-            // "range_dispatch_count": [{ "op": "GTE", "value": 1 }, { "op": "LTE", "value": null }], // Specific from logs
+            "range_dispatch_count": [{ "op": "GTE", "value": 1 }, { "op": "LTE", "value": null }], // Specific from logs
             "sorting": [{ "field": "updated_at", "direction": "DESC" }]
         };
 
@@ -102,10 +102,9 @@ export const fetchDelhiveryNDR = async (page = 1) => {
         });
 
         if (!response.ok) {
-            // Re-use the same crude retry logic if needed, or just let the main one handle it if we genericize
-            // For now, simple return null
-            console.error("NDR Fetch Failed:", response.status);
-            return null;
+            const errorText = await response.text();
+            console.error("NDR Fetch Failed:", response.status, errorText);
+            return { error: true, status: response.status, message: errorText };
         }
 
         const data = await response.json();
@@ -113,7 +112,7 @@ export const fetchDelhiveryNDR = async (page = 1) => {
 
     } catch (error) {
         console.error("Error fetching NDR orders:", error);
-        return null;
+        return { error: true, message: error.message };
     }
 };
 

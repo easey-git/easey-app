@@ -10,15 +10,25 @@ export const NDRView = () => {
     const [loading, setLoading] = useState(false);
     const [allOrders, setAllOrders] = useState([]);
 
+    const [errorMsg, setErrorMsg] = useState(null);
+
     useEffect(() => {
         loadOrders();
     }, []);
 
     const loadOrders = async () => {
         setLoading(true);
+        setErrorMsg(null);
         try {
             const data = await fetchDelhiveryNDR();
-            if (data?.data) { // NDR API returns { data: [...] } based on our new function
+
+            if (data?.error) {
+                setErrorMsg(`API Error: ${data.status || ''} ${data.message}`);
+                setAllOrders([]);
+                return;
+            }
+
+            if (data?.data) {
                 const mapped = data.data.map(pkg => ({
                     id: pkg.oid || 'N/A',
                     awb: pkg.wbn || 'N/A',
@@ -33,6 +43,7 @@ export const NDRView = () => {
             }
         } catch (err) {
             console.error("Failed to load NDR orders", err);
+            setErrorMsg(err.message);
             setAllOrders([]);
         } finally {
             setLoading(false);
@@ -117,6 +128,15 @@ export const NDRView = () => {
                 iconColor={theme.colors.onSurfaceVariant}
                 placeholderTextColor={theme.colors.onSurfaceVariant}
             />
+
+            {/* Error Banner */}
+            {errorMsg && (
+                <Card style={{ margin: 16, backgroundColor: '#FFEBEE', borderColor: '#F44336' }} mode="outlined">
+                    <Card.Content>
+                        <Text style={{ color: '#D32F2F' }}>{errorMsg}</Text>
+                    </Card.Content>
+                </Card>
+            )}
 
             {/* Status Chips */}
             <ScrollView
