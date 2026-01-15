@@ -149,33 +149,3 @@ export const syncDelhiveryStatus = async (awb) => {
     // ...
 };
 
-export const fetchDelhiveryBalance = async () => {
-    try {
-        console.log("Fetching Delhivery Balance (Live)...");
-        // This endpoint uses Puppeteer to login and scrape the balance. It takes ~30s.
-        const response = await fetch('https://easey-app.vercel.app/api/auth-delhivery', {
-            method: 'POST',
-        });
-
-        if (!response.ok) {
-            console.error("Balance Fetch Failed:", response.status);
-            return null;
-        }
-
-        const data = await response.json();
-        if (data.token) {
-            // Also update the token while we are at it
-            LOGISTICS_TOKENS.DELHIVERY_JWT = data.token.replace('Bearer ', '');
-        }
-
-        if (data.balance !== undefined && data.balance !== null) {
-            return data.balance;
-        } else {
-            console.warn("Balance not found in response:", data);
-            return null;
-        }
-    } catch (error) {
-        console.error("Error fetching Delhivery balance:", error);
-        return null;
-    }
-};

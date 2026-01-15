@@ -5,12 +5,7 @@ import { CRMLayout } from '../components/CRMLayout';
 import { DelhiveryView } from '../components/logistics/DelhiveryView';
 import { NDRView } from '../components/logistics/NDRView';
 
-// Placeholder components for future features
-const WalletView = () => (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text variant="titleMedium" style={{ color: '#666' }}>Logistics Wallet Coming Soon</Text>
-    </View>
-);
+
 
 // 1. Service/Feature Registry
 // Currently all features belong to Delhivery. 
@@ -30,13 +25,7 @@ const SERVICES = [
         icon: 'alert-circle-outline',
         color: '#F57C00', // Orange for Attention
     },
-    {
-        id: 'wallet',
-        label: 'Wallet',
-        component: WalletView,
-        icon: 'wallet-outline',
-        color: '#388E3C', // Green for Money
-    },
+
 ];
 
 const LogisticsScreen = ({ navigation }) => {

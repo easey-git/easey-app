@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, FlatList } from 'react-native';
 import { Text, Searchbar, Chip, useTheme, Card, ActivityIndicator } from 'react-native-paper';
-import { fetchDelhiveryOrders, fetchDelhiveryBalance } from '../../services/delhiveryService';
+import { fetchDelhiveryOrders } from '../../services/delhiveryService';
 
 export const DelhiveryView = () => {
     const theme = useTheme();
@@ -10,20 +10,9 @@ export const DelhiveryView = () => {
     const [loading, setLoading] = useState(false);
     const [allOrders, setAllOrders] = useState([]);
 
-    const [balance, setBalance] = useState(null);
-    const [balanceLoading, setBalanceLoading] = useState(false);
-
     useEffect(() => {
         loadOrders();
-        loadBalance();
     }, []);
-
-    const loadBalance = async () => {
-        setBalanceLoading(true);
-        const bal = await fetchDelhiveryBalance();
-        if (bal !== null) setBalance(bal);
-        setBalanceLoading(false);
-    };
 
     const loadOrders = async () => {
         setLoading(true);
@@ -119,22 +108,7 @@ export const DelhiveryView = () => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            {/* Balance Card */}
-            <Card style={{ margin: 16, marginBottom: 8, backgroundColor: theme.colors.elevation.level2 }} mode="contained">
-                <Card.Content style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Delhivery Balance</Text>
-                        {balanceLoading ? (
-                            <ActivityIndicator size="small" color={theme.colors.primary} style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
-                        ) : (
-                            <Text variant="headlineMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>
-                                ₹{balance ? Number(balance).toLocaleString('en-IN') : '--'}
-                            </Text>
-                        )}
-                    </View>
-                    <Chip icon="wallet" style={{ backgroundColor: theme.colors.surface }}>Wallet</Chip>
-                </Card.Content>
-            </Card>
+
 
             {/* Search */}
             <Searchbar
