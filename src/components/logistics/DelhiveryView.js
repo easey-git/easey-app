@@ -45,7 +45,20 @@ export const DelhiveryView = () => {
         );
     };
 
-    // Filter orders based on selected statuses and search query
+    // Debounce search query to prevent lag on typing
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+        }, 300); // 300ms delay is industry standard
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [searchQuery]);
+
+    // Filter orders based on selected statuses and debounced search query
     const filteredOrders = React.useMemo(() => {
         let filtered = allOrders;
 
@@ -56,9 +69,9 @@ export const DelhiveryView = () => {
             );
         }
 
-        // Filter by search query
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
+        // Filter by debounced search query
+        if (debouncedSearchQuery.trim()) {
+            const query = debouncedSearchQuery.toLowerCase();
             filtered = filtered.filter(order =>
                 order.id.toLowerCase().includes(query) ||
                 order.awb.toLowerCase().includes(query)
@@ -66,7 +79,7 @@ export const DelhiveryView = () => {
         }
 
         return filtered;
-    }, [allOrders, selectedStatuses, searchQuery]);
+    }, [allOrders, selectedStatuses, debouncedSearchQuery]);
 
     const statusCounts = React.useMemo(() => {
         const counts = {};
@@ -90,27 +103,7 @@ export const DelhiveryView = () => {
     };
 
     const renderOrder = React.useCallback(({ item }) => (
-        <Card style={[styles.orderCard, { backgroundColor: theme.colors.surface }]} mode="outlined">
-            <Card.Content style={styles.cardContent}>
-                <View style={styles.orderRow}>
-                    <View style={styles.orderInfo}>
-                        <Text variant="titleMedium" style={[styles.orderId, { color: theme.colors.onSurface }]}>{item.id}</Text>
-                        <Text variant="bodySmall" style={[styles.awb, { color: theme.colors.onSurfaceVariant }]}>AWB: {item.awb}</Text>
-                    </View>
-                    <View style={styles.statusContainer}>
-                        <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
-                        <Text variant="bodySmall" style={[styles.statusText, { color: theme.colors.onSurface }]}>{item.status}</Text>
-                    </View>
-                </View>
-                <View style={styles.orderDetails}>
-                    <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurfaceVariant }]}>📍 {item.location}</Text>
-                    <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurfaceVariant }]}>📅 {item.date}</Text>
-                </View>
-                {item.update !== 'N/A' && (
-                    <Text variant="bodySmall" style={[styles.updateText, { color: theme.colors.outline }]}>{item.update}</Text>
-                )}
-            </Card.Content>
-        </Card>
+        <OrderItem item={item} theme={theme} getStatusColor={getStatusColor} />
     ), [theme]);
 
     return (
@@ -167,15 +160,10 @@ export const DelhiveryView = () => {
                     keyExtractor={item => item.awb}
                     contentContainerStyle={styles.listContent}
                     removeClippedSubviews={true}
-                    maxToRenderPerBatch={10}
-                    updateCellsBatchingPeriod={50}
+                    maxToRenderPerBatch={15}
+                    updateCellsBatchingPeriod={30}
                     initialNumToRender={10}
-                    windowSize={5}
-                    getItemLayout={(data, index) => ({
-                        length: 120,
-                        offset: 120 * index,
-                        index,
-                    })}
+                    windowSize={11}
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <Text variant="titleMedium" style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
@@ -188,6 +176,31 @@ export const DelhiveryView = () => {
         </View>
     );
 };
+
+// Memoized Item Component prevents re-renders of all items when one things changes
+const OrderItem = React.memo(({ item, theme, getStatusColor }) => (
+    <Card style={[styles.orderCard, { backgroundColor: theme.colors.surface }]} mode="outlined">
+        <Card.Content style={styles.cardContent}>
+            <View style={styles.orderRow}>
+                <View style={styles.orderInfo}>
+                    <Text variant="titleMedium" style={[styles.orderId, { color: theme.colors.onSurface }]}>{item.id}</Text>
+                    <Text variant="bodySmall" style={[styles.awb, { color: theme.colors.onSurfaceVariant }]}>AWB: {item.awb}</Text>
+                </View>
+                <View style={styles.statusContainer}>
+                    <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
+                    <Text variant="bodySmall" style={[styles.statusText, { color: theme.colors.onSurface }]}>{item.status}</Text>
+                </View>
+            </View>
+            <View style={styles.orderDetails}>
+                <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurfaceVariant }]}>📍 {item.location}</Text>
+                <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurfaceVariant }]}>📅 {item.date}</Text>
+            </View>
+            {item.update !== 'N/A' && (
+                <Text variant="bodySmall" style={[styles.updateText, { color: theme.colors.outline }]}>{item.update}</Text>
+            )}
+        </Card.Content>
+    </Card>
+));
 
 const styles = StyleSheet.create({
     container: {
