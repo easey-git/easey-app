@@ -132,6 +132,15 @@ export const DelhiveryView = () => {
                 style={styles.chipsContainer}
                 contentContainerStyle={styles.chipsContent}
             >
+                <Chip
+                    selected={selectedStatuses.length === 0}
+                    onPress={() => setSelectedStatuses([])}
+                    style={styles.chip}
+                    compact
+                    showSelectedCheck={false}
+                >
+                    All ({allOrders.length})
+                </Chip>
                 {Object.keys(statusCounts).sort().map(status => (
                     <Chip
                         key={status}
