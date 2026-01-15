@@ -1,39 +1,37 @@
 import { LOGISTICS_TOKENS, LOGISTICS_URLS } from '../config/logistics';
 
-export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
+// Status mapping based on Delhivery "One" Portal Internal API
+export const fetchDelhiveryOrders = async (status = 'Pending', page = 1) => {
     try {
-        const token = LOGISTICS_TOKENS.DELHIVERY_JWT; // Use the internal JWT
+        const token = LOGISTICS_TOKENS.DELHIVERY_JWT;
         if (!token) throw new Error("Delhivery Token not found");
 
         const STATUS_DEFINITIONS = {
-            'Pending': ['Manifested', 'In Transit', 'Pending', 'Dispatched', 'Out for Delivery', 'Pickup Scheduled', 'Ready for Pickup'],
-            'Ready to Ship': ['Manifested', 'Pickup Scheduled'],
-            'Ready for Pickup': ['Ready for Pickup'],
-            'In-Transit': ['In Transit', 'Dispatched'],
-            'Out for Delivery': ['Out for Delivery'],
-            'Delivered': ['Delivered'],
-            'RTO In-Transit': ['RTO'],
-            'RTO-Returned': ['RTO Delivered', 'Returned'],
-            'Cancelled': ['Cancelled'],
-            'Lost': ['Lost'],
+            'Pending': ['MANIFESTED', 'PICKUP_SCHEDULED', 'Dispatched'],
+            'Ready to Ship': ['MANIFESTED', 'PICKUP_SCHEDULED'],
+            'Ready for Pickup': ['PICKUP_SCHEDULED', 'Ready for Pickup'],
+            'In-Transit': ['SHIPPED', 'IN_TRANSIT'],
+            'Out for Delivery': ['OUT_FOR_DELIVERY'],
+            'Delivered': ['DELIVERED'],
+            'RTO In-Transit': ['RTO_INITIATED', 'RETURN_PENDING'],
+            'RTO-Returned': ['RETURNED_TO_ORIGIN'],
+            'Cancelled': ['CANCELLED'],
+            'Lost': ['LOST'],
             'All': []
         };
 
         const filterStatuses = STATUS_DEFINITIONS[status] || [];
 
-        const payload = {
-            "search_on": ["wbn"],
-            "search_type": "CONTAINS",
-            "search_term": "",
-            "page_size": 50,
+        // Proper Payload Structure for "One" Portal
+        const apiPayload = {
+            "page_size": 20,
             "page": page,
-            "only_count": false,
-            "filter_only_master_wbn": true,
-            "filter_shipment_type": ["FORWARD"],
-            "filter_status": filterStatuses.length > 0 ? filterStatuses : undefined,
-            "sorting": [{ "field": "manifested_at", "direction": "DESC" }]
+            "filter_shipment_status": filterStatuses.length > 0 ? filterStatuses : undefined,
+            "only_count": false
         };
 
+        // We use the proxy to bypass CORS
+        // We attempt to send the new Target URL to the proxy (if it supports it)
         const response = await fetch(LOGISTICS_URLS.DELHIVERY_INTERNAL_URL, {
             method: 'POST',
             headers: {
@@ -41,51 +39,32 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
             },
             body: JSON.stringify({
                 token: token,
-                payload: payload
+                // Passing the specific internal URL directly to the proxy
+                url: 'https://ucp-app-gateway.delhivery.com/web/api/forward_orders/shipments/ES/lists',
+                payload: { payload: apiPayload } // The API expects { payload: { ... } }
             })
         });
 
         if (!response.ok) {
-            try {
-                const err = await response.json();
-                console.error("DEBUG: Delhivery Proxy Failed:", response.status, JSON.stringify(err));
-
-                // If 401 Unauthorized, attempt to Auto-Refresh Token
-                if (response.status === 401) {
-                    console.log("Attempting Auto-Refresh of Delhivery Token...");
-
-                    const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', {
-                        method: 'POST',
-                    }); // Takes 30s+
-
-                    if (refreshRes.ok) {
-                        const refreshData = await refreshRes.json();
-                        if (refreshData.token) {
-                            console.log("Token Refreshed Successfully!");
-                            // Update the token in memory for this session
-                            LOGISTICS_TOKENS.DELHIVERY_JWT = refreshData.token.replace('Bearer ', '');
-
-                            // Retry the Original Request with new token
-                            // Recursive call with same params
-                            return fetchDelhiveryOrders(status, page);
-                        }
-                    } else {
-                        console.error("Token Refresh Failed:", await refreshRes.text());
+            console.error("Delhivery Proxy Failed:", response.status);
+            // Auto-Refresh Logic (Generic)
+            if (response.status === 401) {
+                console.log("Attempting Auto-Refresh...");
+                const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', { method: 'POST' });
+                if (refreshRes.ok) {
+                    const refreshData = await refreshRes.json();
+                    if (refreshData.token) {
+                        LOGISTICS_TOKENS.DELHIVERY_JWT = refreshData.token.replace('Bearer ', '');
+                        return fetchDelhiveryOrders(status, page);
                     }
                 }
-
-            } catch (e) {
-                console.error("DEBUG: Delhivery Proxy Failed (non-JSON):", response.status);
             }
             return null;
         }
 
         const data = await response.json();
-        console.log("Delhivery Internal API Response:", JSON.stringify(data).slice(0, 500)); // Log part of response to debug
+        // console.log("DEBUG: One Portal API Response:", JSON.stringify(data).slice(0, 500)); 
 
-        // The previous "data.packages" was for the public API. 
-        // We will need to see what `data` contains now and map it later.
-        // For now, return raw data so we can inspect it in the View logs.
         return data;
 
     } catch (error) {
