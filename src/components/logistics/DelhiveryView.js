@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, FlatList } from 'react-native';
-import { Text, Searchbar, Chip, useTheme, Card, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
+import { Text, Searchbar, Chip, useTheme, Card, ActivityIndicator, Icon } from 'react-native-paper';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { fetchDelhiveryOrders } from '../../services/delhiveryService';
 
 export const DelhiveryView = () => {
@@ -178,29 +180,45 @@ export const DelhiveryView = () => {
 };
 
 // Memoized Item Component prevents re-renders of all items when one things changes
-const OrderItem = React.memo(({ item, theme, getStatusColor }) => (
-    <Card style={[styles.orderCard, { backgroundColor: theme.colors.surface }]} mode="outlined">
-        <Card.Content style={styles.cardContent}>
-            <View style={styles.orderRow}>
-                <View style={styles.orderInfo}>
-                    <Text variant="titleMedium" style={[styles.orderId, { color: theme.colors.onSurface }]}>{item.id}</Text>
-                    <Text variant="bodySmall" style={[styles.awb, { color: theme.colors.onSurfaceVariant }]}>AWB: {item.awb}</Text>
+const OrderItem = React.memo(({ item, theme, getStatusColor }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+        Clipboard.setStringAsync(item.awb);
+        Haptics.selectionAsync();
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <Card style={[styles.orderCard, { backgroundColor: theme.colors.surface }]} mode="outlined">
+            <Card.Content style={styles.cardContent}>
+                <View style={styles.orderRow}>
+                    <View style={styles.orderInfo}>
+                        <Text variant="titleMedium" style={[styles.orderId, { color: theme.colors.onSurface }]}>{item.id}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text variant="bodySmall" style={[styles.awb, { color: theme.colors.onSurfaceVariant }]}>AWB: {item.awb}</Text>
+                            <TouchableOpacity onPress={handleCopy} hitSlop={8}>
+                                <Icon source={copied ? "check" : "content-copy"} size={14} color={copied ? "#4CAF50" : theme.colors.outline} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                    <View style={styles.statusContainer}>
+                        <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
+                        <Text variant="bodySmall" style={[styles.statusText, { color: theme.colors.onSurface }]}>{item.status}</Text>
+                    </View>
                 </View>
-                <View style={styles.statusContainer}>
-                    <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
-                    <Text variant="bodySmall" style={[styles.statusText, { color: theme.colors.onSurface }]}>{item.status}</Text>
+                <View style={styles.orderDetails}>
+                    <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurfaceVariant }]}>📍 {item.location}</Text>
+                    <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurfaceVariant }]}>📅 {item.date}</Text>
                 </View>
-            </View>
-            <View style={styles.orderDetails}>
-                <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurfaceVariant }]}>📍 {item.location}</Text>
-                <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurfaceVariant }]}>📅 {item.date}</Text>
-            </View>
-            {item.update !== 'N/A' && (
-                <Text variant="bodySmall" style={[styles.updateText, { color: theme.colors.outline }]}>{item.update}</Text>
-            )}
-        </Card.Content>
-    </Card>
-));
+                {item.update !== 'N/A' && (
+                    <Text variant="bodySmall" style={[styles.updateText, { color: theme.colors.outline }]}>{item.update}</Text>
+                )}
+            </Card.Content>
+        </Card>
+    );
+});
 
 const styles = StyleSheet.create({
     container: {
