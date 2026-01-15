@@ -196,7 +196,12 @@ export const DelhiveryView = () => {
                 </Surface>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
-                    <Button mode="outlined" compact icon="filter-variant" onPress={() => setStatusFilterVisible(true)}>
+                    <Button
+                        mode="outlined"
+                        compact
+                        icon="filter-variant"
+                        onPress={() => setStatusFilterVisible(true)}
+                    >
                         Status
                     </Button>
                     <Button mode="outlined" compact icon="calendar-range">
@@ -248,7 +253,7 @@ export const DelhiveryView = () => {
                     />
                 ))}
             </Menu>
-        </View>
+        </View >
     );
 };
 

@@ -9,7 +9,7 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
             "search_on": ["wbn"],
             "search_type": "CONTAINS",
             "search_term": "",
-            "page_size": 50,
+            "page_size": 1000,
             "page": page,
             "only_count": false,
             "filter_only_master_wbn": true,
