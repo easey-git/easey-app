@@ -37,7 +37,7 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
                 if (response.status === 401) {
                     console.log("Attempting Auto-Refresh of Delhivery Token...");
 
-                    const refreshRes = await fetch('/api/auth-delhivery', {
+                    const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', {
                         method: 'POST',
                     }); // Takes 30s+
 

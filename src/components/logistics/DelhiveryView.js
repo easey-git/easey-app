@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Text, Surface, Button, DataTable, Chip, useTheme, Card, IconButton, Checkbox, Menu, TextInput, Divider } from 'react-native-paper';
 import { fetchDelhiveryOrders } from '../../services/delhiveryService';
 
@@ -79,28 +79,39 @@ export const DelhiveryView = () => {
     };
 
     const getStatusColor = (status) => {
-        // Industry standard colors
         const s = status?.toUpperCase() || '';
-        if (s.includes('DELIVERED')) return '#E8F5E9'; // Green
-        if (s.includes('READY')) return '#E3F2FD'; // Blue
-        if (s.includes('TRANSIT')) return '#FFF3E0'; // Orange
-        if (s.includes('CANCEL')) return '#FFEBEE'; // Red
-        if (s.includes('RTO')) return '#FFEBEE'; // Red
-        return '#F5F5F5'; // Grey
+        // Use simpler transparent styling or theme-aware colors specifically for dark mode support if needed
+        // For now, these industry standard light pastels work well on dark if the text is dark, 
+        // OR we can make them distinct. 
+        // A better approach for dark mode is generally using the `tertiaryContainer` or similar, 
+        // but specific semantic colors are better.
+        // Let's keep them but ensure the container doesn't look weird.
+
+        if (s.includes('DELIVERED')) return theme.dark ? '#1b5e20' : '#E8F5E9'; // Dk Green / Lt Green
+        if (s.includes('READY')) return theme.dark ? '#0d47a1' : '#E3F2FD'; // Dk Blue / Lt Blue
+        if (s.includes('TRANSIT')) return theme.dark ? '#e65100' : '#FFF3E0'; // Dk Orange / Lt Orange
+        if (s.includes('CANCEL')) return theme.dark ? '#b71c1c' : '#FFEBEE'; // Dk Red / Lt Red
+        if (s.includes('RTO')) return theme.dark ? '#b71c1c' : '#FFEBEE';
+        return theme.colors.surfaceVariant;
     };
 
     const getStatusTextColor = (status) => {
         const s = status?.toUpperCase() || '';
+        if (theme.dark) return '#ffffff'; // White text on dark semantic backgrounds
+
         if (s.includes('DELIVERED')) return '#2E7D32';
         if (s.includes('READY')) return '#1565C0';
         if (s.includes('TRANSIT')) return '#EF6C00';
         if (s.includes('CANCEL')) return '#C62828';
         if (s.includes('RTO')) return '#C62828';
-        return '#616161';
+        return theme.colors.onSurfaceVariant;
     };
 
     const renderOrderItem = (item) => (
-        <View key={item.id} style={styles.rowItem}>
+        <View key={item.id} style={[styles.rowItem, {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.outlineVariant
+        }]}>
             {/* Checkbox Column */}
             <View style={{ width: 40, justifyContent: 'center' }}>
                 <Checkbox status="unchecked" color={theme.colors.primary} />
@@ -108,7 +119,7 @@ export const DelhiveryView = () => {
 
             {/* Order Details Column */}
             <View style={{ flex: 2, justifyContent: 'center' }}>
-                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
                     {item.id}
                 </Text>
                 <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
@@ -118,7 +129,7 @@ export const DelhiveryView = () => {
 
             {/* Date Column */}
             <View style={{ flex: 1.5, justifyContent: 'center' }}>
-                <Text variant="bodyMedium">{item.manifestDate}</Text>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>{item.manifestDate}</Text>
                 <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Manifested</Text>
             </View>
 
@@ -142,7 +153,7 @@ export const DelhiveryView = () => {
 
             {/* Location Column */}
             <View style={{ flex: 1.5, justifyContent: 'center' }}>
-                <Text variant="bodyMedium">{item.pickup}</Text>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>{item.pickup}</Text>
                 <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Pickup</Text>
             </View>
 
@@ -154,31 +165,32 @@ export const DelhiveryView = () => {
     );
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Header */}
             <View style={styles.header}>
                 <View>
-                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: '#1a1a1a' }}>Logistics Hub</Text>
+                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>Logistics Hub</Text>
                     <Text variant="bodyMedium" style={{ color: theme.colors.outline }}>
                         {orders.length > 0 ? `Showing 1 - ${orders.length} of ${orders.length}` : 'Loading shipments...'}
                     </Text>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                     <Button icon="cloud-download-outline" mode="outlined" style={styles.actionButton}>Export</Button>
-                    <Button icon="plus" mode="contained" buttonColor="#000" style={styles.actionButton}>Create</Button>
+                    <Button icon="plus" mode="contained" buttonColor={theme.colors.primary} textColor={theme.colors.onPrimary} style={styles.actionButton}>Create</Button>
                 </View>
             </View>
 
             {/* Filters */}
             <View style={styles.filterContainer}>
-                <Surface style={styles.searchBar} elevation={0}>
-                    <IconButton icon="magnify" size={20} style={{ margin: 0 }} />
+                <Surface style={[styles.searchBar, { backgroundColor: theme.colors.elevation.level1, borderColor: theme.colors.outlineVariant }]} elevation={0}>
+                    <IconButton icon="magnify" size={20} style={{ margin: 0 }} iconColor={theme.colors.onSurfaceVariant} />
                     <TextInput
                         placeholder="Search by AWB or Order ID"
                         style={styles.searchInput}
                         underlineColor="transparent"
                         activeUnderlineColor="transparent"
                         placeholderTextColor={theme.colors.outline}
+                        textColor={theme.colors.onSurface}
                         dense
                     />
                 </Surface>
@@ -194,12 +206,12 @@ export const DelhiveryView = () => {
             </View>
 
             {/* List Header */}
-            <Surface style={styles.listHeader} elevation={0}>
+            <Surface style={[styles.listHeader, { borderBottomColor: theme.colors.outlineVariant, backgroundColor: theme.colors.background }]} elevation={0}>
                 <View style={{ width: 40 }} />
-                <Text style={[styles.columnHeader, { flex: 2 }]}>ORDER DETAILS</Text>
-                <Text style={[styles.columnHeader, { flex: 1.5 }]}>DATE</Text>
-                <Text style={[styles.columnHeader, { flex: 1.5 }]}>STATUS</Text>
-                <Text style={[styles.columnHeader, { flex: 1.5 }]}>LOCATION</Text>
+                <Text style={[styles.columnHeader, { flex: 2, color: theme.colors.outline }]}>ORDER DETAILS</Text>
+                <Text style={[styles.columnHeader, { flex: 1.5, color: theme.colors.outline }]}>DATE</Text>
+                <Text style={[styles.columnHeader, { flex: 1.5, color: theme.colors.outline }]}>STATUS</Text>
+                <Text style={[styles.columnHeader, { flex: 1.5, color: theme.colors.outline }]}>LOCATION</Text>
                 <View style={{ width: 50 }} />
             </Surface>
 
@@ -214,7 +226,7 @@ export const DelhiveryView = () => {
 
                     {!loading && orders.length === 0 && (
                         <View style={styles.emptyState}>
-                            <IconButton icon="package-variant-closed" size={48} iconColor="#ddd" />
+                            <IconButton icon="package-variant-closed" size={48} iconColor={theme.colors.outlineVariant} />
                             <Text variant="titleMedium" style={{ color: theme.colors.outline }}>No shipments found</Text>
                         </View>
                     )}
@@ -225,7 +237,7 @@ export const DelhiveryView = () => {
             <Menu
                 visible={statusFilterVisible}
                 onDismiss={() => setStatusFilterVisible(false)}
-                anchor={{ x: 100, y: 150 }} // Approximate anchor, or attach to button ref
+                anchor={{ x: 100, y: 150 }}
             >
                 {DELHIVERY_STATUSES.map(status => (
                     <Menu.Item
@@ -243,7 +255,6 @@ export const DelhiveryView = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F7F9FC', // Very light premium grey background
         padding: 24,
     },
     header: {
@@ -264,10 +275,8 @@ const styles = StyleSheet.create({
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#E0E0E0',
         width: 300,
         height: 40,
         paddingRight: 8,
@@ -282,32 +291,34 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         paddingVertical: 12,
         paddingHorizontal: 16,
-        backgroundColor: 'transparent',
         borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
         marginBottom: 8,
     },
     columnHeader: {
         fontSize: 11,
         fontWeight: '700',
-        color: '#9E9E9E',
         letterSpacing: 0.5,
     },
     rowItem: {
         flexDirection: 'row',
-        backgroundColor: '#fff',
         paddingVertical: 16,
         paddingHorizontal: 16,
         marginBottom: 8,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#EEF0F4',
-        // Premium shadow
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 8,
-        elevation: 2,
+        // Premium shadow with Platform specific handling
+        ...Platform.select({
+            web: {
+                boxShadow: '0px 2px 8px rgba(0,0,0,0.03)'
+            },
+            default: {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.03,
+                shadowRadius: 8,
+                elevation: 2,
+            }
+        }),
     },
     statusBadge: {
         paddingHorizontal: 8,
