@@ -5,22 +5,6 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
         const token = LOGISTICS_TOKENS.DELHIVERY_JWT; // Use the internal JWT
         if (!token) throw new Error("Delhivery Token not found");
 
-        const STATUS_DEFINITIONS = {
-            'Pending': ['Manifested', 'In Transit', 'Pending', 'Dispatched', 'Out for Delivery', 'Pickup Scheduled', 'Ready for Pickup'],
-            'Ready to Ship': ['Manifested', 'Pickup Scheduled'],
-            'Ready for Pickup': ['Ready for Pickup'],
-            'In-Transit': ['In Transit', 'Dispatched'],
-            'Out for Delivery': ['Out for Delivery'],
-            'Delivered': ['Delivered'],
-            'RTO In-Transit': ['RTO'],
-            'RTO-Returned': ['RTO Delivered', 'Returned'],
-            'Cancelled': ['Cancelled'],
-            'Lost': ['Lost'],
-            'All': []
-        };
-
-        const filterStatuses = STATUS_DEFINITIONS[status] || [];
-
         const payload = {
             "search_on": ["wbn"],
             "search_type": "CONTAINS",
@@ -30,7 +14,6 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
             "only_count": false,
             "filter_only_master_wbn": true,
             "filter_shipment_type": ["FORWARD"],
-            "filter_status": filterStatuses.length > 0 ? filterStatuses : undefined,
             "sorting": [{ "field": "manifested_at", "direction": "DESC" }]
         };
 

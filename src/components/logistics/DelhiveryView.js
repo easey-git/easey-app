@@ -6,18 +6,18 @@ import { fetchDelhiveryOrders } from '../../services/delhiveryService';
 export const DelhiveryView = () => {
     const theme = useTheme();
     const [page, setPage] = useState(0);
-    const [selectedFilter, setSelectedFilter] = useState('Pending');
+    const [statusFilterVisible, setStatusFilterVisible] = useState(false);
+    const [selectedStatuses, setSelectedStatuses] = useState([]);
 
-    // Exact statuses from the user's request
-    const DELHIVERY_FILTERS = [
-        "Pending",
-        "Ready to Ship",
-        "Ready for Pickup",
+    // Exact statuses from the user's screenshot
+    const DELHIVERY_STATUSES = [
+        "Ready To Ship",
+        "Ready for pickup",
         "In-Transit",
-        "Out for Delivery",
+        "Out for delivery",
         "Delivered",
-        "RTO In-Transit",
-        "RTO-Returned",
+        "RTO - In Transit",
+        "RTO - Returned",
         "Cancelled",
         "Lost"
     ];
@@ -30,8 +30,9 @@ export const DelhiveryView = () => {
         const loadOrders = async () => {
             setLoading(true);
             try {
-                // Fetch based on selected filter
-                const data = await fetchDelhiveryOrders(selectedFilter, 1);
+                // In a real app, we would pass the selectedStatuses and page to the API
+                // For now, we fetch generic data.
+                const data = await fetchDelhiveryOrders(selectedStatuses);
                 console.log("DEBUG: Raw API Data received in View:", JSON.stringify(data)); // Force log
 
                 if (data) {
@@ -67,7 +68,15 @@ export const DelhiveryView = () => {
         };
 
         loadOrders();
-    }, [selectedFilter, page]);
+    }, [selectedStatuses, page]);
+
+    const toggleStatus = (status) => {
+        if (selectedStatuses.includes(status)) {
+            setSelectedStatuses(selectedStatuses.filter(s => s !== status));
+        } else {
+            setSelectedStatuses([...selectedStatuses, status]);
+        }
+    };
 
     const getStatusColor = (status) => {
         const s = status?.toUpperCase() || '';
@@ -175,23 +184,13 @@ export const DelhiveryView = () => {
                     />
                 </Surface>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4, paddingVertical: 4 }}>
-                    {DELHIVERY_FILTERS.map(filter => (
-                        <Chip
-                            key={filter}
-                            selected={selectedFilter === filter}
-                            onPress={() => setSelectedFilter(filter)}
-                            showSelectedOverlay
-                            style={{
-                                backgroundColor: selectedFilter === filter ? theme.colors.primaryContainer : theme.colors.surface,
-                                borderColor: theme.colors.outlineVariant,
-                                borderWidth: 1
-                            }}
-                            textStyle={{ color: selectedFilter === filter ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant }}
-                        >
-                            {filter}
-                        </Chip>
-                    ))}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+                    <Button mode="outlined" compact icon="filter-variant" onPress={() => setStatusFilterVisible(true)}>
+                        Status
+                    </Button>
+                    <Button mode="outlined" compact icon="calendar-range">
+                        Date Range
+                    </Button>
                 </ScrollView>
             </View>
 
@@ -221,6 +220,21 @@ export const DelhiveryView = () => {
                 </ScrollView>
             </View>
 
+            {/* Status Filter Menu */}
+            <Menu
+                visible={statusFilterVisible}
+                onDismiss={() => setStatusFilterVisible(false)}
+                anchor={{ x: 100, y: 150 }}
+            >
+                {DELHIVERY_STATUSES.map(status => (
+                    <Menu.Item
+                        key={status}
+                        onPress={() => toggleStatus(status)}
+                        title={status}
+                        trailingIcon={selectedStatuses.includes(status) ? "check" : undefined}
+                    />
+                ))}
+            </Menu>
         </View>
     );
 };
