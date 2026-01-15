@@ -6,23 +6,23 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
         if (!token) throw new Error("Delhivery Token not found");
 
         const STATUS_DEFINITIONS = {
-            'Pending': ['MANIFESTED', 'PICKUP_SCHEDULED', 'READY_FOR_PICKUP'],
-            'Ready to Ship': ['MANIFESTED', 'PICKUP_SCHEDULED'],
-            'Ready for Pickup': ['READY_FOR_PICKUP'],
-            'In-Transit': ['IN_TRANSIT', 'SHIPPED'],
-            'Out for Delivery': ['OUT_FOR_DELIVERY'], // This usually exists, keeping for now
-            'Delivered': ['DELIVERED'],
+            'Pending': ['Manifested', 'In Transit', 'Pending', 'Dispatched', 'Out for Delivery', 'Pickup Scheduled', 'Ready for Pickup'],
+            'Ready to Ship': ['Manifested', 'Pickup Scheduled'],
+            'Ready for Pickup': ['Ready for Pickup'],
+            'In-Transit': ['In Transit', 'Dispatched'],
+            'Out for Delivery': ['Out for Delivery'],
+            'Delivered': ['Delivered'],
             'RTO In-Transit': ['RTO'],
-            'RTO-Returned': ['RETURNED_TO_ORIGIN', 'RTO_DELIVERED'],
-            'Cancelled': ['CANCELLED'],
-            'Lost': ['LOST'],
+            'RTO-Returned': ['RTO Delivered', 'Returned'],
+            'Cancelled': ['Cancelled'],
+            'Lost': ['Lost'],
             'All': []
         };
 
         const filterStatuses = STATUS_DEFINITIONS[status] || [];
 
         const payload = {
-            "search_on": ["wbn", "order_id"],
+            "search_on": ["wbn"],
             "search_type": "CONTAINS",
             "search_term": "",
             "page_size": 50,
@@ -30,13 +30,9 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
             "only_count": false,
             "filter_only_master_wbn": true,
             "filter_shipment_type": ["FORWARD"],
-            // Removing generic 'filter_status' to avoid conflicts. Sending only specific key.
-            // "filter_status": filterStatuses.length > 0 ? filterStatuses : undefined,
-            "filter_shipment_status": filterStatuses.length > 0 ? filterStatuses : undefined,
+            "filter_status": filterStatuses.length > 0 ? filterStatuses : undefined,
             "sorting": [{ "field": "manifested_at", "direction": "DESC" }]
         };
-
-        console.log("DEBUG: Sending Delhivery Payload:", JSON.stringify(payload));
 
         const response = await fetch(LOGISTICS_URLS.DELHIVERY_INTERNAL_URL, {
             method: 'POST',
