@@ -104,11 +104,43 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setSnackbarVisible(true);
     };
 
+    // Filter Persistence
+    const [knownAttributes, setKnownAttributes] = useState({ events: new Set(), stages: new Set() });
+
     useEffect(() => {
         setDocuments([]); // Clear data to prevent layout glitch during tab switch
         fetchDocuments();
         setSelectedItems(new Set());
+        // Reset known attributes when switching collections completely
+        if (!filter) {
+            // Optional: You might want to keep them, but clearing on collection switch is safer
+            // actually no, let's keep them expanding as long as we are in checkouts.
+        }
     }, [selectedCollection, filter]); // Re-fetch when filter changes
+
+    // Update Known Attributes whenever documents successfully load
+    useEffect(() => {
+        if (selectedCollection === 'checkouts' && documents.length > 0) {
+            setKnownAttributes(prev => {
+                const newEvents = new Set(prev.events);
+                const newStages = new Set(prev.stages);
+                let changed = false;
+
+                documents.forEach(doc => {
+                    if (doc.eventType && !newEvents.has(doc.eventType)) {
+                        newEvents.add(doc.eventType);
+                        changed = true;
+                    }
+                    if (doc.latest_stage && !newStages.has(doc.latest_stage)) {
+                        newStages.add(doc.latest_stage);
+                        changed = true;
+                    }
+                });
+
+                return changed ? { events: newEvents, stages: newStages } : prev;
+            });
+        }
+    }, [documents, selectedCollection]);
 
     const fetchDocuments = async () => {
         setLoading(true);
@@ -122,8 +154,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             const sortMapping = {
                 whatsapp_messages: 'timestamp',
                 checkouts: 'updatedAt',
-                push_tokens: 'updatedAt',
-                wallet_transactions: 'date'
             };
             const sortField = sortMapping[selectedCollection] || 'createdAt';
 
@@ -143,7 +173,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             setDocuments(docs);
         } catch (error) {
             console.error("Error fetching docs:", error);
-            // If sorting fails (missing index or field), valid fallback to unsorted
             if (error.code === 'failed-precondition' || error.message.includes('index')) {
                 showSnackbar("Missing Index: detailed sort disabled", true);
             } else {
@@ -249,9 +278,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             } else if (selectedDoc.adminModifiedFields) {
                 // Keep existing modification log if nothing new changed (or clear it? usually we want to persist "this was modified")
                 // Let's keep it in dataToUpdate implicitly if we didn't remove it, but specific logic:
-                // If we edited but detected no real changes, maybe we shouldn't update timestamp? 
-                // But let's stick to user request: track changes.
-                // If strictly no changes, changedFields is empty.
+                // If we edited but detected no real changes, changedFields is empty.
             }
 
             await updateDoc(doc(db, selectedCollection, id), dataToUpdate);
@@ -610,27 +637,16 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 <View style={{ paddingVertical: 8 }}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
                         {(() => {
-                            // 1. Calculate Unique Statuses from CURRENT documents
-                            const uniqueStages = new Set();
-                            const uniqueEvents = new Set();
-
-                            documents.forEach(doc => {
-                                if (doc.latest_stage) uniqueStages.add(doc.latest_stage);
-                                if (doc.eventType) uniqueEvents.add(doc.eventType);
-                            });
-
-                            // 2. Build Filter Options
-                            const dynamicFilters = [
-                                { label: 'All', value: null }
-                            ];
+                            // Use KNOWN attributes + 'All'
+                            const dynamicFilters = [{ label: 'All', value: null }];
 
                             // Add Event Types
-                            uniqueEvents.forEach(evt => {
+                            Array.from(knownAttributes.events).sort().forEach(evt => {
                                 dynamicFilters.push({ label: evt.replace(/_/g, ' '), value: evt, field: 'eventType' });
                             });
 
                             // Add Stages
-                            uniqueStages.forEach(stage => {
+                            Array.from(knownAttributes.stages).sort().forEach(stage => {
                                 dynamicFilters.push({ label: stage, value: stage, field: 'latest_stage' });
                             });
 
