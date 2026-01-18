@@ -194,8 +194,15 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
     const handleBulkDelete = () => {
         if (selectedItems.size === 0) return;
-        setConfirmTitle("Bulk Delete");
-        setConfirmMessage(`Delete ${selectedItems.size} documents?`);
+
+        if (selectedItems.size === 1) {
+            setConfirmTitle("Delete Document");
+            setConfirmMessage("Are you sure you want to delete this document?");
+        } else {
+            setConfirmTitle("Bulk Delete");
+            setConfirmMessage(`Delete ${selectedItems.size} documents?`);
+        }
+
         setPendingAction({ type: 'bulk' });
         setConfirmVisible(true);
     };
@@ -567,7 +574,9 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     </View>
 
                     {selectedItems.size > 0 ? (
-                        <Button textColor={theme.colors.error} onPress={handleBulkDelete}>Delete ({selectedItems.size})</Button>
+                        <Button textColor={theme.colors.error} onPress={handleBulkDelete}>
+                            {selectedItems.size === 1 ? 'Delete Item' : `Bulk Delete (${selectedItems.size})`}
+                        </Button>
                     ) : (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <IconButton icon="magnify" onPress={() => setSearchVisible(!searchVisible)} />
@@ -1075,16 +1084,16 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 </Portal>
             ) : null}
 
-            {/* Confirmation Dialog */}
+            {/* Confirmation Dialog (Compact & Industry Standard) */}
             <Portal>
-                <Dialog visible={confirmVisible} onDismiss={() => setConfirmVisible(false)}>
-                    <Dialog.Title>{confirmTitle}</Dialog.Title>
+                <Dialog visible={confirmVisible} onDismiss={() => setConfirmVisible(false)} style={{ maxWidth: 400, width: '100%', alignSelf: 'center' }}>
+                    <Dialog.Title style={{ textAlign: 'center' }}>{confirmTitle}</Dialog.Title>
                     <Dialog.Content>
-                        <Paragraph>{confirmMessage}</Paragraph>
+                        <Paragraph style={{ textAlign: 'center' }}>{confirmMessage}</Paragraph>
                     </Dialog.Content>
-                    <Dialog.Actions>
-                        <Button onPress={() => setConfirmVisible(false)}>Cancel</Button>
-                        <Button onPress={executeConfirm} textColor={theme.colors.error}>Confirm</Button>
+                    <Dialog.Actions style={{ justifyContent: 'center', paddingBottom: 16 }}>
+                        <Button onPress={() => setConfirmVisible(false)} style={{ marginRight: 8 }}>Cancel</Button>
+                        <Button mode="contained" onPress={executeConfirm} buttonColor={theme.colors.error} textColor={theme.colors.onError}>Delete</Button>
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
