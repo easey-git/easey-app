@@ -216,6 +216,20 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
             isConverted ? theme.colors.onPrimaryContainer :
                 theme.colors.onSecondaryContainer;
 
+        // Helper to extract product name safely
+        const getProductName = () => {
+            const products = item.items || item.line_items || item.cart?.items || [];
+            if (products.length > 0) {
+                const firstProduct = products[0];
+                const productName = firstProduct.name || firstProduct.title || 'Unknown Product';
+                const extraCount = products.length - 1;
+                return `${productName}${extraCount > 0 ? ` +${extraCount} more` : ''}`;
+            }
+            return null;
+        };
+
+        const productName = getProductName();
+
         return (
             <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
                 <TouchableOpacity onPress={() => onPress(item)} onLongPress={() => onToggle(item.id)} delayLongPress={200}>
@@ -232,30 +246,53 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                         )}
 
                         <View style={[styles.textContainer, isMobile && { marginLeft: 8 }]}>
+                            {/* Top Row: Name & Date */}
                             <View style={styles.rowBetween}>
-                                <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flex: 1, marginRight: 8 }} numberOfLines={1}>
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flex: 1, marginRight: 8 }} numberOfLines={1}>
                                     {item.customerName || item.email || 'Guest Checkout'}
                                 </Text>
-                                {item.totalPrice > 0 && (
-                                    <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.primary, fontFamily: 'monospace' }}>
-                                        ₹{item.totalPrice}
+                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
+                                    {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                                </Text>
+                            </View>
+
+                            {/* Middle Row: Product Name & Price */}
+                            <View style={{ marginTop: 2 }}>
+                                {productName && (
+                                    <Text variant="bodyMedium" numberOfLines={1} style={{ color: theme.colors.secondary }}>
+                                        {productName}
+                                    </Text>
+                                )}
+                                {(item.totalPrice > 0 || item.total_price > 0) && (
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: 'bold' }}>
+                                        ₹{item.totalPrice || item.total_price}
                                     </Text>
                                 )}
                             </View>
 
-                            <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                            {/* Contact Row: Phone with Copy Button */}
+                            {(item.phone || item.phone_number || item.phoneNormalized) && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                    <Icon source="phone" size={12} color={theme.colors.onSurfaceVariant} />
+                                    <CopyableText
+                                        text={item.phone || item.phone_number || item.phoneNormalized}
+                                        style={{ marginLeft: 4 }}
+                                        theme={theme}
+                                        numberOfLines={1}
+                                    />
+                                </View>
+                            )}
+
+                            {/* Bottom Row: Status Chip */}
+                            <View style={{ marginTop: 6, alignItems: 'flex-start' }}>
                                 <Chip
                                     mode="flat"
                                     compact
-                                    style={[styles.chip, { backgroundColor: statusBg }]}
-                                    textStyle={{ fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold', color: statusText }}
+                                    style={[styles.chip, { backgroundColor: statusBg, height: 20 }]}
+                                    textStyle={{ fontSize: 9, lineHeight: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold', color: statusText }}
                                 >
-                                    {item.latest_stage || 'ACTIVE'}
+                                    {item.stage || item.latest_stage || 'ACTIVE'}
                                 </Chip>
-                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
-                                    {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleDateString() :
-                                        item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : ''}
-                                </Text>
                             </View>
                         </View>
                         <IconButton icon="chevron-right" size={20} />
