@@ -605,6 +605,55 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 />
             </View>
 
+            {/* DYNAMIC FILTERS FOR CHECKOUTS */}
+            {selectedCollection === 'checkouts' && (
+                <View style={{ paddingVertical: 8 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+                        {(() => {
+                            // 1. Calculate Unique Statuses from CURRENT documents
+                            const uniqueStages = new Set();
+                            const uniqueEvents = new Set();
+
+                            documents.forEach(doc => {
+                                if (doc.latest_stage) uniqueStages.add(doc.latest_stage);
+                                if (doc.eventType) uniqueEvents.add(doc.eventType);
+                            });
+
+                            // 2. Build Filter Options
+                            const dynamicFilters = [
+                                { label: 'All', value: null }
+                            ];
+
+                            // Add Event Types
+                            uniqueEvents.forEach(evt => {
+                                dynamicFilters.push({ label: evt.replace(/_/g, ' '), value: evt, field: 'eventType' });
+                            });
+
+                            // Add Stages
+                            uniqueStages.forEach(stage => {
+                                dynamicFilters.push({ label: stage, value: stage, field: 'latest_stage' });
+                            });
+
+                            // 3. Render Chips
+                            return dynamicFilters.map((f) => {
+                                const isSelected = f.value === null ? !filter : (filter && filter.value === f.value);
+                                return (
+                                    <Chip
+                                        key={`${f.field}-${f.value}`} // Unique key
+                                        selected={isSelected}
+                                        showSelectedOverlay
+                                        onPress={() => setFilter(f.value ? { field: f.field, value: f.value } : null)}
+                                        style={{ backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface }}
+                                    >
+                                        {f.label}
+                                    </Chip>
+                                );
+                            });
+                        })()}
+                    </ScrollView>
+                </View>
+            )}
+
             <Divider />
 
             <FlatList
