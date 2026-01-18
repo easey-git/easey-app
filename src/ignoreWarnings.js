@@ -1,6 +1,6 @@
 import { LogBox } from 'react-native';
 
-LogBox.ignoreLogs([
+const ignoreWarns = [
     'Expo AV has been deprecated',
     'TouchableMixin',
     'onStartShouldSetResponder',
@@ -8,10 +8,33 @@ LogBox.ignoreLogs([
     'onResponderRelease',
     'onResponderMove',
     'onResponderTerminationRequest',
+    'onResponderTerminate',
+    'Event handler property',
     'onPressOut',
-    'Animated: useNativeDriver',
+    'Animated: `useNativeDriver`',
     'Blocked aria-hidden',
     'props.pointerEvents is deprecated',
-    'shadow',
-    'Listening to push token changes'
-]);
+    '"shadow*" style props',
+    'Listening to push token changes',
+    'Unexpected text node'
+];
+
+LogBox.ignoreLogs(ignoreWarns);
+
+// Filter console logs on Web/Dev
+if (typeof window !== 'undefined' && window.console) {
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    console.warn = (...args) => {
+        const log = args.join(' ');
+        if (ignoreWarns.some(pattern => log.includes(pattern))) return;
+        originalWarn(...args);
+    };
+
+    console.error = (...args) => {
+        const log = args.join(' ');
+        if (ignoreWarns.some(pattern => log.includes(pattern))) return;
+        originalError(...args);
+    };
+}

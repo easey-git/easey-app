@@ -111,8 +111,15 @@ export const MobileDrawer = React.memo(() => {
                             transform: [{ translateX: slideAnim }],
                             height: screenHeight,
                             // Only apply shadow when open to prevent "bleeding" artifacts on Android
-                            elevation: isDrawerOpen ? 16 : 0,
-                            shadowOpacity: isDrawerOpen ? 0.3 : 0,
+                            ...Platform.select({
+                                default: {
+                                    elevation: isDrawerOpen ? 16 : 0,
+                                    shadowOpacity: isDrawerOpen ? 0.3 : 0,
+                                },
+                                web: {
+                                    boxShadow: isDrawerOpen ? '-4px 0px 10px rgba(0, 0, 0, 0.3)' : 'none',
+                                }
+                            }),
                         }
                     ]}
                 >
@@ -140,10 +147,17 @@ const styles = StyleSheet.create({
         top: 0,
         bottom: 0,
         width: LAYOUT.drawerWidth,
-        shadowColor: '#000',
-        shadowOffset: { width: 4, height: 0 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 16,
+        ...Platform.select({
+            web: {
+                boxShadow: '4px 0px 10px rgba(0, 0, 0, 0.3)',
+            },
+            default: {
+                shadowColor: '#000',
+                shadowOffset: { width: 4, height: 0 },
+                shadowOpacity: 0.3,
+                shadowRadius: 10,
+                elevation: 16,
+            }
+        }),
     }
 });

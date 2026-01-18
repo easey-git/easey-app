@@ -196,6 +196,27 @@ const LiveFeedItem = React.memo(({ item, theme, onPress }) => {
     );
 });
 
+const RecoverButton = ({ link, theme }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        await Clipboard.setStringAsync(link);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <Button
+            mode="contained"
+            icon={copied ? "check" : "link"}
+            onPress={handleCopy}
+            style={{ marginBottom: 16, backgroundColor: copied ? theme.colors.primary : '#4caf50' }}
+        >
+            {copied ? "Link Copied" : "Copy Recover Link"}
+        </Button>
+    );
+};
+
 const StatsScreen = ({ navigation }) => {
     const theme = useTheme();
     const { hasPermission } = useAuth();
@@ -732,9 +753,9 @@ const StatsScreen = ({ navigation }) => {
                 ))}
             </View>
 
-            {/* Document Details Modal (Unchanged Layout) */}
+            {/* Document Details Modal (Compact & Industry Standard) */}
             <Portal>
-                <Dialog visible={modalVisible} onDismiss={() => setModalVisible(false)} style={{ maxHeight: '85%' }}>
+                <Dialog visible={modalVisible} onDismiss={() => setModalVisible(false)} style={{ maxHeight: '85%', maxWidth: 450, width: '100%', alignSelf: 'center' }}>
                     <Dialog.Title>Checkout Details</Dialog.Title>
                     <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0 }}>
                         <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 8 }}>
@@ -773,16 +794,10 @@ const StatsScreen = ({ navigation }) => {
 
                                     {/* Action: Recover Link */}
                                     {(selectedDoc.checkout_url || selectedDoc.custom_attributes?.landing_page_url) && (
-                                        <Button
-                                            mode="contained"
-                                            icon="link"
-                                            onPress={async () => {
-                                                await Clipboard.setStringAsync(selectedDoc.checkout_url || selectedDoc.custom_attributes?.landing_page_url);
-                                            }}
-                                            style={{ marginBottom: 16, backgroundColor: '#4caf50' }}
-                                        >
-                                            Copy Recover Link
-                                        </Button>
+                                        <RecoverButton
+                                            link={selectedDoc.checkout_url || selectedDoc.custom_attributes?.landing_page_url}
+                                            theme={theme}
+                                        />
                                     )}
 
                                     <View style={{ marginBottom: 16 }}>
