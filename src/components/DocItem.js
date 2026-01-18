@@ -249,7 +249,7 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                             {/* Top Row: Name & Date */}
                             <View style={styles.rowBetween}>
                                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flex: 1, marginRight: 8 }} numberOfLines={1}>
-                                    {item.customerName || item.email || 'Guest Checkout'}
+                                    {item.customerName || (item.first_name ? `${item.first_name} ${item.last_name || ''}` : null) || item.email || 'Guest Checkout'}
                                 </Text>
                                 <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
                                     {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
