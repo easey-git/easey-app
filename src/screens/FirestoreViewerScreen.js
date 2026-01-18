@@ -609,7 +609,10 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     data={collections}
                     renderItem={({ item }) => (
                         <TouchableOpacity
-                            onPress={() => setSelectedCollection(item)}
+                            onPress={() => {
+                                setFilter(null);
+                                setSelectedCollection(item);
+                            }}
                             style={[
                                 styles.collectionTab,
                                 {
