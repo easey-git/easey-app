@@ -611,7 +611,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 data={filteredDocuments}
                 renderItem={renderDocItem}
                 keyExtractor={item => item.id}
-                contentContainerStyle={{ padding: 0, paddingBottom: 80 }}
+                contentContainerStyle={{ padding: 12, paddingBottom: 80 }}
+                ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
                 refreshing={loading}
                 onRefresh={fetchDocuments}
                 initialNumToRender={10}
