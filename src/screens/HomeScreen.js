@@ -77,7 +77,9 @@ const HomeScreen = ({ navigation }) => {
                 const vercelQuery = query(collection(db, "push_tokens"), limit(1));
                 const vercelSnapshot = await getDocs(vercelQuery);
                 setConnectionStatus(prev => ({ ...prev, vercel: !vercelSnapshot.empty }));
-            } catch (error) { }
+            } catch (error) {
+                console.error("Webhook health check error:", error.code || error.message);
+            }
         };
         checkWebhookHealth();
         const interval = setInterval(checkWebhookHealth, 5 * 60 * 1000);

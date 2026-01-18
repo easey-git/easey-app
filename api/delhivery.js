@@ -19,7 +19,6 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: "Missing token in request body" });
         }
 
-        console.log("Token received length:", token.length);
 
         const response = await fetch("https://ucp-app-gateway.delhivery.com/web/api/forward_orders/hq_es_shipments_search/list", {
             method: 'POST',

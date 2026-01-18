@@ -20,7 +20,7 @@ const executeDelhiveryRequest = async (payload) => {
 
     // Handle Token Expiry
     if (response.status === 401) {
-        console.log("Delhivery Token Expired. Attempting Auto-Refresh...");
+        if (__DEV__) console.log("Delhivery Token Expired. Attempting Auto-Refresh...");
         try {
             const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', {
                 method: 'POST',
@@ -29,7 +29,7 @@ const executeDelhiveryRequest = async (payload) => {
             if (refreshRes.ok) {
                 const refreshData = await refreshRes.json();
                 if (refreshData.token) {
-                    console.log("Token Refreshed Successfully!");
+                    if (__DEV__) console.log("Token Refreshed Successfully!");
                     LOGISTICS_TOKENS.DELHIVERY_JWT = refreshData.token.replace('Bearer ', '');
                     token = LOGISTICS_TOKENS.DELHIVERY_JWT;
                     // Retry Request
@@ -59,7 +59,7 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
         let keepFetching = true;
         const MAX_PAGES = 50; // Safety cap (50k orders)
 
-        console.log("Fetching Delhivery Orders (Limitless Mode)...");
+        if (__DEV__) console.log("Fetching Delhivery Orders (Limitless Mode)...");
 
         while (keepFetching && currentPage <= MAX_PAGES) {
             const payload = {
@@ -80,7 +80,7 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
             const results = data.results || (data.data?.packages) || [];
             allResults = [...allResults, ...results];
 
-            console.log(` fetched page ${currentPage}: ${results.length} items`);
+            if (__DEV__) console.log(`✓ fetched page ${currentPage}: ${results.length} items`);
 
             // If we got fewer items than requested, we reached the end
             if (results.length < PAGE_SIZE) {
@@ -106,7 +106,7 @@ export const fetchDelhiveryNDR = async (page = 1) => {
         let keepFetching = true;
         const MAX_PAGES = 50;
 
-        console.log("Fetching Delhivery NDR (Limitless Mode)...");
+        if (__DEV__) console.log("Fetching Delhivery NDR (Limitless Mode)...");
 
         while (keepFetching && currentPage <= MAX_PAGES) {
             const payload = {
@@ -128,7 +128,7 @@ export const fetchDelhiveryNDR = async (page = 1) => {
             const results = data.results || data.data || [];
             allResults = [...allResults, ...results];
 
-            console.log(` fetched NDR page ${currentPage}: ${results.length} items`);
+            if (__DEV__) console.log(`✓ fetched NDR page ${currentPage}: ${results.length} items`);
 
             if (results.length < PAGE_SIZE) {
                 keepFetching = false;

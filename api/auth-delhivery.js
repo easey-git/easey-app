@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     let debugInfo = { logs: [] };
 
     const log = (msg) => {
-        console.log(msg);
+        if (process.env.NODE_ENV !== 'production') console.log(msg);
         debugInfo.logs.push({ time: new Date().toISOString(), msg });
     };
 
