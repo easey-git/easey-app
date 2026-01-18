@@ -228,7 +228,80 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
             return null;
         };
 
+        // Helper to extract location safely
+        const getKeyLocation = () => {
+            // Try explicit addresses first, then customer default, then fallback to root properties
+            const addr = item.shipping_address || item.billing_address || item.customer?.default_address || item.default_address || item;
+
+            // Some payloads (like Shiprocket) might have 'city' at root, others in address objs
+            const city = addr.city || item.city;
+            const state = addr.province_code || addr.province || addr.state || item.province || item.state;
+
+            if (city && state) return `${city}, ${state}`;
+            if (city) return city;
+            return null;
+        };
+
+        // Helper to extract Traffic Source
+        const getTrafficSource = () => {
+            // Check Root fields OR nested attributes (common in Shopify/Fastrr)
+            const source = item.referring_site ||
+                item.landing_site ||
+                item.custom_attributes?.landing_page_url || // <-- ADDED THIS BASED ON JSON
+                item.cart_attributes?.landing_page_url ||
+                item.note_attributes?.landing_page_url ||
+                '';
+
+            if (!source) return null;
+
+            const lowerSource = source.toLowerCase();
+
+            // 1. Google Ads (gclid is definitive)
+            if (lowerSource.includes('gclid') || lowerSource.includes('google')) return { label: 'Google', icon: 'google' };
+
+            // 2. Instagram (Specific checks first)
+            if (lowerSource.includes('instagram') ||
+                lowerSource.includes('utm_source=ig') ||
+                lowerSource.includes('android-app://com.instagram') ||
+                lowerSource.includes('ios-app://com.instagram')) {
+                return { label: 'Instagram', icon: 'instagram' };
+            }
+
+            // 3. Facebook
+            if (lowerSource.includes('facebook') || lowerSource.includes('fbclid')) return { label: 'Facebook', icon: 'facebook' };
+
+            // 4. Other Socials
+            if (lowerSource.includes('youtube') || lowerSource.includes('yt')) return { label: 'YouTube', icon: 'youtube' };
+            if (lowerSource.includes('whatsapp') || lowerSource.includes('wa.me')) return { label: 'WhatsApp', icon: 'whatsapp' };
+
+            // 5. Direct / Generic
+            if (lowerSource.startsWith('http')) return { label: 'Web', icon: 'web' };
+
+            return null;
+        };
+
         const productName = getProductName();
+        const locationText = getKeyLocation();
+        const trafficSource = getTrafficSource();
+
+        // Helper to extract Discount Code (String or Object)
+        const getDiscountCode = () => {
+            if (item.discount_codes && item.discount_codes.length > 0) {
+                const first = item.discount_codes[0];
+                if (typeof first === 'string') return first;
+                if (typeof first === 'object' && first.code) return first.code;
+            }
+            if (item.applied_discount && item.applied_discount.title) { // Common in Shopify Orders
+                return item.applied_discount.title;
+            }
+            return null;
+        };
+        const discountCode = getDiscountCode();
+
+        const rtoRisk = item.rtoPredict; // 'low', 'high', etc.
+
+        // Product Image Logic
+        const productImageUrl = item.img_url || (item.items && item.items.length > 0 && item.items[0].img_url) || null;
 
         return (
             <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
@@ -237,20 +310,58 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                         <Checkbox status={isSelected ? 'checked' : 'unchecked'} onPress={() => onToggle(item.id)} />
 
                         {!isMobile && (
-                            <Avatar.Icon
-                                size={40}
-                                icon={isAbandoned ? "cart-remove" : isConverted ? "check-circle" : "cart-outline"}
-                                style={{ backgroundColor: statusBg, marginLeft: 4 }}
-                                color={statusText}
-                            />
+                            <View>
+                                {productImageUrl ? (
+                                    <Avatar.Image
+                                        size={40}
+                                        source={{ uri: productImageUrl }}
+                                        style={{ backgroundColor: theme.colors.surfaceVariant, marginLeft: 4 }}
+                                    />
+                                ) : (
+                                    <Avatar.Icon
+                                        size={40}
+                                        icon={isAbandoned ? "cart-remove" : isConverted ? "check-circle" : "cart-outline"}
+                                        style={{ backgroundColor: statusBg, marginLeft: 4 }}
+                                        color={statusText}
+                                    />
+                                )}
+                            </View>
                         )}
 
                         <View style={[styles.textContainer, isMobile && { marginLeft: 8 }]}>
-                            {/* Top Row: Name & Date */}
+                            {/* Top Row: Name, Traffic, RTO & Date */}
                             <View style={styles.rowBetween}>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flex: 1, marginRight: 8 }} numberOfLines={1}>
-                                    {item.customerName || (item.first_name ? `${item.first_name} ${item.last_name || ''}` : null) || item.email || 'Guest Checkout'}
-                                </Text>
+                                <View style={{ flex: 1, marginRight: 8, flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flexShrink: 1 }} numberOfLines={1}>
+                                        {item.customerName || (item.first_name ? `${item.first_name} ${item.last_name || ''}` : null) || item.email || 'Potential Lead'}
+                                    </Text>
+
+                                    {/* Traffic Source Icon */}
+                                    {trafficSource && (
+                                        <View style={{ marginLeft: 6, backgroundColor: theme.colors.surfaceVariant, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source={trafficSource.icon} size={10} color={theme.colors.onSurfaceVariant} />
+                                        </View>
+                                    )}
+
+                                    {/* RTO Risk Badge */}
+                                    {rtoRisk && (
+                                        <View style={{
+                                            marginLeft: 4,
+                                            backgroundColor: rtoRisk === 'low' ? theme.colors.tertiaryContainer : theme.colors.errorContainer,
+                                            borderRadius: 4,
+                                            paddingHorizontal: 4,
+                                            paddingVertical: 2,
+                                        }}>
+                                            <Text style={{
+                                                fontSize: 9,
+                                                fontWeight: 'bold',
+                                                color: rtoRisk === 'low' ? theme.colors.onTertiaryContainer : theme.colors.onErrorContainer
+                                            }}>
+                                                {rtoRisk.toUpperCase()} RTO
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
                                 <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
                                     {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
                                 </Text>
@@ -263,25 +374,46 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                         {productName}
                                     </Text>
                                 )}
-                                {(item.totalPrice > 0 || item.total_price > 0) && (
-                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: 'bold' }}>
-                                        ₹{item.totalPrice || item.total_price}
-                                    </Text>
-                                )}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                    {(item.totalPrice > 0 || item.total_price > 0) && (
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: 'bold', marginRight: 8 }}>
+                                            ₹{item.totalPrice || item.total_price}
+                                        </Text>
+                                    )}
+                                    {/* Discount Code Tag */}
+                                    {discountCode && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source="tag" size={10} color={theme.colors.primary} />
+                                            <Text style={{ fontSize: 10, color: theme.colors.primary, marginLeft: 2, fontWeight: 'bold' }}>
+                                                {discountCode}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
                             </View>
 
-                            {/* Contact Row: Phone with Copy Button */}
-                            {(item.phone || item.phone_number || item.phoneNormalized) && (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                    <Icon source="phone" size={12} color={theme.colors.onSurfaceVariant} />
-                                    <CopyableText
-                                        text={item.phone || item.phone_number || item.phoneNormalized}
-                                        style={{ marginLeft: 4 }}
-                                        theme={theme}
-                                        numberOfLines={1}
-                                    />
-                                </View>
-                            )}
+                            {/* Contact Row: Phone & Location */}
+                            <View style={{ marginTop: 4 }}>
+                                {(item.phone || item.phone_number || item.phoneNormalized) && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Icon source="phone" size={12} color={theme.colors.onSurfaceVariant} />
+                                        <CopyableText
+                                            text={item.phone || item.phone_number || item.phoneNormalized}
+                                            style={{ marginLeft: 4 }}
+                                            theme={theme}
+                                            numberOfLines={1}
+                                        />
+                                    </View>
+                                )}
+                                {locationText && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                        <Icon source="map-marker" size={12} color={theme.colors.onSurfaceVariant} />
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>
+                                            {locationText}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
 
                             {/* Bottom Row: Status Chip */}
                             <View style={{ marginTop: 6, alignItems: 'flex-start' }}>
