@@ -675,7 +675,7 @@ const StatsScreen = ({ navigation }) => {
                 <Surface style={styles.listCard} elevation={0}>
                     <View style={styles.cardHeader}>
                         <Icon source="flash" size={18} color="#f59e0b" />
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 8 }}>Top Events</Text>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 8 }}>Event Metrics</Text>
                     </View>
                     {ga4Analytics.topEvents && ga4Analytics.topEvents.length > 0 ? (
                         ga4Analytics.topEvents.slice(0, 5).map((event, index) => (
@@ -693,7 +693,7 @@ const StatsScreen = ({ navigation }) => {
                 <Surface style={styles.listCard} elevation={0}>
                     <View style={styles.cardHeader}>
                         <Icon source="file-document" size={18} color="#3b82f6" />
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 8 }}>Popular Pages</Text>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 8 }}>Active Feeds</Text>
                     </View>
                     {ga4Analytics.topPages.length > 0 ? (
                         ga4Analytics.topPages.slice(0, 5).map((page, index) => (
@@ -711,7 +711,7 @@ const StatsScreen = ({ navigation }) => {
                 <Surface style={styles.listCard} elevation={0}>
                     <View style={styles.cardHeader}>
                         <Icon source="earth" size={18} color="#10b981" />
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 8 }}>Top Locations</Text>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 8 }}>Real-Time Regions</Text>
                     </View>
                     {ga4Analytics.locations.length > 0 ? (
                         ga4Analytics.locations.slice(0, 5).map((loc, index) => (
