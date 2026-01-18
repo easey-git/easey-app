@@ -31,6 +31,35 @@ const CopyableText = ({ text, display, style, theme, numberOfLines = 1 }) => {
     );
 };
 
+const RecoverButton = ({ link, theme }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        await Clipboard.setStringAsync(link);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <TouchableOpacity
+            onPress={handleCopy}
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: copied ? '#4caf50' : theme.colors.primaryContainer,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 12
+            }}
+        >
+            <Icon source={copied ? "check" : "link"} size={12} color={copied ? '#ffffff' : theme.colors.onPrimaryContainer} />
+            <Text style={{ fontSize: 10, fontWeight: 'bold', color: copied ? '#ffffff' : theme.colors.onPrimaryContainer, marginLeft: 4 }}>
+                {copied ? "COPIED" : "RECOVER"}
+            </Text>
+        </TouchableOpacity>
+    );
+};
+
 const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset, onAttachVoice, onDeleteVoice, onShippedToggle }) => {
     const { isMobile } = useResponsive();
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
@@ -415,16 +444,42 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 )}
                             </View>
 
-                            {/* Bottom Row: Status Chip */}
-                            <View style={{ marginTop: 6, alignItems: 'flex-start' }}>
-                                <Chip
-                                    mode="flat"
-                                    compact
-                                    style={[styles.chip, { backgroundColor: statusBg, height: 20 }]}
-                                    textStyle={{ fontSize: 9, lineHeight: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold', color: statusText }}
-                                >
-                                    {item.stage || item.latest_stage || 'ACTIVE'}
-                                </Chip>
+                            {/* Bottom Row: Status, Payment & Recovery Link */}
+                            <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <Chip
+                                        mode="flat"
+                                        compact
+                                        style={[styles.chip, { backgroundColor: statusBg, height: 20 }]}
+                                        textStyle={{ fontSize: 9, lineHeight: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold', color: statusText }}
+                                    >
+                                        {item.stage || item.latest_stage || 'ACTIVE'}
+                                    </Chip>
+
+                                    {/* Payment Method Tag */}
+                                    {item.payment_method && (
+                                        <View style={{
+                                            backgroundColor: theme.colors.surfaceVariant,
+                                            borderRadius: 4,
+                                            paddingHorizontal: 6,
+                                            paddingVertical: 2,
+                                            borderWidth: 1,
+                                            borderColor: theme.colors.outlineVariant
+                                        }}>
+                                            <Text style={{ fontSize: 9, fontWeight: 'bold', color: theme.colors.onSurfaceVariant }}>
+                                                {item.payment_method.toUpperCase()}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                {/* Recovery Link Button */}
+                                {(item.checkout_url || item.custom_attributes?.landing_page_url) && (
+                                    <RecoverButton
+                                        link={item.checkout_url || item.custom_attributes?.landing_page_url}
+                                        theme={theme}
+                                    />
+                                )}
                             </View>
                         </View>
                         <IconButton icon="chevron-right" size={20} />
