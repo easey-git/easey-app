@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Image, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Image, LayoutAnimation, Platform, UIManager, TouchableOpacity } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Text, Surface, ActivityIndicator, Icon, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog, ProgressBar } from 'react-native-paper';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { collection, query, orderBy, onSnapshot, limit, where } from 'firebase/firestore';
@@ -537,47 +538,147 @@ const StatsScreen = ({ navigation }) => {
                     </Button>
                 </View>
 
-                {recentActivity.map((item) => (
-                    <View key={item.id} style={{ overflow: 'hidden' }}>
-                        <List.Item
-                            title={item.customerName || item.first_name || item.phone || 'Visitor'}
-                            titleStyle={{ fontWeight: 'bold', fontSize: 15 }}
-                            descriptionStyle={{ fontSize: 13 }}
-                            style={{ paddingHorizontal: 16, backgroundColor: theme.colors.background }}
-                            description={() => (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
-                                    {(() => {
-                                        const config = getStageConfig(item.status);
-                                        return (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: config.bg, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                                                <Icon source={config.icon} size={12} color={config.color} />
-                                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: config.color, marginLeft: 4, textTransform: 'uppercase' }}>
-                                                    {item.status || 'Active'}
-                                                </Text>
+                {recentActivity.map((item) => {
+                    // --- Logic extracted from DocItem.js for consistency ---
+
+                    // 1. Traffic Source
+                    const getTrafficSource = () => {
+                        const source = item.referring_site ||
+                            item.landing_site ||
+                            item.custom_attributes?.landing_page_url ||
+                            item.cart_attributes?.landing_page_url ||
+                            item.note_attributes?.landing_page_url || // Added note_attributes check
+                            '';
+
+                        if (!source) return null;
+                        const lowerSource = source.toLowerCase();
+
+                        if (lowerSource.includes('gclid') || lowerSource.includes('google')) return { label: 'Google', icon: 'google' };
+
+                        if (lowerSource.includes('instagram') ||
+                            lowerSource.includes('utm_source=ig') ||
+                            lowerSource.includes('android-app://com.instagram') ||
+                            lowerSource.includes('ios-app://com.instagram')) {
+                            return { label: 'Instagram', icon: 'instagram' };
+                        }
+
+                        if (lowerSource.includes('facebook') || lowerSource.includes('fbclid')) return { label: 'Facebook', icon: 'facebook' };
+
+                        if (lowerSource.includes('youtube') || lowerSource.includes('yt')) return { label: 'YouTube', icon: 'youtube' };
+                        if (lowerSource.includes('whatsapp') || lowerSource.includes('wa.me')) return { label: 'WhatsApp', icon: 'whatsapp' };
+
+                        if (lowerSource.startsWith('http')) return { label: 'Web', icon: 'web' };
+                        return null;
+                    };
+                    const trafficSource = getTrafficSource();
+
+                    // 2. Product Image
+                    const productImageUrl = item.img_url || (item.items && item.items.length > 0 && item.items[0].img_url) || null;
+
+                    // 3. Discount Code
+                    const getDiscountCode = () => {
+                        if (item.discount_codes && item.discount_codes.length > 0) {
+                            const first = item.discount_codes[0];
+                            return (typeof first === 'object' && first.code) ? first.code : first;
+                        }
+                        return item.applied_discount?.title || null;
+                    };
+                    const discountCode = getDiscountCode();
+
+                    // 4. RTO Risk
+                    const rtoRisk = item.rtoPredict;
+
+                    // 5. Smart Location
+                    const getKeyLocation = () => {
+                        const rootLoc = (item.city && item.state) ? `${item.city}, ${item.province || item.state_code || item.state}` : item.city || item.state;
+                        if (rootLoc) return rootLoc;
+                        const addr = item.shipping_address || item.billing_address || item.customer?.default_address || item.default_address;
+                        if (addr) {
+                            return (addr.city && addr.province) ? `${addr.city}, ${addr.province}` : addr.city || addr.province || addr.country;
+                        }
+                        return null;
+                    };
+                    const locationText = getKeyLocation();
+
+                    return (
+                        <View key={item.id} style={{ overflow: 'hidden' }}>
+                            <Surface style={{ marginHorizontal: 16, marginVertical: 4, borderRadius: 12, backgroundColor: theme.colors.surface }} elevation={1}>
+                                <TouchableOpacity onPress={() => { setSelectedDoc(item); setModalVisible(true); }} style={{ flexDirection: 'row', padding: 12, alignItems: 'center' }}>
+
+                                    {/* LEFT: Image or Avatar */}
+                                    <View style={{ marginRight: 12 }}>
+                                        {productImageUrl ? (
+                                            <Avatar.Image size={46} source={{ uri: productImageUrl }} style={{ backgroundColor: theme.colors.surfaceVariant }} />
+                                        ) : (
+                                            <Avatar.Text size={46} label={(item.customerName || 'G').charAt(0).toUpperCase()} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />
+                                        )}
+                                        {/* Status Badge Overlap */}
+                                        <View style={{ position: 'absolute', bottom: -2, right: -2, backgroundColor: theme.colors.surface, borderRadius: 8 }}>
+                                            <Icon source={getStageConfig(item.status).icon} size={16} color={getStageConfig(item.status).color} />
+                                        </View>
+                                    </View>
+
+                                    {/* MIDDLE: Details */}
+                                    <View style={{ flex: 1 }}>
+                                        {/* Top Line: Name + Badges */}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                                            <Text variant="titleSmall" style={{ fontWeight: 'bold', flexShrink: 1 }} numberOfLines={1}>
+                                                {item.customerName || item.first_name || item.phone || 'Visitor'}
+                                            </Text>
+
+                                            {/* Traffic Icon */}
+                                            {trafficSource && (
+                                                <View style={{ marginLeft: 6, backgroundColor: theme.colors.surfaceVariant, borderRadius: 4, padding: 2 }}>
+                                                    <Icon source={trafficSource.icon} size={10} color={theme.colors.onSurfaceVariant} />
+                                                </View>
+                                            )}
+
+                                            {/* RTO Badge */}
+                                            {rtoRisk && (
+                                                <View style={{ marginLeft: 4, backgroundColor: rtoRisk === 'low' ? theme.colors.tertiaryContainer : theme.colors.errorContainer, borderRadius: 4, paddingHorizontal: 4 }}>
+                                                    <Text style={{ fontSize: 8, fontWeight: 'bold', color: rtoRisk === 'low' ? theme.colors.onTertiaryContainer : theme.colors.onErrorContainer }}>
+                                                        {rtoRisk.toUpperCase()}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
+
+                                        {/* Subtext: Product + Loc */}
+                                        <Text variant="bodySmall" style={{ color: theme.colors.secondary }} numberOfLines={1}>
+                                            {(item.items && item.items.length > 0 && (item.items[0].name || item.items[0].title)) || 'Cart Items'}
+                                        </Text>
+
+                                        {/* Footer: Time + Location + Discount */}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                            <Text style={{ fontSize: 10, color: theme.colors.outline }}>{getRelativeTime(item.jsDate)}</Text>
+                                            {locationText && (
+                                                <Text style={{ fontSize: 10, color: theme.colors.outline, marginLeft: 8 }}>• {locationText}</Text>
+                                            )}
+                                            {discountCode && (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
+                                                    <Icon source="tag" size={10} color={theme.colors.primary} />
+                                                    <Text style={{ fontSize: 10, color: theme.colors.primary, marginLeft: 2, fontWeight: 'bold' }}>{discountCode}</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    </View>
+
+                                    {/* RIGHT: Price + Payment */}
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>
+                                            ₹{item.totalPrice || item.total_price || item.amount || 0}
+                                        </Text>
+                                        {item.payment_method && (
+                                            <View style={{ backgroundColor: theme.colors.surfaceVariant, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, marginTop: 2 }}>
+                                                <Text style={{ fontSize: 9, fontWeight: 'bold', color: theme.colors.onSurfaceVariant }}>{item.payment_method.toUpperCase()}</Text>
                                             </View>
-                                        );
-                                    })()}
-                                    <Text style={{ fontSize: 11, marginLeft: 8, color: theme.colors.outline, fontStyle: 'italic' }}>
-                                        {getRelativeTime(item.jsDate)}
-                                    </Text>
-                                </View>
-                            )}
-                            left={props => <Avatar.Text {...props} size={42} label={(item.customerName || 'G').charAt(0).toUpperCase()} />}
-                            right={props => (
-                                <View style={{ justifyContent: 'center', alignItems: 'flex-end' }}>
-                                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>
-                                        ₹{item.totalPrice || item.total_price || item.amount || 0}
-                                    </Text>
-                                </View>
-                            )}
-                            onPress={() => {
-                                setSelectedDoc(item);
-                                setModalVisible(true);
-                            }}
-                        />
-                        <Divider style={{ marginLeft: 72 }} />
-                    </View>
-                ))}
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                            </Surface>
+                        </View>
+                    );
+                })}
             </View>
 
             {/* Document Details Modal (Unchanged Layout) */}
@@ -588,14 +689,51 @@ const StatsScreen = ({ navigation }) => {
                         <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 8 }}>
                             {selectedDoc && (
                                 <View>
+                                    {/* Product Image Header */}
+                                    {(selectedDoc.img_url || (selectedDoc.items && selectedDoc.items.length > 0 && selectedDoc.items[0].img_url)) && (
+                                        <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                                            <Image
+                                                source={{ uri: selectedDoc.img_url || selectedDoc.items[0].img_url }}
+                                                style={{ width: 100, height: 100, borderRadius: 8, backgroundColor: theme.colors.surfaceVariant }}
+                                                resizeMode="cover"
+                                            />
+                                        </View>
+                                    )}
+
                                     <View style={{ marginBottom: 16 }}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Customer</Text>
                                         <Text variant="bodyLarge">{selectedDoc.customerName || selectedDoc.first_name || selectedDoc.phone || 'Visitor'}</Text>
+                                        {selectedDoc.email && <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>{selectedDoc.email}</Text>}
+                                        {selectedDoc.phone && <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>{selectedDoc.phone}</Text>}
                                     </View>
-                                    <View style={{ marginBottom: 16 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Status</Text>
-                                        <Chip compact style={{ alignSelf: 'flex-start' }}>{selectedDoc.status}</Chip>
+
+                                    {/* Key Attributes Grid */}
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                                        <Chip compact>{selectedDoc.status}</Chip>
+                                        {selectedDoc.rtoPredict && (
+                                            <Chip compact mode="outlined" style={{ backgroundColor: selectedDoc.rtoPredict === 'low' ? theme.colors.tertiaryContainer : theme.colors.errorContainer }}>
+                                                {selectedDoc.rtoPredict.toUpperCase()} RTO
+                                            </Chip>
+                                        )}
+                                        {selectedDoc.payment_method && (
+                                            <Chip compact mode="outlined">{selectedDoc.payment_method}</Chip>
+                                        )}
                                     </View>
+
+                                    {/* Action: Recover Link */}
+                                    {(selectedDoc.checkout_url || selectedDoc.custom_attributes?.landing_page_url) && (
+                                        <Button
+                                            mode="contained"
+                                            icon="link"
+                                            onPress={async () => {
+                                                await Clipboard.setStringAsync(selectedDoc.checkout_url || selectedDoc.custom_attributes?.landing_page_url);
+                                            }}
+                                            style={{ marginBottom: 16, backgroundColor: '#4caf50' }}
+                                        >
+                                            Copy Recover Link
+                                        </Button>
+                                    )}
+
                                     <View style={{ marginBottom: 16 }}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Total Amount</Text>
                                         <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || selectedDoc.cart?.totalPrice || selectedDoc.total_price || 0}</Text>

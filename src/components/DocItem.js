@@ -349,43 +349,29 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 ) : (
                                     <Avatar.Icon
                                         size={40}
-                                        icon={isAbandoned ? "cart-remove" : isConverted ? "check-circle" : "cart-outline"}
-                                        style={{ backgroundColor: statusBg, marginLeft: 4 }}
-                                        color={statusText}
+                                        icon="package-variant-closed"
+                                        style={{ backgroundColor: theme.colors.secondaryContainer, marginLeft: 4 }}
+                                        color={theme.colors.onSecondaryContainer}
                                     />
                                 )}
                             </View>
                         )}
 
-                        <View style={[styles.textContainer, isMobile && { marginLeft: 8 }]}>
-                            {/* Top Row: Name, Traffic, RTO & Date */}
-                            <View style={styles.rowBetween}>
-                                <View style={{ flex: 1, marginRight: 8, flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={[styles.textContainer, { marginLeft: isMobile ? 4 : 16 }]}>
+                            {/* Top Row: Name & Traffic Source */}
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
                                     <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, flexShrink: 1 }} numberOfLines={1}>
-                                        {item.customerName || (item.first_name ? `${item.first_name} ${item.last_name || ''}` : null) || item.email || 'Potential Lead'}
+                                        {item.customerName || item.first_name || 'Visitor'}
                                     </Text>
-
-                                    {/* Traffic Source Icon */}
                                     {trafficSource && (
                                         <View style={{ marginLeft: 6, backgroundColor: theme.colors.surfaceVariant, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}>
                                             <Icon source={trafficSource.icon} size={10} color={theme.colors.onSurfaceVariant} />
                                         </View>
                                     )}
-
-                                    {/* RTO Risk Badge */}
                                     {rtoRisk && (
-                                        <View style={{
-                                            marginLeft: 4,
-                                            backgroundColor: rtoRisk === 'low' ? theme.colors.tertiaryContainer : theme.colors.errorContainer,
-                                            borderRadius: 4,
-                                            paddingHorizontal: 4,
-                                            paddingVertical: 2,
-                                        }}>
-                                            <Text style={{
-                                                fontSize: 9,
-                                                fontWeight: 'bold',
-                                                color: rtoRisk === 'low' ? theme.colors.onTertiaryContainer : theme.colors.onErrorContainer
-                                            }}>
+                                        <View style={{ marginLeft: 4, backgroundColor: rtoRisk === 'low' ? theme.colors.tertiaryContainer : theme.colors.errorContainer, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2 }}>
+                                            <Text style={{ fontSize: 9, fontWeight: 'bold', color: rtoRisk === 'low' ? theme.colors.onTertiaryContainer : theme.colors.onErrorContainer }}>
                                                 {rtoRisk.toUpperCase()} RTO
                                             </Text>
                                         </View>
@@ -456,7 +442,6 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                         {item.stage || item.latest_stage || 'ACTIVE'}
                                     </Chip>
 
-                                    {/* Payment Method Tag */}
                                     {item.payment_method && (
                                         <View style={{
                                             backgroundColor: theme.colors.surfaceVariant,
@@ -473,7 +458,6 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                     )}
                                 </View>
 
-                                {/* Recovery Link Button */}
                                 {(item.checkout_url || item.custom_attributes?.landing_page_url) && (
                                     <RecoverButton
                                         link={item.checkout_url || item.custom_attributes?.landing_page_url}
@@ -773,8 +757,8 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                         )}
                     </View>
                     <IconButton icon="chevron-right" size={20} />
-                </View >
-            </TouchableOpacity >
+                </View>
+            </TouchableOpacity>
         </Surface>
     );
 });
