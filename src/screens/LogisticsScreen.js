@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Platform } from 'react-native';
 import { Text, useTheme, Surface, Icon } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { DelhiveryView } from '../components/logistics/DelhiveryView';
@@ -127,10 +127,17 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 2,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        ...Platform.select({
+            web: {
+                boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+            },
+            default: {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+            }
+        }),
     },
     selectorContainer: {
         paddingVertical: 12,
@@ -149,10 +156,17 @@ const styles = StyleSheet.create({
         borderRadius: 20, // Full rounded pills
         borderWidth: 1,
         // Elevation for better touch target feel
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 1,
+        ...Platform.select({
+            web: {
+                boxShadow: '0px 1px 1px rgba(0, 0, 0, 0.05)',
+            },
+            default: {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 1,
+            }
+        }),
         elevation: 1,
     },
     contentArea: {

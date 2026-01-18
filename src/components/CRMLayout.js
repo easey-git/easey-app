@@ -63,7 +63,7 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
                 {/* Floating Elements Layer */}
                 {/* Floating Elements Layer */}
                 {floatingButton && (
-                    <View style={styles.floatingContainer} pointerEvents="box-none">
+                    <View style={[styles.floatingContainer, { pointerEvents: "box-none" }]}>
                         {floatingButton}
                     </View>
                 )}
