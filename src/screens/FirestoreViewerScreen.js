@@ -668,8 +668,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                 return (
                                     <Chip
                                         key={`${f.field}-${f.value}`} // Unique key
-                                        selected={isSelected}
-                                        showSelectedOverlay
+                                        icon={isSelected ? 'check' : undefined}
                                         onPress={() => setFilter(f.value ? { field: f.field, value: f.value } : null)}
                                         style={{ backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface }}
                                     >
