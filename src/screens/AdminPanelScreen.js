@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, ScrollView, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, ScrollView, useWindowDimensions, Alert, Platform } from 'react-native';
+import { useAuth } from '../context/AuthContext';
 import { Text, useTheme, Avatar, Surface, IconButton, ActivityIndicator, Chip, Divider, Button, Portal, Dialog, Switch } from 'react-native-paper';
 import { collection, getDocs, query, orderBy, doc, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -94,6 +95,39 @@ const AdminPanelScreen = ({ navigation }) => {
             console.error("Error updating permissions:", error);
         }
     };
+
+    const { user: currentUser } = useAuth();
+
+    const confirmDelete = (user) => {
+        if (Platform.OS === 'web') {
+            if (window.confirm(`Are you sure you want to delete user ${user.email}? This cannot be undone.`)) {
+                handleDeleteUser(user.id);
+            }
+        } else {
+            Alert.alert(
+                "Delete User",
+                `Are you sure you want to delete user ${user.email}? This cannot be undone.`,
+                [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: () => handleDeleteUser(user.id)
+                    }
+                ]
+            );
+        }
+    };
+
+    const handleDeleteUser = async (userId) => {
+        try {
+            await deleteDoc(doc(db, 'users', userId));
+        } catch (error) {
+            console.error("Error deleting user:", error);
+            Alert.alert("Error", "Failed to delete user.");
+        }
+    };
+
     const renderItem = ({ item }) => (
         <Surface style={[styles.userCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={0}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -139,7 +173,15 @@ const AdminPanelScreen = ({ navigation }) => {
                         )}
                     </View>
                 </View>
-                <IconButton icon="pencil" onPress={() => openPermissionsDialog(item)} />
+                <View style={{ flexDirection: 'row' }}>
+                    <IconButton icon="pencil" onPress={() => openPermissionsDialog(item)} />
+                    <IconButton
+                        icon="delete"
+                        iconColor={theme.colors.error}
+                        onPress={() => confirmDelete(item)}
+                        disabled={currentUser?.uid === item.id}
+                    />
+                </View>
             </View>
         </Surface>
     );
