@@ -301,12 +301,11 @@ const LiveFeedSection = React.memo(({ recentActivity, navigation, theme }) => {
     const [modalVisible, setModalVisible] = useState(false);
     const hasActivity = recentActivity.length > 0;
 
-    // Compact height logic: Short enough to be negligible, tall enough to be useful
-    const CONTAINER_HEIGHT = 220;
+
 
     return (
-        <View style={{ marginTop: 24, paddingBottom: 16 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 }}>
+        <Surface style={[styles.chartContainer, { height: 300, backgroundColor: theme.colors.surface }]} elevation={1}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingBottom: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     {/* Live Pulse Dot */}
                     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: hasActivity ? '#22c55e' : theme.colors.outlineVariant }} />
@@ -327,7 +326,7 @@ const LiveFeedSection = React.memo(({ recentActivity, navigation, theme }) => {
                 </Button>
             </View>
 
-            <Surface style={{ height: CONTAINER_HEIGHT, backgroundColor: theme.colors.surface, marginHorizontal: 16, borderRadius: 16, overflow: 'hidden' }} elevation={1}>
+            <View style={{ flex: 1, paddingHorizontal: 0 }}>
                 {hasActivity ? (
                     <FlatList
                         data={recentActivity}
@@ -339,7 +338,7 @@ const LiveFeedSection = React.memo(({ recentActivity, navigation, theme }) => {
                                 onPress={(doc) => { setSelectedDoc(doc); setModalVisible(true); }}
                             />
                         )}
-                        contentContainerStyle={{ padding: 8, paddingBottom: 16 }}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
                         nestedScrollEnabled={true}
                         showsVerticalScrollIndicator={true}
                         initialNumToRender={4}
@@ -354,7 +353,7 @@ const LiveFeedSection = React.memo(({ recentActivity, navigation, theme }) => {
                         <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Waiting for new actions...</Text>
                     </View>
                 )}
-            </Surface>
+            </View>
 
             <Portal>
                 <Dialog visible={modalVisible} onDismiss={() => setModalVisible(false)} style={{ maxHeight: '85%', maxWidth: 450, width: '100%', alignSelf: 'center' }}>
@@ -429,7 +428,7 @@ const LiveFeedSection = React.memo(({ recentActivity, navigation, theme }) => {
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
-        </View>
+        </Surface>
     );
 });
 
