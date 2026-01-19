@@ -59,7 +59,12 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
     // Custom Date Picker State
     const [openDatePicker, setOpenDatePicker] = useState(false);
-    const [customDate, setCustomDate] = useState(undefined);
+    const [customDate, setCustomDate] = useState(() => {
+        if (route.params?.customDate) {
+            return new Date(route.params.customDate);
+        }
+        return undefined;
+    });
 
     // Edit Date Picker State
     const [editDatePickerVisible, setEditDatePickerVisible] = useState(false);
@@ -224,11 +229,16 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // 1. Attribute Filters
             if (filter) {
                 const op = filter.operator || "==";
-                constraints.push(where(filter.field, op, filter.value));
+                let val = filter.value;
+                // Auto-convert ISO date strings to Date objects for Firestore comparison
+                if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
+                    val = new Date(val);
+                }
+                constraints.push(where(filter.field, op, val));
             }
 
             // 2. Date Filters
-            if (customDate) { // Updated to only use customDate
+            if (customDate) {
                 const { start, end } = getDateRange();
                 // Siloed breakdown: checkouts -> updatedAt, others -> createdAt
                 const dateField = selectedCollection === 'checkouts' ? 'updatedAt' : 'createdAt';

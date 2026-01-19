@@ -202,11 +202,9 @@ const HomeScreen = ({ navigation }) => {
                     value={todayOrders}
                     icon="package-variant"
                     onPress={() => {
-                        const now = new Date();
-                        now.setHours(0, 0, 0, 0);
                         navigation.navigate('DatabaseManager', {
                             collection: 'orders',
-                            filter: { field: 'createdAt', operator: '>=', value: Timestamp.fromDate(now), label: 'Today' }
+                            customDate: new Date().toISOString()
                         });
                     }}
                     theme={theme}
@@ -260,11 +258,9 @@ const HomeScreen = ({ navigation }) => {
                     value={todayOrders}
                     icon="package-variant"
                     onPress={() => {
-                        const now = new Date();
-                        now.setHours(0, 0, 0, 0);
                         navigation.navigate('DatabaseManager', {
                             collection: 'orders',
-                            filter: { field: 'createdAt', operator: '>=', value: Timestamp.fromDate(now), label: 'Today' }
+                            customDate: new Date().toISOString()
                         });
                     }}
                     theme={theme}
