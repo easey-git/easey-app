@@ -90,7 +90,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchVisible, setSearchVisible] = useState(false);
 
     // Filter Documents
     const filteredDocuments = React.useMemo(() => {
@@ -839,25 +838,29 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                     iconColor={theme.colors.onSurface}
                                 />
                             )}
-                            <IconButton icon="magnify" onPress={() => setSearchVisible(!searchVisible)} />
                             <Appbar.Action icon="refresh" onPress={fetchDocuments} />
                         </View>
                     )}
                 </View>
             }
         >
-            {searchVisible && (
-                <View style={{ padding: 16, paddingBottom: 0 }}>
+            {/* Search Bar - Clean & Beautiful */}
+            <View style={styles.searchContainer}>
+                <Surface style={[styles.searchBar, { backgroundColor: theme.colors.elevation.level1 }]} elevation={0}>
+                    <IconButton icon="magnify" size={20} iconColor={theme.colors.onSurfaceVariant} />
                     <TextInput
-                        mode="outlined"
-                        placeholder="Search by Name, Order #, Phone, Email..."
+                        placeholder="Search by Name, Order #, Phone..."
+                        placeholderTextColor={theme.colors.onSurfaceVariant}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        right={<TextInput.Icon icon="close" onPress={() => { setSearchQuery(''); setSearchVisible(false); }} />}
-                        style={{ backgroundColor: theme.colors.surface }}
+                        style={[styles.searchInput, { color: theme.colors.onSurface }]}
+                        underlineColor="transparent"
+                        activeUnderlineColor="transparent"
+                        theme={{ colors: { background: 'transparent' } }}
                     />
-                </View>
-            )}
+                    {searchQuery.length > 0 && <IconButton icon="close" size={20} onPress={() => setSearchQuery('')} />}
+                </Surface>
+            </View>
 
 
 
@@ -1372,7 +1375,23 @@ const styles = StyleSheet.create({
     fieldRow: {
         marginBottom: 2,
         paddingVertical: 1
-    }
+    },
+    searchContainer: {
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 8,
+    },
+    searchBar: {
+        borderRadius: 28,
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 50,
+        paddingHorizontal: 4,
+    },
+    searchInput: {
+        flex: 1,
+        backgroundColor: 'transparent',
+    },
 });
 
 export default FirestoreViewerScreen;
