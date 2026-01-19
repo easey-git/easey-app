@@ -302,6 +302,7 @@ const NotesScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     searchContainer: {
         paddingHorizontal: 16,
+        paddingTop: 16,
         paddingBottom: 16
     },
     searchBar: {

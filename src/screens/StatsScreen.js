@@ -349,8 +349,6 @@ const LiveFeedSection = React.memo(({ recentActivity, navigation, theme }) => {
                 ) : (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', opacity: 0.5 }}>
                         <Icon source="radar" size={48} color={theme.colors.outline} />
-                        <Text variant="titleSmall" style={{ color: theme.colors.outline, marginTop: 12, fontWeight: 'bold' }}>Quiet on the deck</Text>
-                        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Waiting for new actions...</Text>
                     </View>
                 )}
             </View>

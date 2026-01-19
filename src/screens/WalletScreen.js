@@ -528,7 +528,7 @@ const WalletScreen = ({ navigation }) => {
     ), [theme, confirmDelete]);
 
     const ListHeader = useMemo(() => (
-        <View style={{ paddingBottom: 16 }}>
+        <View style={{ paddingBottom: 16, paddingTop: 16 }}>
             <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
                 <SegmentedButtons
                     value={timeRange}
