@@ -72,10 +72,15 @@ const ActivityLogScreen = ({ navigation }) => {
         return theme.colors.secondary;
     };
 
-    const formatTime = (timestamp) => {
+    const formatDateTime = (timestamp) => {
         if (!timestamp) return '';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return date.toLocaleString([], {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     };
 
     const OnlineUsers = useMemo(() => {
@@ -116,7 +121,7 @@ const ActivityLogScreen = ({ navigation }) => {
                         {item.userEmail}
                     </Text>
                     <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
-                        {formatTime(item.timestamp)}
+                        {formatDateTime(item.timestamp)}
                     </Text>
                 </View>
 
@@ -145,7 +150,7 @@ const ActivityLogScreen = ({ navigation }) => {
     );
 
     return (
-        <CRMLayout title="Activity Log" navigation={navigation} scrollable={false}>
+        <CRMLayout title="Activity Log" navigation={navigation} scrollable={false} fullWidth={true}>
             {/* Online Users Header */}
             <View style={{ padding: 16, backgroundColor: theme.colors.surfaceVariant }}>
                 <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 8, color: theme.colors.onSurfaceVariant }}>

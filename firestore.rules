@@ -125,7 +125,7 @@ service cloud.firestore {
     // 9. Activity Logs
     match /activity_logs/{logId} {
       allow read: if isAdmin();
-      allow create: if request.auth != null; // Append-only for audit trail
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid; // Append-only, self-logging
     }
     match /{document=**} {
       allow read, write: if false; 

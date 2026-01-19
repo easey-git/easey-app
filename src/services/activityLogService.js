@@ -1,4 +1,4 @@
-import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { collection, serverTimestamp, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const LOGS_COLLECTION = 'activity_logs';
@@ -17,7 +17,12 @@ export const ActivityLogService = {
         if (!userId) return;
 
         try {
-            await addDoc(collection(db, LOGS_COLLECTION), {
+            const batch = writeBatch(db);
+            const logRef = doc(collection(db, LOGS_COLLECTION));
+            const userRef = doc(db, USERS_COLLECTION, userId);
+
+            // 1. Create Log Entry
+            batch.set(logRef, {
                 userId,
                 userEmail,
                 action,
@@ -26,13 +31,14 @@ export const ActivityLogService = {
                 timestamp: serverTimestamp()
             });
 
-            // Update user's last active timestamp
-            const userRef = doc(db, USERS_COLLECTION, userId);
-            await updateDoc(userRef, {
+            // 2. Update User Presence (Atomic side-effect)
+            batch.update(userRef, {
                 lastActive: serverTimestamp(),
                 lastAction: action,
-                isOnline: true // Optimistically set online
+                isOnline: true
             });
+
+            await batch.commit();
 
         } catch (error) {
             console.error("Failed to log activity:", error);
