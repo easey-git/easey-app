@@ -304,10 +304,10 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                             />
                         )}
                         <View style={[styles.textContainer, isMobile && { marginLeft: 8 }]}>
-                            {/* Top Row: Type & Date */}
+                            {/* Top Row: Description & Date */}
                             <View style={styles.rowBetween}>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                    {item.type ? item.type.toUpperCase() : 'TRANSACTION'}
+                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} numberOfLines={1}>
+                                    {item.description || 'No Description'}
                                 </Text>
                                 {item.date && item.date.toDate && (
                                     <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
@@ -318,23 +318,23 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
 
                             {/* Details Grid */}
                             <View style={{ marginTop: 4 }}>
-                                {/* Category & Amount Row */}
+                                {/* Type & Amount Row */}
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                                    {item.category ? (
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>{item.category}</Text>
-                                    ) : <View />}
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>
+                                        {item.type ? item.type.toUpperCase() : 'TRANSACTION'}
+                                    </Text>
 
                                     <Text variant="titleMedium" style={{ fontWeight: 'bold', color: isIncome ? theme.colors.primary : theme.colors.error }}>
                                         {isIncome ? '+' : '-'}₹{Math.abs(item.amount || 0).toLocaleString('en-IN')}
                                     </Text>
                                 </View>
 
-                                {/* Description */}
-                                {item.description && (
-                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 2 }} numberOfLines={2}>
-                                        {item.description}
+                                {/* Category (moved from top) */}
+                                {item.category ? (
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 2 }}>
+                                        {item.category}
                                     </Text>
-                                )}
+                                ) : <View />}
 
                                 {/* Created At (Footer) */}
                                 {item.createdAt && item.createdAt.toDate && (

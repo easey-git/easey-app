@@ -694,6 +694,88 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         );
     }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection, role, handleCodToggle, handleResetItem, handleAttachVoice, handleDeleteVoice, handleShippedToggle]);
 
+    // Reusable Field Editor Component to ensure consistency across Mobile/Desktop views
+    const EditFieldItem = ({ k, value, isEditing, onUpdate, onEditDate, theme, style }) => {
+        // Render timestamp
+        if (value && typeof value === 'object' && value.seconds) {
+            const dateObj = new Date(value.seconds * 1000);
+            const dateStr = dateObj.toLocaleString();
+            return (
+                <View style={style}>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+                        {k}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <TouchableOpacity
+                            disabled={!isEditing}
+                            onPress={() => onEditDate(k, value)}
+                            style={{ flex: 1, paddingVertical: 4, borderBottomWidth: isEditing ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}
+                        >
+                            <Text variant="bodyLarge" style={{ color: isEditing ? theme.colors.onSurface : theme.colors.onSurface }}>
+                                {dateStr}
+                            </Text>
+                        </TouchableOpacity>
+
+                        {isEditing && (
+                            <IconButton
+                                icon="pencil"
+                                size={20}
+                                onPress={() => onEditDate(k, value)}
+                                iconColor={theme.colors.primary}
+                            />
+                        )}
+                    </View>
+                </View>
+            );
+        }
+
+        // Render boolean
+        if (typeof value === 'boolean') {
+            return (
+                <View style={[style, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }]}>
+                    <Text variant="bodyLarge">{k}</Text>
+                    {isEditing ? (
+                        <Switch
+                            value={value}
+                            onValueChange={(val) => onUpdate(k, val)}
+                            color={theme.colors.primary}
+                        />
+                    ) : (
+                        <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
+                            {value ? 'Yes' : 'No'}
+                        </Text>
+                    )}
+                </View>
+            );
+        }
+
+        // Render string/number
+        const fullWidthFields = ['address1', 'address2', 'note', 'notes', 'description'];
+        const isFullWidth = fullWidthFields.includes(k);
+
+        return (
+            <View style={style}>
+                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+                    {k}
+                </Text>
+                {isEditing ? (
+                    <TextInput
+                        mode="outlined"
+                        value={String(value)}
+                        onChangeText={(text) => onUpdate(k, text)}
+                        style={{ backgroundColor: theme.colors.surface }}
+                        multiline={isFullWidth}
+                        numberOfLines={isFullWidth ? 3 : 1}
+                    />
+                ) : (
+                    <Text variant="bodyLarge" selectable>
+                        {String(value) || '—'}
+                    </Text>
+                )}
+            </View>
+        );
+    };
+
     const { isMobile } = useResponsive();
 
     return (
@@ -979,90 +1061,17 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                             // Skip complex nested objects
                             if (value && typeof value === 'object' && !value.seconds) return null;
 
-                            // Render timestamp
-                            if (value && typeof value === 'object' && value.seconds) {
-                                const dateObj = new Date(value.seconds * 1000);
-                                const dateStr = dateObj.toLocaleString();
-                                return (
-                                    <View key={key} style={{ marginBottom: 16 }}>
-                                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
-                                            {key}
-                                        </Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <TouchableOpacity
-                                                disabled={!isEditing}
-                                                onPress={() => handleEditDate(key, value)}
-                                                style={{ flex: 1, paddingVertical: 4, borderBottomWidth: isEditing ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}
-                                            >
-                                                <Text variant="bodyLarge" style={{ color: isEditing ? theme.colors.onSurface : theme.colors.onSurface }}>
-                                                    {dateStr}
-                                                </Text>
-                                            </TouchableOpacity>
-
-                                            {isEditing && (
-                                                <IconButton
-                                                    icon="pencil"
-                                                    size={20}
-                                                    onPress={() => handleEditDate(key, value)}
-                                                    iconColor={theme.colors.primary}
-                                                />
-                                            )}
-                                        </View>
-                                    </View>
-                                );
-                            }
-
-                            // Render boolean
-                            if (typeof value === 'boolean') {
-                                return (
-                                    <View key={key} style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        marginBottom: 16,
-                                        paddingVertical: 8
-                                    }}>
-                                        <Text variant="bodyLarge">{key}</Text>
-                                        {isEditing ? (
-                                            <Switch
-                                                value={value}
-                                                onValueChange={(val) => updateField(key, val)}
-                                                color={theme.colors.primary}
-                                            />
-                                        ) : (
-                                            <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
-                                                {value ? 'Yes' : 'No'}
-                                            </Text>
-                                        )}
-                                    </View>
-                                );
-                            }
-
-                            // Full-width fields
-                            const fullWidthFields = ['address1', 'address2', 'note', 'notes'];
-                            const isFullWidth = fullWidthFields.includes(key);
-
-                            // Render string/number
                             return (
-                                <View key={key} style={{ marginBottom: 16 }}>
-                                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
-                                        {key}
-                                    </Text>
-                                    {isEditing ? (
-                                        <TextInput
-                                            mode="outlined"
-                                            value={String(value)}
-                                            onChangeText={(text) => updateField(key, text)}
-                                            style={{ backgroundColor: theme.colors.surface }}
-                                            multiline={isFullWidth}
-                                            numberOfLines={isFullWidth ? 3 : 1}
-                                        />
-                                    ) : (
-                                        <Text variant="bodyLarge" selectable>
-                                            {String(value) || '—'}
-                                        </Text>
-                                    )}
-                                </View>
+                                <EditFieldItem
+                                    key={key}
+                                    k={key}
+                                    value={value}
+                                    isEditing={isEditing}
+                                    onUpdate={updateField}
+                                    onEditDate={handleEditDate}
+                                    theme={theme}
+                                    style={{ marginBottom: 16 }}
+                                />
                             );
                         })}
                     </ScrollView>
@@ -1192,100 +1201,25 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                     // Skip complex nested objects for simplicity
                                     if (value && typeof value === 'object' && !value.seconds) return null;
 
-                                    // Render timestamp
-                                    if (value && typeof value === 'object' && value.seconds) {
-                                        const dateObj = new Date(value.seconds * 1000);
-                                        const dateStr = dateObj.toLocaleString();
-                                        return (
-                                            <View key={key} style={{
-                                                marginBottom: 20,
-                                                width: 'calc(50% - 8px)',
-                                                minWidth: 250
-                                            }}>
-                                                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
-                                                    {key}
-                                                </Text>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <TouchableOpacity
-                                                        disabled={!isEditing}
-                                                        onPress={() => handleEditDate(key, value)}
-                                                        style={{ flex: 1, paddingVertical: 4, borderBottomWidth: isEditing ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}
-                                                    >
-                                                        <Text variant="bodyLarge" style={{ color: isEditing ? theme.colors.onSurface : theme.colors.onSurface }}>
-                                                            {dateStr}
-                                                        </Text>
-                                                    </TouchableOpacity>
-
-                                                    {isEditing && (
-                                                        <IconButton
-                                                            icon="pencil"
-                                                            size={20}
-                                                            onPress={() => handleEditDate(key, value)}
-                                                            iconColor={theme.colors.primary}
-                                                        />
-                                                    )}
-                                                </View>
-                                            </View>
-                                        );
-                                    }
-
-                                    // Render boolean
-                                    if (typeof value === 'boolean') {
-                                        return (
-                                            <View key={key} style={{
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                marginBottom: 20,
-                                                paddingVertical: 8,
-                                                width: 'calc(50% - 8px)',
-                                                minWidth: 250
-                                            }}>
-                                                <Text variant="bodyLarge">{key}</Text>
-                                                {isEditing ? (
-                                                    <Switch
-                                                        value={value}
-                                                        onValueChange={(val) => updateField(key, val)}
-                                                        color={theme.colors.primary}
-                                                    />
-                                                ) : (
-                                                    <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
-                                                        {value ? 'Yes' : 'No'}
-                                                    </Text>
-                                                )}
-                                            </View>
-                                        );
-                                    }
-
-                                    // Full-width fields (address, notes)
-                                    const fullWidthFields = ['address1', 'address2', 'note', 'notes'];
+                                    // Desktop Grid Logic
+                                    const fullWidthFields = ['address1', 'address2', 'note', 'notes', 'description'];
                                     const isFullWidth = fullWidthFields.includes(key);
 
-                                    // Render string/number
                                     return (
-                                        <View key={key} style={{
-                                            marginBottom: 20,
-                                            width: isFullWidth ? '100%' : 'calc(50% - 8px)',
-                                            minWidth: isFullWidth ? '100%' : 250
-                                        }}>
-                                            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
-                                                {key}
-                                            </Text>
-                                            {isEditing ? (
-                                                <TextInput
-                                                    mode="outlined"
-                                                    value={String(value)}
-                                                    onChangeText={(text) => updateField(key, text)}
-                                                    style={{ backgroundColor: theme.colors.surface }}
-                                                    multiline={isFullWidth}
-                                                    numberOfLines={isFullWidth ? 3 : 1}
-                                                />
-                                            ) : (
-                                                <Text variant="bodyLarge" selectable>
-                                                    {String(value) || '—'}
-                                                </Text>
-                                            )}
-                                        </View>
+                                        <EditFieldItem
+                                            key={key}
+                                            k={key}
+                                            value={value}
+                                            isEditing={isEditing}
+                                            onUpdate={updateField}
+                                            onEditDate={handleEditDate}
+                                            theme={theme}
+                                            style={{
+                                                marginBottom: 20,
+                                                width: isFullWidth ? '100%' : 'calc(50% - 8px)',
+                                                minWidth: isFullWidth ? '100%' : 250
+                                            }}
+                                        />
                                     );
                                 })}
                             </View>
