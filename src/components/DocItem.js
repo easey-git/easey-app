@@ -1,5 +1,5 @@
 import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
-import { View, TouchableOpacity, TouchableWithoutFeedback, StyleSheet, Pressable } from 'react-native';
+import { View, TouchableOpacity, TouchableWithoutFeedback, StyleSheet } from 'react-native';
 import { Surface, Checkbox, Avatar, Text, IconButton, Chip, Icon, ActivityIndicator } from 'react-native-paper';
 import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
