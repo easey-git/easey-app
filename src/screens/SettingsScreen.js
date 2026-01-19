@@ -40,8 +40,7 @@ const SettingsScreen = ({ navigation }) => {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Avatar.Text size={56} label={user?.email?.charAt(0).toUpperCase() || "U"} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />
                     <View style={{ marginLeft: 16, flex: 1 }}>
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{user?.displayName || "User"}</Text>
-                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{user?.email || "No email"}</Text>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{user?.email || "No email"}</Text>
                     </View>
                 </View>
             </Surface>

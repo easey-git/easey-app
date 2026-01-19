@@ -11,11 +11,21 @@ import { AccessDenied } from '../components/AccessDenied';
  * Fully wired with all backend APIs
  */
 
+import { ActivityLogService } from '../services/activityLogService';
+import { useAuth } from '../context/AuthContext';
+import { AccessDenied } from '../components/AccessDenied';
+
+/**
+ * MetaScreen - Comprehensive Meta (Facebook/Instagram) Advertising Hub
+ * 
+ * Fully wired with all backend APIs
+ */
+
 const BASE_URL = 'https://easey-app.vercel.app/api';
 
 const MetaScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { hasPermission } = useAuth();
+    const { hasPermission, user } = useAuth();
     const { width } = useWindowDimensions();
     const isDesktop = width >= 768;
 
@@ -377,6 +387,16 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
             });
 
             if (response.ok) {
+                // Log Activity
+                if (user) {
+                    ActivityLogService.log(
+                        user.uid,
+                        user.email,
+                        'TOGGLE_CAMPAIGN_STATUS',
+                        `Toggled campaign ${campaignId} status to ${newStatus}`,
+                        { campaignId, newStatus }
+                    );
+                }
                 fetchData(); // Refresh data
             } else {
                 const errorData = await response.json();
@@ -461,8 +481,23 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                     ));
                     Alert.alert('Success', 'Ad Set budget updated');
                 } else {
-                    setEditingItem(null);
                     fetchData(); // Refresh campaign list
+                }
+
+                // Log Activity
+                if (user) {
+                    ActivityLogService.log(
+                        user.uid,
+                        user.email,
+                        'UPDATE_BUDGET',
+                        `Updated budget for ${isEditingAdSet ? 'AdSet' : 'Campaign'} ${editingItem.id}`,
+                        {
+                            itemId: editingItem.id,
+                            type: isEditingAdSet ? 'AdSet' : 'Campaign',
+                            amount: amount,
+                            budgetType: isLifetime ? 'lifetime' : 'daily'
+                        }
+                    );
                 }
             } else {
                 const errorData = await response.json();

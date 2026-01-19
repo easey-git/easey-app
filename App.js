@@ -17,6 +17,7 @@ import MetaScreen from './src/screens/MetaScreen';
 import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
 import LogisticsScreen from './src/screens/LogisticsScreen';
+import ActivityLogScreen from './src/screens/ActivityLogScreen';
 
 import AdminPanelScreen from './src/screens/AdminPanelScreen';
 
@@ -236,6 +237,11 @@ function AppStack() {
               name="Logistics"
               component={LogisticsScreen}
               options={{ title: 'Logistics' }}
+            />
+            <Stack.Screen
+              name="ActivityLog"
+              component={ActivityLogScreen}
+              options={{ title: 'Activity Logs' }}
             />
 
 

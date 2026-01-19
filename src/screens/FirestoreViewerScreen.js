@@ -7,6 +7,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { db, storage } from '../config/firebase';
 import DocItem from '../components/DocItem';
 import { CRMLayout } from '../components/CRMLayout';
+import { ActivityLogService } from '../services/activityLogService';
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
 import { useResponsive } from '../hooks/useResponsive';
@@ -327,6 +328,17 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
                 await batch.commit();
 
+                // Log Activity
+                if (user) {
+                    ActivityLogService.log(
+                        user.uid,
+                        user.email,
+                        'BULK_DELETE_DOCS',
+                        `Deleted ${itemsToDelete.length} docs from ${selectedCollection}`,
+                        { count: itemsToDelete.length, collection: selectedCollection }
+                    );
+                }
+
                 setSelectedItems(new Set());
                 fetchDocuments();
                 showSnackbar(`Successfully deleted ${itemsToDelete.length} documents`);
@@ -334,6 +346,18 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 // Always create a fresh reference from the current db instance
                 const docRef = doc(db, selectedCollection, pendingAction.id);
                 await deleteDoc(docRef);
+
+                // Log Activity
+                if (user) {
+                    ActivityLogService.log(
+                        user.uid,
+                        user.email,
+                        'DELETE_DOC',
+                        `Deleted doc ${pendingAction.id} from ${selectedCollection}`,
+                        { docId: pendingAction.id, collection: selectedCollection }
+                    );
+                }
+
                 setVisible(false);
                 fetchDocuments();
                 showSnackbar("Document deleted successfully");
@@ -386,6 +410,18 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             }
 
             await updateDoc(doc(db, selectedCollection, id), dataToUpdate);
+
+            // Log Activity
+            if (user) {
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'EDIT_DOC',
+                    `Edited doc ${id} in ${selectedCollection}`,
+                    { docId: id, collection: selectedCollection, changedFields }
+                );
+            }
+
             setIsEditing(false);
             fetchDocuments();
             showSnackbar("Document updated successfully");
@@ -401,6 +437,18 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 adminEdited: false,
                 adminModifiedFields: deleteField()
             });
+
+            // Log Activity
+            if (user) {
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'RESET_DOC_MODS',
+                    `Reset modifications for doc ${selectedDoc.id}`,
+                    { docId: selectedDoc.id, collection: selectedCollection }
+                );
+            }
+
             setVisible(false);
             fetchDocuments();
             showSnackbar("Modifications reset successfully");
@@ -582,6 +630,18 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         try {
             const newStatus = item.cod_status === 'confirmed' ? 'pending' : 'confirmed';
             await updateDoc(doc(db, selectedCollection, item.id), { cod_status: newStatus });
+
+            // Log Activity
+            if (user) {
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'UPDATE_STATUS',
+                    `Toggled COD status to ${newStatus} for doc ${item.id}`,
+                    { docId: item.id, collection: selectedCollection, newStatus }
+                );
+            }
+
             // Local state update (optional if real-time listener is fast enough, but good for UX)
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
             showSnackbar(`Order marked as ${newStatus}`);
@@ -597,6 +657,18 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 adminEdited: false,
                 adminModifiedFields: deleteField()
             });
+
+            // Log Activity
+            if (user) {
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'RESET_DOC_MODS',
+                    `Reset modifications for doc ${item.id}`,
+                    { docId: item.id, collection: selectedCollection }
+                );
+            }
+
             // Update local state immediately for snappy feel
             setDocuments(prev => prev.map(d => d.id === item.id ? {
                 ...d,
@@ -622,7 +694,20 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 const storageRef = ref(storage, fileName);
                 await uploadBytes(storageRef, blob);
                 const url = await getDownloadURL(storageRef);
+                const url = await getDownloadURL(storageRef);
                 await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: url, voiceNoteName: asset.name || 'Voice Note' });
+
+                // Log Activity
+                if (user) {
+                    ActivityLogService.log(
+                        user.uid,
+                        user.email,
+                        'ATTACH_VOICE_NOTE',
+                        `Attached voice note to doc ${item.id}`,
+                        { docId: item.id, collection: selectedCollection }
+                    );
+                }
+
                 setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: url, voiceNoteName: asset.name || 'Voice Note' } : d));
                 showSnackbar("Voice note attached");
                 return true;
@@ -649,6 +734,18 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             } catch (e) { console.warn("Storage delete failed", e); }
 
             await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: deleteField(), voiceNoteName: deleteField() });
+
+            // Log Activity
+            if (user) {
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'DELETE_VOICE_NOTE',
+                    `Deleted voice note from doc ${item.id}`,
+                    { docId: item.id, collection: selectedCollection }
+                );
+            }
+
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: undefined, voiceNoteName: undefined } : d));
             showSnackbar("Voice note deleted");
         } catch (err) {
@@ -665,6 +762,18 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // Assumption: Unchecking shipped means it goes back to active pool, usually 'confirmed' ready to ship.
             const newStatus = item.cod_status === 'shipped' ? 'confirmed' : 'shipped';
             await updateDoc(doc(db, selectedCollection, item.id), { cod_status: newStatus });
+
+            // Log Activity
+            if (user) {
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'UPDATE_STATUS',
+                    `Toggled SHIPPED status to ${newStatus} for doc ${item.id}`,
+                    { docId: item.id, collection: selectedCollection, newStatus }
+                );
+            }
+
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
             showSnackbar(`Order marked as ${newStatus.toUpperCase()}`);
         } catch (error) {
@@ -678,6 +787,18 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // Reverting from 'cancelled' goes back to 'pending' (neutral state).
             const newStatus = item.cod_status === 'cancelled' ? 'pending' : 'cancelled';
             await updateDoc(doc(db, selectedCollection, item.id), { cod_status: newStatus });
+
+            // Log Activity
+            if (user) {
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'UPDATE_STATUS',
+                    `Toggled CANCELLED status to ${newStatus} for doc ${item.id}`,
+                    { docId: item.id, collection: selectedCollection, newStatus }
+                );
+            }
+
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
             showSnackbar(`Order marked as ${newStatus.toUpperCase()}`);
         } catch (error) {

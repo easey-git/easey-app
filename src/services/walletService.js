@@ -1,5 +1,6 @@
 import { collection, doc, runTransaction, getDocs, query, serverTimestamp, orderBy, limit, startAfter } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { ActivityLogService } from './activityLogService';
 
 const STATS_DOC_ID = 'global';
 const STATS_COLLECTION = 'wallet_stats';
@@ -21,7 +22,7 @@ export const WalletService = {
     /**
      * Add a transaction and atomically update global stats
      */
-    addTransaction: async (transactionData) => {
+    addTransaction: async (transactionData, userId, userEmail) => {
         try {
             await runTransaction(db, async (transaction) => {
                 // 1. Create Ref for new Transaction
@@ -67,6 +68,18 @@ export const WalletService = {
                 transaction.set(newTxRef, { ...transactionData, date: serverTimestamp() });
                 transaction.set(statsRef, stats);
             });
+
+            // Log Activity
+            if (userId) {
+                ActivityLogService.log(
+                    userId,
+                    userEmail,
+                    'ADD_TRANSACTION',
+                    `Added ${transactionData.type} of ${transactionData.amount}`,
+                    { ...transactionData }
+                );
+            }
+
             return true;
         } catch (error) {
             console.error("WalletService.addTransaction failed:", error);
@@ -78,7 +91,7 @@ export const WalletService = {
      * Delete a transaction and reverse its effect on global stats
      * Safe: Reads the actual transaction record within the atomic window to ensure accurate reversal.
      */
-    deleteTransaction: async (transactionId) => {
+    deleteTransaction: async (transactionId, userId, userEmail) => {
         try {
             await runTransaction(db, async (transaction) => {
                 const txRef = doc(db, TRANSACTION_COLLECTION, transactionId);
@@ -139,6 +152,17 @@ export const WalletService = {
                 transaction.delete(txRef);
                 transaction.set(statsRef, stats);
             });
+
+            // Log Activity
+            if (userId) {
+                ActivityLogService.log(
+                    userId,
+                    userEmail,
+                    'DELETE_TRANSACTION',
+                    `Deleted transaction ${transactionId}`
+                );
+            }
+
             return true;
         } catch (error) {
             console.error("WalletService.deleteTransaction failed:", error);

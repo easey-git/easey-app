@@ -78,7 +78,7 @@ const StatChart = ({ title, data, theme }) => {
 
 const WalletScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { hasPermission } = useAuth();
+    const { hasPermission, user } = useAuth();
 
     if (!hasPermission('access_wallet')) {
         return <AccessDenied title="Wallet Restricted" message="You need permission to access financial records." />;
@@ -367,6 +367,8 @@ const WalletScreen = ({ navigation }) => {
                 description: description.trim(),
                 category,
                 type,
+                userId: user?.uid,
+                userEmail: user?.email
             });
             setVisible(false);
             setAmount('');
@@ -397,7 +399,7 @@ const WalletScreen = ({ navigation }) => {
             const docRef = doc(db, "wallet_transactions", id);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
-                await WalletService.deleteTransaction(id, docSnap.data());
+                await WalletService.deleteTransaction(id, user?.uid, user?.email);
             }
 
             if (Platform.OS !== 'web') {

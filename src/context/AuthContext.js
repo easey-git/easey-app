@@ -4,6 +4,8 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { ActivityLogService } from '../services/activityLogService';
+
 const AuthContext = createContext({});
 
 export const AuthProvider = ({ children }) => {
@@ -111,6 +113,13 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         try {
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            // Log Login
+            ActivityLogService.log(
+                userCredential.user.uid,
+                userCredential.user.email,
+                'LOGIN',
+                'User logged in via email/password'
+            );
             return { success: true, user: userCredential.user };
         } catch (error) {
             console.error('Login error:', error);
@@ -120,6 +129,14 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async () => {
         try {
+            if (user) {
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'LOGOUT',
+                    'User logged out'
+                );
+            }
             await signOut(auth);
             await AsyncStorage.removeItem('user');
             setRole(null);

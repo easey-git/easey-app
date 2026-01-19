@@ -6,6 +6,7 @@ import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import * as Clipboard from 'expo-clipboard';
 import { CRMLayout } from '../components/CRMLayout';
+import { ActivityLogService } from '../services/activityLogService';
 
 const NOTE_COLORS = [
     { value: 'default', label: 'Default' },
@@ -69,11 +70,35 @@ const NotesScreen = ({ navigation }) => {
 
             if (isEditing && currentNote.id) {
                 await updateDoc(doc(db, 'notes', currentNote.id), noteData);
+
+                // Log Activity
+                if (user) {
+                    ActivityLogService.log(
+                        user.uid,
+                        user.email,
+                        'UPDATE_NOTE',
+                        `Updated note ${currentNote.id}`,
+                        { noteId: currentNote.id }
+                    );
+                }
+
                 showSnackbar('Note updated');
             } else {
                 noteData.userId = user.uid;
                 noteData.createdAt = serverTimestamp();
-                await addDoc(collection(db, 'notes'), noteData);
+                const docRef = await addDoc(collection(db, 'notes'), noteData);
+
+                // Log Activity
+                if (user) {
+                    ActivityLogService.log(
+                        user.uid,
+                        user.email,
+                        'CREATE_NOTE',
+                        `Created new note`,
+                        { noteId: docRef.id, title: noteData.title }
+                    );
+                }
+
                 showSnackbar('Note created');
             }
             setVisible(false);
@@ -87,6 +112,18 @@ const NotesScreen = ({ navigation }) => {
         if (!currentNote.id) return;
         try {
             await deleteDoc(doc(db, 'notes', currentNote.id));
+
+            // Log Activity
+            if (user) {
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'DELETE_NOTE',
+                    `Deleted note ${currentNote.id}`,
+                    { noteId: currentNote.id }
+                );
+            }
+
             setVisible(false);
             showSnackbar('Note deleted');
         } catch (error) {

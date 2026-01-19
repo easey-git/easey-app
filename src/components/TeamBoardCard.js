@@ -4,6 +4,7 @@ import { Surface, Text, TextInput, useTheme, IconButton } from 'react-native-pap
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
+import { ActivityLogService } from '../services/activityLogService';
 
 export const TeamBoardCard = ({ style }) => {
     const theme = useTheme();
@@ -47,6 +48,16 @@ export const TeamBoardCard = ({ style }) => {
                     lastEditedBy: user.email || 'Unknown',
                     updatedAt: serverTimestamp()
                 }, { merge: true });
+
+                // Log Activity (Debounced auto-save)
+                ActivityLogService.log(
+                    user.uid,
+                    user.email,
+                    'UPDATE_TEAM_BOARD',
+                    `Updated team board content`,
+                    { contentLength: note.length }
+                );
+
                 // Status is handled by the listener's metadata.hasPendingWrites
             } catch (error) {
                 console.error("Error saving Team Board:", error);
