@@ -1,5 +1,5 @@
-import React, { memo, useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { View, TouchableOpacity, TouchableWithoutFeedback, StyleSheet, Pressable } from 'react-native';
 import { Surface, Checkbox, Avatar, Text, IconButton, Chip, Icon, ActivityIndicator } from 'react-native-paper';
 import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
@@ -69,10 +69,21 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
     const [isPlaying, setIsPlaying] = useState(false);
     const [isLoadingSound, setIsLoadingSound] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [position, setPosition] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [progressBarWidth, setProgressBarWidth] = useState(0);
 
     useEffect(() => {
         return sound ? () => { sound.unloadAsync(); } : undefined;
     }, [sound]);
+
+    // Format milliseconds to MM:SS
+    const formatTime = (millis) => {
+        if (!millis) return '0:00';
+        const minutes = Math.floor(millis / 60000);
+        const seconds = Math.floor((millis % 60000) / 1000);
+        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    };
 
     const handlePlayPause = async () => {
         if (!item.voiceNoteUrl) return;
@@ -97,15 +108,21 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                 setIsLoadingSound(true);
                 const { sound: newSound, status } = await Audio.Sound.createAsync(
                     { uri: item.voiceNoteUrl },
-                    { shouldPlay: true }
+                    { shouldPlay: true, progressUpdateIntervalMillis: 100 }
                 );
                 if (status.isLoaded) {
                     setSound(newSound);
                     setIsPlaying(true);
+                    setDuration(status.durationMillis || 0);
                     newSound.setOnPlaybackStatusUpdate(s => {
-                        if (s.didJustFinish) {
-                            setIsPlaying(false);
-                            newSound.stopAsync(); // Use stopAsync to prevent auto-replay loop if logic expects it
+                        if (s.isLoaded) {
+                            setPosition(s.positionMillis);
+                            setDuration(s.durationMillis || 0);
+                            if (s.didJustFinish) {
+                                setIsPlaying(false);
+                                setPosition(0);
+                                newSound.stopAsync();
+                            }
                         }
                     });
                 } else {
@@ -118,6 +135,80 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
             setIsLoadingSound(false);
         }
     };
+
+    // Seek to a specific position when user taps on progress bar
+    const progressBarRef = useRef(null);
+    const progressBarLayoutRef = useRef({ x: 0, width: 0 });
+
+    const handleSeek = useCallback(async (event) => {
+        const { pageX } = event.nativeEvent;
+        const { x: barX, width: barWidth } = progressBarLayoutRef.current;
+
+        if (barWidth === 0) return;
+
+        const touchX = pageX - barX;
+        const seekRatio = Math.max(0, Math.min(1, touchX / barWidth));
+
+        // If no sound loaded yet, load it first then seek
+        if (!sound) {
+            if (!item.voiceNoteUrl) return;
+            try {
+                setIsLoadingSound(true);
+                const { sound: newSound, status } = await Audio.Sound.createAsync(
+                    { uri: item.voiceNoteUrl },
+                    { shouldPlay: false, progressUpdateIntervalMillis: 100 }
+                );
+                if (status.isLoaded) {
+                    const targetDuration = status.durationMillis || 0;
+                    const seekPosition = seekRatio * targetDuration;
+                    setSound(newSound);
+                    setDuration(targetDuration);
+                    await newSound.setPositionAsync(seekPosition);
+                    setPosition(seekPosition);
+                    newSound.setOnPlaybackStatusUpdate(s => {
+                        if (s.isLoaded) {
+                            setPosition(s.positionMillis);
+                            setDuration(s.durationMillis || 0);
+                            if (s.didJustFinish) {
+                                setIsPlaying(false);
+                                setPosition(0);
+                                newSound.stopAsync();
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error("Seek Load Error:", error);
+            } finally {
+                setIsLoadingSound(false);
+            }
+            return;
+        }
+
+        // Sound already loaded - just seek
+        if (duration > 0) {
+            const seekPosition = seekRatio * duration;
+            try {
+                await sound.setPositionAsync(seekPosition);
+                setPosition(seekPosition);
+            } catch (error) {
+                console.error("Seek Error:", error);
+            }
+        }
+    }, [sound, duration, item.voiceNoteUrl]);
+
+    // Handle progress bar layout to get position and width
+    const handleProgressLayout = useCallback((event) => {
+        const { width } = event.nativeEvent.layout;
+        // Measure the absolute position of the progress bar
+        if (progressBarRef.current) {
+            progressBarRef.current.measureInWindow((x, y, measuredWidth, height) => {
+                progressBarLayoutRef.current = { x: x || 0, width: measuredWidth || width };
+            });
+        } else {
+            progressBarLayoutRef.current = { x: 0, width };
+        }
+    }, []);
 
     const handleUpload = async () => {
         if (!onAttachVoice) return;
@@ -566,33 +657,109 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                         </View>
 
                         {/* Voice Note Section */}
-                        <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ marginTop: 8 }}>
                             {item.voiceNoteUrl ? (
-                                <View style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: theme.colors.elevation.level2,
-                                    borderRadius: 24,
-                                    padding: 4,
-                                    height: 48
-                                }}>
-                                    <IconButton
-                                        icon={isPlaying ? "pause" : "play"}
-                                        mode="contained"
-                                        containerColor={theme.colors.primary}
-                                        iconColor={theme.colors.onPrimary}
-                                        size={24}
-                                        onPress={handlePlayPause}
-                                        loading={isLoadingSound}
-                                        disabled={isLoadingSound}
-                                    />
-                                    <IconButton
-                                        icon="delete"
-                                        size={20}
-                                        iconColor={theme.colors.error}
-                                        onPress={() => onDeleteVoice && onDeleteVoice(item)}
-                                    />
-                                </View>
+
+                                <TouchableWithoutFeedback onPress={(e) => e.stopPropagation?.()}>
+                                    <View style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: theme.colors.elevation.level2,
+                                        borderRadius: 16,
+                                        paddingVertical: 6,
+                                        paddingHorizontal: 8,
+                                        borderWidth: 1,
+                                        borderColor: theme.colors.outlineVariant
+                                    }}>
+                                        {/* Play/Pause Button */}
+                                        <View style={{
+                                            backgroundColor: theme.colors.primaryContainer,
+                                            borderRadius: 18,
+                                            marginRight: 10
+                                        }}>
+                                            <IconButton
+                                                icon={isPlaying ? "pause" : "play"}
+                                                iconColor={theme.colors.primary}
+                                                size={18}
+                                                onPress={handlePlayPause}
+                                                loading={isLoadingSound}
+                                                disabled={isLoadingSound}
+                                                style={{ margin: 0, width: 36, height: 36 }}
+                                            />
+                                        </View>
+
+                                        {/* Interactive Seek Bar */}
+                                        <View style={{ flex: 1, marginRight: 8 }}>
+                                            <View
+                                                ref={progressBarRef}
+                                                onLayout={handleProgressLayout}
+                                                onStartShouldSetResponder={() => true}
+                                                onMoveShouldSetResponder={() => true}
+                                                onResponderTerminationRequest={() => false}
+                                                onResponderGrant={handleSeek}
+                                                onResponderMove={handleSeek}
+                                                style={{
+                                                    height: 28,
+                                                    justifyContent: 'center',
+                                                    marginBottom: 2,
+                                                }}
+                                            >
+                                                {/* Track Background */}
+                                                <View style={{
+                                                    height: 6,
+                                                    backgroundColor: theme.colors.surfaceVariant,
+                                                    borderRadius: 3,
+                                                    overflow: 'visible',
+                                                    position: 'relative'
+                                                }}>
+                                                    {/* Progress Fill */}
+                                                    <View style={{
+                                                        height: '100%',
+                                                        width: `${(position / (duration || 1)) * 100}%`,
+                                                        backgroundColor: theme.colors.primary,
+                                                        borderRadius: 3
+                                                    }} />
+                                                    {/* Seek Thumb */}
+                                                    <View style={{
+                                                        position: 'absolute',
+                                                        left: `${(position / (duration || 1)) * 100}%`,
+                                                        top: '50%',
+                                                        transform: [{ translateX: -7 }, { translateY: -7 }],
+                                                        width: 14,
+                                                        height: 14,
+                                                        borderRadius: 7,
+                                                        backgroundColor: theme.colors.primary,
+                                                        borderWidth: 2,
+                                                        borderColor: theme.colors.surface,
+                                                        elevation: 3,
+                                                        shadowColor: '#000',
+                                                        shadowOffset: { width: 0, height: 2 },
+                                                        shadowOpacity: 0.25,
+                                                        shadowRadius: 2
+                                                    }} />
+                                                </View>
+                                            </View>
+                                            {/* Time Labels */}
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 9, fontWeight: '600' }}>
+                                                    {formatTime(position)}
+                                                </Text>
+                                                <Text variant="labelSmall" style={{ color: theme.colors.outline, fontSize: 9 }}>
+                                                    {formatTime(duration)}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Delete Button */}
+                                        <IconButton
+                                            icon="delete-outline"
+                                            size={18}
+                                            iconColor={theme.colors.error}
+                                            style={{ margin: 0, width: 32, height: 32 }}
+                                            onPress={() => onDeleteVoice && onDeleteVoice(item)}
+                                        />
+                                    </View>
+                                </TouchableWithoutFeedback>
                             ) : (
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     {isUploading ? (
@@ -609,7 +776,8 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                         </Chip>
                                     )}
                                 </View>
-                            )}
+                            )
+                            }
                         </View>
 
                         {/* Bottom Row: Tags (Status chips flow naturally here) */}
