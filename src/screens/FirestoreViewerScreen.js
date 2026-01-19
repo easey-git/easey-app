@@ -105,39 +105,70 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     };
 
     // Filter Persistence
-    const [knownAttributes, setKnownAttributes] = useState({ events: new Set(), stages: new Set() });
+    const [knownAttributes, setKnownAttributes] = useState({ events: new Set(), stages: new Set(), financialStatuses: new Set(), paymentGateways: new Set() });
 
+    // 1. Reset Filters & Attributes when Collection Changes
     useEffect(() => {
-        setDocuments([]); // Clear data to prevent layout glitch during tab switch
+        setKnownAttributes({ events: new Set(), stages: new Set(), financialStatuses: new Set(), paymentGateways: new Set() });
+        // Optional: Ensure filter is cleared if it's not the initial route param (logic handled elsewhere or acceptable side effect)
+    }, [selectedCollection]);
+
+    // 2. Fetch Data when Collection OR Filter changes
+    useEffect(() => {
+        setDocuments([]);
         fetchDocuments();
         setSelectedItems(new Set());
-        // Reset known attributes when switching collections completely
-        if (!filter) {
-            // Optional: You might want to keep them, but clearing on collection switch is safer
-            // actually no, let's keep them expanding as long as we are in checkouts.
-        }
-    }, [selectedCollection, filter]); // Re-fetch when filter changes
+    }, [selectedCollection, filter]);
 
     // Update Known Attributes whenever documents successfully load
+    // Update Known Attributes whenever documents successfully load
     useEffect(() => {
-        if (selectedCollection === 'checkouts' && documents.length > 0) {
+        if (documents.length > 0) {
             setKnownAttributes(prev => {
                 const newEvents = new Set(prev.events);
                 const newStages = new Set(prev.stages);
+                const newFinancial = new Set(prev.financialStatuses || []);
+                const newGateways = new Set(prev.paymentGateways || []);
                 let changed = false;
 
-                documents.forEach(doc => {
-                    if (doc.eventType && !newEvents.has(doc.eventType)) {
-                        newEvents.add(doc.eventType);
-                        changed = true;
-                    }
-                    if (doc.latest_stage && !newStages.has(doc.latest_stage)) {
-                        newStages.add(doc.latest_stage);
-                        changed = true;
-                    }
-                });
+                if (selectedCollection === 'checkouts') {
+                    documents.forEach(doc => {
+                        if (doc.eventType && !newEvents.has(doc.eventType)) {
+                            newEvents.add(doc.eventType);
+                            changed = true;
+                        }
+                        if (doc.latest_stage && !newStages.has(doc.latest_stage)) {
+                            newStages.add(doc.latest_stage);
+                            changed = true;
+                        }
+                    });
+                    return changed ? { ...prev, events: newEvents, stages: newStages } : prev;
+                } else if (selectedCollection === 'orders') {
+                    documents.forEach(doc => {
+                        // COD Status
+                        if (doc.cod_status && !newStages.has(doc.cod_status)) {
+                            newStages.add(doc.cod_status);
+                            changed = true;
+                        }
+                        // Financial Status
+                        if (doc.financial_status && !newFinancial.has(doc.financial_status)) {
+                            newFinancial.add(doc.financial_status);
+                            changed = true;
+                        }
+                        // Payment Gateways
+                        if (doc.payment_gateway_names && Array.isArray(doc.payment_gateway_names)) {
+                            doc.payment_gateway_names.forEach(py => {
+                                if (py && !newGateways.has(py)) {
+                                    newGateways.add(py);
+                                    changed = true;
+                                }
+                            });
+                        }
+                    });
+                    return changed ? { ...prev, stages: newStages, financialStatuses: newFinancial, paymentGateways: newGateways } : prev;
+                }
 
-                return changed ? { events: newEvents, stages: newStages } : prev;
+                return prev;
             });
         }
     }, [documents, selectedCollection]);
@@ -147,7 +178,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         try {
             let constraints = [];
             if (filter) {
-                constraints.push(where(filter.field, "==", filter.value));
+                const op = filter.operator || "==";
+                constraints.push(where(filter.field, op, filter.value));
             }
 
             // Determine correct sort field based on collection schema
@@ -527,6 +559,19 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     };
 
+    const handleCancelToggle = async (item) => {
+        try {
+            // Reverting from 'cancelled' goes back to 'pending' (neutral state).
+            const newStatus = item.cod_status === 'cancelled' ? 'pending' : 'cancelled';
+            await updateDoc(doc(db, selectedCollection, item.id), { cod_status: newStatus });
+            setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
+            showSnackbar(`Order marked as ${newStatus.toUpperCase()}`);
+        } catch (error) {
+            console.error("Error toggling Cancelled status:", error);
+            showSnackbar("Failed to update status", true);
+        }
+    };
+
     const renderDocItem = useCallback(({ item }) => {
         const isSelected = selectedItems.has(item.id);
         return (
@@ -543,6 +588,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 onAttachVoice={handleAttachVoice}
                 onDeleteVoice={handleDeleteVoice}
                 onShippedToggle={handleShippedToggle}
+                onCancelToggle={handleCancelToggle}
             />
         );
     }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection, role, handleCodToggle, handleResetItem, handleAttachVoice, handleDeleteVoice, handleShippedToggle]);
@@ -599,18 +645,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 </View>
             )}
 
-            {filter && (
-                <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-                    <Chip
-                        icon="filter-remove"
-                        onClose={() => setFilter(null)}
-                        mode="outlined"
-                        style={{ alignSelf: 'flex-start' }}
-                    >
-                        Filtering by {filter.value.toUpperCase()}
-                    </Chip>
-                </View>
-            )}
+
 
             <View style={{ paddingVertical: 12 }}>
                 <FlatList
@@ -645,32 +680,79 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             </View>
 
             {/* DYNAMIC FILTERS FOR CHECKOUTS */}
-            {selectedCollection === 'checkouts' && (
+            {/* DYNAMIC FILTERS FOR DOCUMENTS */}
+            {(selectedCollection === 'checkouts' || selectedCollection === 'orders') && (
                 <View style={{ paddingVertical: 8 }}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
                         {(() => {
-                            // Use KNOWN attributes + 'All'
-                            const dynamicFilters = [{ label: 'All', value: null }];
+                            // Configuration Driven Filters
+                            const FILTER_CONFIG = {
+                                orders: [
+                                    { label: 'All', value: null },
+                                    { label: 'TODAY', field: 'createdAt', operator: '>=', value: 'TODAY_DATE_PLACEHOLDER' }, // Special handling
+                                    { label: 'COD', field: 'status', value: 'COD' },
+                                    { label: 'PAID', field: 'status', value: 'Paid' },
+                                    { label: 'CONFIRMED', field: 'cod_status', value: 'confirmed' },
+                                    { label: 'PENDING', field: 'cod_status', value: 'pending' },
+                                    { label: 'CANCELLED', field: 'cod_status', value: 'cancelled' },
+                                    { label: 'SHIPPED', field: 'cod_status', value: 'shipped' }
+                                ],
+                                checkouts: [
+                                    { label: 'All', value: null },
+                                    { label: 'BEGIN CHECKOUT', field: 'eventType', value: 'BEGIN_CHECKOUT' },
+                                    { label: 'ADD SHIPPING', field: 'eventType', value: 'ADD_SHIPPING_INFO' },
+                                    { label: 'ADD PAYMENT', field: 'eventType', value: 'ADD_PAYMENT_INFO' },
+                                    { label: 'PURCHASE', field: 'eventType', value: 'PURCHASE' },
+                                    { label: 'ABANDONED', field: 'eventType', value: 'ABANDONED' }
+                                ]
+                            };
 
-                            // Add Event Types
-                            Array.from(knownAttributes.events).sort().forEach(evt => {
-                                dynamicFilters.push({ label: evt.replace(/_/g, ' '), value: evt, field: 'eventType' });
-                            });
+                            const filters = FILTER_CONFIG[selectedCollection] || [];
 
-                            // Add Stages
-                            Array.from(knownAttributes.stages).sort().forEach(stage => {
-                                dynamicFilters.push({ label: stage, value: stage, field: 'latest_stage' });
-                            });
+                            return filters.map((f, index) => {
+                                // Calculate dynamic values if needed
+                                let queryValue = f.value;
 
-                            // 3. Render Chips
-                            return dynamicFilters.map((f) => {
-                                const isSelected = f.value === null ? !filter : (filter && filter.value === f.value);
+                                // Handle Special 'TODAY' Logic
+                                if (f.label === 'TODAY') {
+                                    const todayStart = new Date();
+                                    todayStart.setHours(0, 0, 0, 0);
+                                    queryValue = Timestamp.fromDate(todayStart);
+                                }
+
+                                // Selection State Logic
+                                let isSelected = false;
+                                if (!filter && f.value === null) {
+                                    isSelected = true;
+                                } else if (filter && f.value !== null) {
+                                    const filterOp = filter.operator || '==';
+                                    const configOp = f.operator || '==';
+
+                                    if (filter.field === f.field && filterOp === configOp) {
+                                        if (f.label === 'TODAY') isSelected = true;
+                                        else isSelected = filter.value === queryValue;
+                                    }
+                                }
+
                                 return (
                                     <Chip
-                                        key={`${f.field}-${f.value}`} // Unique key
+                                        key={`${f.field}-${f.label}-${index}`}
                                         icon={isSelected ? 'check' : undefined}
-                                        onPress={() => setFilter(f.value ? { field: f.field, value: f.value } : null)}
-                                        style={{ backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface }}
+                                        onPress={() => setFilter(f.value !== null ? {
+                                            field: f.field,
+                                            operator: f.operator || '==',
+                                            value: queryValue,
+                                            label: f.label
+                                        } : null)}
+                                        style={{
+                                            backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface,
+                                            borderColor: isSelected ? theme.colors.secondaryContainer : theme.colors.outlineVariant,
+                                            borderWidth: 1
+                                        }}
+                                        textStyle={{
+                                            fontWeight: isSelected ? '700' : '400',
+                                            color: isSelected ? theme.colors.onSecondaryContainer : theme.colors.onSurface
+                                        }}
                                     >
                                         {f.label}
                                     </Chip>

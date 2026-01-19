@@ -60,7 +60,7 @@ const RecoverButton = ({ link, theme }) => {
     );
 };
 
-const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset, onAttachVoice, onDeleteVoice, onShippedToggle }) => {
+const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset, onAttachVoice, onDeleteVoice, onShippedToggle, onCancelToggle }) => {
     const { isMobile } = useResponsive();
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
 
@@ -815,8 +815,8 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 </Chip>
                             )}
 
-                            {/* COD Confirmation Status (Active if COD and NOT Shipped) */}
-                            {(isCOD && selectedCollection !== 'checkouts' && item.cod_status !== 'shipped') && (
+                            {/* COD Confirmation Status (Active if COD and NOT Shipped and NOT Cancelled) */}
+                            {(isCOD && selectedCollection !== 'checkouts' && item.cod_status !== 'shipped' && item.cod_status !== 'cancelled') && (
                                 <Chip
                                     mode="flat"
                                     compact
@@ -827,7 +827,7 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                         borderWidth: 1
                                     }]}
                                     textStyle={{
-                                        fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold',
+                                        fontSize: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold',
                                         color: item.cod_status === 'confirmed' ? '#166534' : '#9a3412'
                                     }}
                                 >
@@ -835,7 +835,29 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 </Chip>
                             )}
 
-                            {/* Shipped Status (Visible if Shipped OR Admin and Confirmed) */}
+                            {/* CANCELLED Status Chip */}
+                            {(selectedCollection !== 'checkouts' && item.cod_status !== 'shipped') && (
+                                <Chip
+                                    mode="flat"
+                                    compact
+                                    onPress={() => onCancelToggle && onCancelToggle(item)}
+                                    style={[styles.chip, {
+                                        backgroundColor: item.cod_status === 'cancelled' ? theme.colors.errorContainer : 'transparent',
+                                        borderColor: theme.colors.error,
+                                        borderWidth: 1,
+                                        opacity: 1, // Always visible to allow cancelling
+                                        height: 32 // Explicit height for better touch target
+                                    }]}
+                                    textStyle={{
+                                        fontSize: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold',
+                                        color: item.cod_status === 'cancelled' ? theme.colors.onErrorContainer : theme.colors.error
+                                    }}
+                                >
+                                    {item.cod_status === 'cancelled' ? 'CANCELLED' : 'CANCEL'}
+                                </Chip>
+                            )}
+
+                            {/* Shipped Status (Visible if Shipped OR (Admin and Confirmed and NOT Cancelled)) */}
                             {selectedCollection !== 'checkouts' && (item.cod_status === 'shipped' || (isAdmin && item.cod_status === 'confirmed')) && (
                                 <Chip
                                     mode="flat"
@@ -846,10 +868,11 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                         backgroundColor: item.cod_status === 'shipped' ? theme.colors.primary : 'transparent',
                                         borderColor: theme.colors.primary,
                                         borderWidth: 1,
-                                        opacity: (item.cod_status === 'shipped' || isAdmin) ? 1 : 0.7
+                                        opacity: (item.cod_status === 'shipped' || isAdmin) ? 1 : 0.7,
+                                        height: 32 // Explicit height for better touch target
                                     }]}
                                     textStyle={{
-                                        fontSize: 10, lineHeight: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold',
+                                        fontSize: 10, marginVertical: 0, marginHorizontal: 4, fontWeight: 'bold',
                                         color: item.cod_status === 'shipped' ? theme.colors.onPrimary : theme.colors.primary
                                     }}
                                 >

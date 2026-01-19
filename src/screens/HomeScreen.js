@@ -39,6 +39,7 @@ const HomeScreen = ({ navigation }) => {
     const prevOrdersRef = React.useRef(0);
     const [timeRange, setTimeRange] = useState('today');
     const [stats, setStats] = useState({ sales: 0, orders: 0, aov: 0, activeCarts: 0 });
+    const [todayOrders, setTodayOrders] = useState(0);
     const [workQueue, setWorkQueue] = useState({ pending: 0, confirmed: 0 });
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -59,7 +60,16 @@ const HomeScreen = ({ navigation }) => {
         }, (error) => {
             // Silently handle error
         });
-        return () => unsubscribe();
+
+        // Listen for Today's Orders specifically
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const todayQuery = query(collection(db, "orders"), where("createdAt", ">=", Timestamp.fromDate(now)));
+        const unsubToday = onSnapshot(todayQuery, (snap) => {
+            setTodayOrders(snap.size);
+        });
+
+        return () => { unsubscribe(); unsubToday(); };
     }, []);
 
     useEffect(() => {
@@ -187,7 +197,20 @@ const HomeScreen = ({ navigation }) => {
             {/* Main Stats Row - 6 Columns */}
             <View style={{ flexDirection: 'row', gap: 16 }}>
                 {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>}
-                {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Orders" value={stats.orders} icon="package-variant" theme={theme} /></View>}
+                {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard
+                    label="Today"
+                    value={todayOrders}
+                    icon="package-variant"
+                    onPress={() => {
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0);
+                        navigation.navigate('DatabaseManager', {
+                            collection: 'orders',
+                            filter: { field: 'createdAt', operator: '>=', value: Timestamp.fromDate(now), label: 'Today' }
+                        });
+                    }}
+                    theme={theme}
+                /></View>}
                 {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Pending" value={workQueue.pending} icon="clock-alert-outline" color={theme.colors.errorContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'pending' } })} theme={theme} /></View>}
                 {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Confirmed" value={workQueue.confirmed} icon="check-circle-outline" color={theme.colors.secondaryContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'confirmed' } })} theme={theme} /></View>}
                 {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" theme={theme} /></View>}
@@ -232,7 +255,20 @@ const HomeScreen = ({ navigation }) => {
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
                 {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>}
-                {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Orders" value={stats.orders} icon="package-variant" theme={theme} /></View>}
+                {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard
+                    label="Today"
+                    value={todayOrders}
+                    icon="package-variant"
+                    onPress={() => {
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0);
+                        navigation.navigate('DatabaseManager', {
+                            collection: 'orders',
+                            filter: { field: 'createdAt', operator: '>=', value: Timestamp.fromDate(now), label: 'Today' }
+                        });
+                    }}
+                    theme={theme}
+                /></View>}
             </View>
 
             {hasPermission('view_order_stats') && (
