@@ -351,12 +351,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 if (user) {
                     const deletedDoc = documents.find(d => d.id === pendingAction.id);
                     const docIdentifier = deletedDoc?.order_number ? `#${deletedDoc.order_number}` : pendingAction.id;
+                    const meta = { docId: pendingAction.id, collection: selectedCollection };
+                    if (deletedDoc?.order_number) meta.orderNumber = deletedDoc.order_number;
                     ActivityLogService.log(
                         user.uid,
                         user.email,
                         'DELETE_DOC',
                         `Deleted ${docIdentifier} from ${selectedCollection}`,
-                        { docId: pendingAction.id, orderNumber: deletedDoc?.order_number, collection: selectedCollection }
+                        meta
                     );
                 }
 
@@ -416,12 +418,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // Log Activity
             if (user) {
                 const docIdentifier = selectedDoc.order_number ? `#${selectedDoc.order_number}` : id;
+                const meta = { docId: id, collection: selectedCollection, changedFields };
+                if (selectedDoc.order_number) meta.orderNumber = selectedDoc.order_number;
                 ActivityLogService.log(
                     user.uid,
                     user.email,
                     'EDIT_DOC',
                     `Edited doc ${docIdentifier} in ${selectedCollection}`,
-                    { docId: id, orderNumber: selectedDoc.order_number, collection: selectedCollection, changedFields }
+                    meta
                 );
             }
 
@@ -444,12 +448,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // Log Activity
             if (user) {
                 const docIdentifier = selectedDoc.order_number ? `#${selectedDoc.order_number}` : selectedDoc.id;
+                const meta = { docId: selectedDoc.id, collection: selectedCollection };
+                if (selectedDoc.order_number) meta.orderNumber = selectedDoc.order_number;
                 ActivityLogService.log(
                     user.uid,
                     user.email,
                     'RESET_DOC_MODS',
                     `Reset modifications for ${docIdentifier}`,
-                    { docId: selectedDoc.id, orderNumber: selectedDoc.order_number, collection: selectedCollection }
+                    meta
                 );
             }
 
@@ -638,12 +644,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // Log Activity
             if (user) {
                 const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
+                const meta = { docId: item.id, collection: selectedCollection, newStatus };
+                if (item.order_number) meta.orderNumber = item.order_number;
                 ActivityLogService.log(
                     user.uid,
                     user.email,
                     'UPDATE_STATUS',
                     `Toggled COD status to ${newStatus} for ${docIdentifier}`,
-                    { docId: item.id, orderNumber: item.order_number, collection: selectedCollection, newStatus }
+                    meta
                 );
             }
 
@@ -666,12 +674,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // Log Activity
             if (user) {
                 const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
+                const meta = { docId: item.id, collection: selectedCollection };
+                if (item.order_number) meta.orderNumber = item.order_number;
                 ActivityLogService.log(
                     user.uid,
                     user.email,
                     'RESET_DOC_MODS',
                     `Reset modifications for ${docIdentifier}`,
-                    { docId: item.id, orderNumber: item.order_number, collection: selectedCollection }
+                    meta
                 );
             }
 
@@ -705,12 +715,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 // Log Activity
                 if (user) {
                     const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
+                    const meta = { docId: item.id, collection: selectedCollection };
+                    if (item.order_number) meta.orderNumber = item.order_number;
                     ActivityLogService.log(
                         user.uid,
                         user.email,
                         'ATTACH_VOICE_NOTE',
                         `Attached voice note to ${docIdentifier}`,
-                        { docId: item.id, orderNumber: item.order_number, collection: selectedCollection }
+                        meta
                     );
                 }
 
@@ -744,12 +756,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // Log Activity
             if (user) {
                 const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
+                const meta = { docId: item.id, collection: selectedCollection };
+                if (item.order_number) meta.orderNumber = item.order_number;
                 ActivityLogService.log(
                     user.uid,
                     user.email,
                     'DELETE_VOICE_NOTE',
                     `Deleted voice note from ${docIdentifier}`,
-                    { docId: item.id, orderNumber: item.order_number, collection: selectedCollection }
+                    meta
                 );
             }
 
@@ -773,12 +787,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // Log Activity
             if (user) {
                 const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
+                const meta = { docId: item.id, collection: selectedCollection, newStatus };
+                if (item.order_number) meta.orderNumber = item.order_number;
                 ActivityLogService.log(
                     user.uid,
                     user.email,
                     'UPDATE_STATUS',
                     `Toggled SHIPPED status to ${newStatus} for ${docIdentifier}`,
-                    { docId: item.id, orderNumber: item.order_number, collection: selectedCollection, newStatus }
+                    meta
                 );
             }
 
@@ -799,12 +815,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             // Log Activity
             if (user) {
                 const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
+                const meta = { docId: item.id, collection: selectedCollection, newStatus };
+                if (item.order_number) meta.orderNumber = item.order_number;
                 ActivityLogService.log(
                     user.uid,
                     user.email,
                     'UPDATE_STATUS',
                     `Toggled CANCELLED status to ${newStatus} for ${docIdentifier}`,
-                    { docId: item.id, orderNumber: item.order_number, collection: selectedCollection, newStatus }
+                    meta
                 );
             }
 
