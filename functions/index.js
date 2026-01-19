@@ -21,3 +21,6 @@ exports.toggleUserStatus = manageUsers.toggleUserStatus;
 
 // To add new domains:
 // exports.orderTriggers = require('./triggers/orders');
+// Export Utilities (Scheduled)
+const utilsTriggers = require('./triggers/utils');
+exports.cleanupOldLogs = utilsTriggers.cleanupOldLogs;

@@ -12,14 +12,6 @@ import { AccessDenied } from '../components/AccessDenied';
  */
 
 import { ActivityLogService } from '../services/activityLogService';
-import { useAuth } from '../context/AuthContext';
-import { AccessDenied } from '../components/AccessDenied';
-
-/**
- * MetaScreen - Comprehensive Meta (Facebook/Instagram) Advertising Hub
- * 
- * Fully wired with all backend APIs
- */
 
 const BASE_URL = 'https://easey-app.vercel.app/api';
 

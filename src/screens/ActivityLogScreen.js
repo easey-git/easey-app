@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, FlatList, StyleSheet } from 'react-native';
+import { View, FlatList, StyleSheet, Platform } from 'react-native';
 import { Text, useTheme, Surface, Avatar, Chip, ActivityIndicator, List, Icon } from 'react-native-paper';
 import { collection, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore';
 import { db } from '../config/firebase';

@@ -31,7 +31,7 @@ const SERVICES = [
 const LogisticsScreen = ({ navigation }) => {
     const theme = useTheme();
     const { hasPermission } = useAuth();
-    const [activeServiceId, setActiveServiceId] = useState('shipments');
+
 
     if (!hasPermission('access_logistics')) {
         return <AccessDenied title="Logistics Restricted" message="You need permission to access logistics operations." />;

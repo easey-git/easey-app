@@ -694,7 +694,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 const storageRef = ref(storage, fileName);
                 await uploadBytes(storageRef, blob);
                 const url = await getDownloadURL(storageRef);
-                const url = await getDownloadURL(storageRef);
                 await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: url, voiceNoteName: asset.name || 'Voice Note' });
 
                 // Log Activity

@@ -122,7 +122,11 @@ service cloud.firestore {
     // 8. Chat System - Open Model
 
 
-    // Fallback: Default Deny for everything else
+    // 9. Activity Logs
+    match /activity_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if request.auth != null; // Append-only for audit trail
+    }
     match /{document=**} {
       allow read, write: if false; 
     }
