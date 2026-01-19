@@ -217,6 +217,176 @@ const RecoverButton = ({ link, theme }) => {
     );
 };
 
+const SalesChartSection = React.memo(({ chartData, theme, screenWidth }) => (
+    <Surface style={[styles.chartContainer, { backgroundColor: theme.colors.surface }]} elevation={0}>
+        <View style={{ padding: 16 }}>
+            <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Sales Performance</Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Hourly breakdown of today's revenue</Text>
+        </View>
+        <LineChart
+            data={(chartData.datasets[0]?.data || [0]).map((value, index) => ({
+                value: value,
+                label: chartData.labels?.[index] || '',
+                labelTextStyle: { color: theme.colors.outline, fontSize: 10 },
+                orderCount: chartData.datasets[0]?.orderCounts?.[index] || 0,
+                dateLabel: chartData.fullLabels?.[index] || ''
+            }))}
+            height={180}
+            width={screenWidth - 40}
+            thickness={3}
+            color={theme.colors.primary}
+            startFillColor={theme.colors.primary}
+            endFillColor={theme.colors.background}
+            startOpacity={0.2}
+            endOpacity={0.0}
+            spacing={60}
+            initialSpacing={20}
+            noOfSections={4}
+            yAxisColor="transparent"
+            xAxisColor="transparent"
+            yAxisTextStyle={{ color: theme.colors.outline, fontSize: 10 }}
+            rulesType="dashed"
+            rulesColor={theme.colors.outlineVariant}
+            hideDataPoints={false}
+            dataPointsColor={theme.colors.primary}
+            curved
+            areaChart
+            pointerConfig={{
+                pointerStripHeight: 160,
+                pointerStripColor: theme.colors.primary,
+                pointerColor: theme.colors.primary,
+                radius: 6,
+                pointerLabelWidth: 120,
+                pointerLabelHeight: 90,
+                activatePointersOnLongPress: true,
+                autoAdjustPointerLabelPosition: true,
+                pointerLabelComponent: items => {
+                    const item = items[0];
+                    return (
+                        <View style={{ height: 90, width: 120, justifyContent: 'center', backgroundColor: theme.colors.inverseSurface, borderRadius: 8, padding: 8 }}>
+                            <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 10, textAlign: 'center', opacity: 0.8, marginBottom: 2 }}>
+                                {item.dateLabel.replace(item.label, '').trim()}
+                            </Text>
+                            <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 14, fontWeight: 'bold', textAlign: 'center' }}>
+                                ₹{Math.round(item.value).toLocaleString()}
+                            </Text>
+                            <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 10, textAlign: 'center', marginTop: 2, fontWeight: 'bold' }}>
+                                {item.orderCount} {item.orderCount === 1 ? 'Order' : 'Orders'}
+                            </Text>
+                        </View>
+                    );
+                },
+            }}
+        />
+    </Surface>
+));
+
+const LiveFeedSection = React.memo(({ recentActivity, navigation, theme }) => {
+    const [selectedDoc, setSelectedDoc] = useState(null);
+    const [modalVisible, setModalVisible] = useState(false);
+
+    return (
+        <View style={{ marginTop: 24, paddingBottom: 40 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.error }} />
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Live Checkout Feed</Text>
+                </View>
+                <Button
+                    compact
+                    mode="text"
+                    onPress={() => navigation.navigate('DatabaseManager', { collection: 'checkouts' })}
+                >
+                    History
+                </Button>
+            </View>
+
+            {recentActivity.map((item) => (
+                <LiveFeedItem
+                    key={item.id}
+                    item={item}
+                    theme={theme}
+                    onPress={(doc) => { setSelectedDoc(doc); setModalVisible(true); }}
+                />
+            ))}
+
+            <Portal>
+                <Dialog visible={modalVisible} onDismiss={() => setModalVisible(false)} style={{ maxHeight: '85%', maxWidth: 450, width: '100%', alignSelf: 'center' }}>
+                    <Dialog.Title>Checkout Details</Dialog.Title>
+                    <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0 }}>
+                        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 8 }}>
+                            {selectedDoc && (
+                                <View>
+                                    {(selectedDoc.img_url || (selectedDoc.items && selectedDoc.items.length > 0 && selectedDoc.items[0].img_url)) && (
+                                        <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                                            <Image
+                                                source={{ uri: selectedDoc.img_url || selectedDoc.items[0].img_url }}
+                                                style={{ width: 100, height: 100, borderRadius: 8, backgroundColor: theme.colors.surfaceVariant }}
+                                                resizeMode="cover"
+                                            />
+                                        </View>
+                                    )}
+
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Customer</Text>
+                                        <Text variant="bodyLarge">{selectedDoc.customerName || selectedDoc.first_name || selectedDoc.phone || 'Visitor'}</Text>
+                                        {selectedDoc.email && <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>{selectedDoc.email}</Text>}
+                                        {selectedDoc.phone && <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>{selectedDoc.phone}</Text>}
+                                    </View>
+
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                                        <Chip compact>{selectedDoc.status}</Chip>
+                                        {selectedDoc.rtoPredict && (
+                                            <Chip compact mode="outlined" style={{ backgroundColor: selectedDoc.rtoPredict === 'low' ? theme.colors.tertiaryContainer : theme.colors.errorContainer }}>
+                                                {selectedDoc.rtoPredict.toUpperCase()} RTO
+                                            </Chip>
+                                        )}
+                                        {selectedDoc.payment_method && (
+                                            <Chip compact mode="outlined">{selectedDoc.payment_method}</Chip>
+                                        )}
+                                    </View>
+
+                                    {(selectedDoc.checkout_url || selectedDoc.custom_attributes?.landing_page_url) && (
+                                        <RecoverButton
+                                            link={selectedDoc.checkout_url || selectedDoc.custom_attributes?.landing_page_url}
+                                            theme={theme}
+                                        />
+                                    )}
+
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Total Amount</Text>
+                                        <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || selectedDoc.cart?.totalPrice || selectedDoc.total_price || 0}</Text>
+                                    </View>
+                                    {(() => {
+                                        const items = selectedDoc.items || selectedDoc.line_items || selectedDoc.cart?.items || [];
+                                        if (items.length > 0) {
+                                            return (
+                                                <View>
+                                                    <Text variant="labelSmall" style={{ color: theme.colors.outline, marginBottom: 8 }}>Items</Text>
+                                                    {items.map((item, index) => (
+                                                        <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                                                            <Text variant="bodyMedium" style={{ flex: 1 }}>{item.name || item.title || 'Unknown Item'}</Text>
+                                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>x{item.quantity || 1}</Text>
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+                                </View>
+                            )}
+                        </ScrollView>
+                    </Dialog.ScrollArea>
+                    <Dialog.Actions>
+                        <Button onPress={() => setModalVisible(false)}>Close</Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
+        </View>
+    );
+});
+
 const StatsScreen = ({ navigation }) => {
     const theme = useTheme();
     const { hasPermission } = useAuth();
@@ -247,8 +417,6 @@ const StatsScreen = ({ navigation }) => {
     const [rawOrders, setRawOrders] = useState([]);
     const [rawCheckouts, setRawCheckouts] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
-    const [selectedDoc, setSelectedDoc] = useState(null);
-    const [modalVisible, setModalVisible] = useState(false);
 
     // Refs for sound logic
     const lastMaxTimestampRef = React.useRef(0);
@@ -567,67 +735,7 @@ const StatsScreen = ({ navigation }) => {
             </View>
 
             {/* 2. SALES TREND CHART */}
-            <Surface style={[styles.chartContainer, { backgroundColor: theme.colors.surface }]} elevation={0}>
-                <View style={{ padding: 16 }}>
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Sales Performance</Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Hourly breakdown of today's revenue</Text>
-                </View>
-                <LineChart
-                    data={(chartData.datasets[0]?.data || [0]).map((value, index) => ({
-                        value: value,
-                        label: chartData.labels?.[index] || '',
-                        labelTextStyle: { color: theme.colors.outline, fontSize: 10 },
-                        orderCount: chartData.datasets[0]?.orderCounts?.[index] || 0,
-                        dateLabel: chartData.fullLabels?.[index] || ''
-                    }))}
-                    height={180}
-                    width={screenWidth - 40}
-                    thickness={3}
-                    color={theme.colors.primary}
-                    startFillColor={theme.colors.primary}
-                    endFillColor={theme.colors.background}
-                    startOpacity={0.2}
-                    endOpacity={0.0}
-                    spacing={60}
-                    initialSpacing={20}
-                    noOfSections={4}
-                    yAxisColor="transparent"
-                    xAxisColor="transparent"
-                    yAxisTextStyle={{ color: theme.colors.outline, fontSize: 10 }}
-                    rulesType="dashed"
-                    rulesColor={theme.colors.outlineVariant}
-                    hideDataPoints={false}
-                    dataPointsColor={theme.colors.primary}
-                    curved
-                    areaChart
-                    pointerConfig={{
-                        pointerStripHeight: 160,
-                        pointerStripColor: theme.colors.primary,
-                        pointerColor: theme.colors.primary,
-                        radius: 6,
-                        pointerLabelWidth: 120,
-                        pointerLabelHeight: 90,
-                        activatePointersOnLongPress: true,
-                        autoAdjustPointerLabelPosition: true,
-                        pointerLabelComponent: items => {
-                            const item = items[0];
-                            return (
-                                <View style={{ height: 90, width: 120, justifyContent: 'center', backgroundColor: theme.colors.inverseSurface, borderRadius: 8, padding: 8 }}>
-                                    <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 10, textAlign: 'center', opacity: 0.8, marginBottom: 2 }}>
-                                        {item.dateLabel.replace(item.label, '').trim()}
-                                    </Text>
-                                    <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 14, fontWeight: 'bold', textAlign: 'center' }}>
-                                        ₹{Math.round(item.value).toLocaleString()}
-                                    </Text>
-                                    <Text style={{ color: theme.colors.inverseOnSurface, fontSize: 10, textAlign: 'center', marginTop: 2, fontWeight: 'bold' }}>
-                                        {item.orderCount} {item.orderCount === 1 ? 'Order' : 'Orders'}
-                                    </Text>
-                                </View>
-                            );
-                        },
-                    }}
-                />
-            </Surface>
+            <SalesChartSection theme={theme} chartData={chartData} screenWidth={screenWidth} />
 
             {/* 3. USER DEMOGRAPHICS */}
             <View style={{ marginTop: 24, paddingHorizontal: 16 }}>
@@ -728,108 +836,7 @@ const StatsScreen = ({ navigation }) => {
             </View>
 
             {/* 5. LIVE FEEDS (Firebase) */}
-            <View style={{ marginTop: 24, paddingBottom: 40 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.error }} />
-                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Live Checkout Feed</Text>
-                    </View>
-                    <Button
-                        compact
-                        mode="text"
-                        onPress={() => navigation.navigate('DatabaseManager', { collection: 'checkouts' })}
-                    >
-                        History
-                    </Button>
-                </View>
-
-                {recentActivity.map((item) => (
-                    <LiveFeedItem
-                        key={item.id}
-                        item={item}
-                        theme={theme}
-                        onPress={(doc) => { setSelectedDoc(doc); setModalVisible(true); }}
-                    />
-                ))}
-            </View>
-
-            {/* Document Details Modal (Compact & Industry Standard) */}
-            <Portal>
-                <Dialog visible={modalVisible} onDismiss={() => setModalVisible(false)} style={{ maxHeight: '85%', maxWidth: 450, width: '100%', alignSelf: 'center' }}>
-                    <Dialog.Title>Checkout Details</Dialog.Title>
-                    <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0 }}>
-                        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 8 }}>
-                            {selectedDoc && (
-                                <View>
-                                    {/* Product Image Header */}
-                                    {(selectedDoc.img_url || (selectedDoc.items && selectedDoc.items.length > 0 && selectedDoc.items[0].img_url)) && (
-                                        <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                                            <Image
-                                                source={{ uri: selectedDoc.img_url || selectedDoc.items[0].img_url }}
-                                                style={{ width: 100, height: 100, borderRadius: 8, backgroundColor: theme.colors.surfaceVariant }}
-                                                resizeMode="cover"
-                                            />
-                                        </View>
-                                    )}
-
-                                    <View style={{ marginBottom: 16 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Customer</Text>
-                                        <Text variant="bodyLarge">{selectedDoc.customerName || selectedDoc.first_name || selectedDoc.phone || 'Visitor'}</Text>
-                                        {selectedDoc.email && <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>{selectedDoc.email}</Text>}
-                                        {selectedDoc.phone && <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>{selectedDoc.phone}</Text>}
-                                    </View>
-
-                                    {/* Key Attributes Grid */}
-                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                                        <Chip compact>{selectedDoc.status}</Chip>
-                                        {selectedDoc.rtoPredict && (
-                                            <Chip compact mode="outlined" style={{ backgroundColor: selectedDoc.rtoPredict === 'low' ? theme.colors.tertiaryContainer : theme.colors.errorContainer }}>
-                                                {selectedDoc.rtoPredict.toUpperCase()} RTO
-                                            </Chip>
-                                        )}
-                                        {selectedDoc.payment_method && (
-                                            <Chip compact mode="outlined">{selectedDoc.payment_method}</Chip>
-                                        )}
-                                    </View>
-
-                                    {/* Action: Recover Link */}
-                                    {(selectedDoc.checkout_url || selectedDoc.custom_attributes?.landing_page_url) && (
-                                        <RecoverButton
-                                            link={selectedDoc.checkout_url || selectedDoc.custom_attributes?.landing_page_url}
-                                            theme={theme}
-                                        />
-                                    )}
-
-                                    <View style={{ marginBottom: 16 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.outline }}>Total Amount</Text>
-                                        <Text variant="headlineMedium" style={{ fontWeight: 'bold' }}>₹{selectedDoc.totalPrice || selectedDoc.cart?.totalPrice || selectedDoc.total_price || 0}</Text>
-                                    </View>
-                                    {(() => {
-                                        const items = selectedDoc.items || selectedDoc.line_items || selectedDoc.cart?.items || [];
-                                        if (items.length > 0) {
-                                            return (
-                                                <View>
-                                                    <Text variant="labelSmall" style={{ color: theme.colors.outline, marginBottom: 8 }}>Items</Text>
-                                                    {items.map((item, index) => (
-                                                        <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-                                                            <Text variant="bodyMedium" style={{ flex: 1 }}>{item.name || item.title || 'Unknown Item'}</Text>
-                                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>x{item.quantity || 1}</Text>
-                                                        </View>
-                                                    ))}
-                                                </View>
-                                            );
-                                        }
-                                        return null;
-                                    })()}
-                                </View>
-                            )}
-                        </ScrollView>
-                    </Dialog.ScrollArea>
-                    <Dialog.Actions>
-                        <Button onPress={() => setModalVisible(false)}>Close</Button>
-                    </Dialog.Actions>
-                </Dialog>
-            </Portal>
+            <LiveFeedSection recentActivity={recentActivity} navigation={navigation} theme={theme} />
 
         </CRMLayout>
     );
