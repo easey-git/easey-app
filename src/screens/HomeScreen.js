@@ -213,7 +213,7 @@ const HomeScreen = ({ navigation }) => {
                 /></View>}
                 {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Pending" value={workQueue.pending} icon="clock-alert-outline" color={theme.colors.errorContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'pending' } })} theme={theme} /></View>}
                 {hasPermission('view_order_stats') && <View style={{ flex: 1 }}><StatCard label="Confirmed" value={workQueue.confirmed} icon="check-circle-outline" color={theme.colors.secondaryContainer} onPress={() => navigation.navigate('DatabaseManager', { collection: 'orders', filter: { field: 'cod_status', value: 'confirmed' } })} theme={theme} /></View>}
-                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" theme={theme} /></View>}
+                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" onPress={() => navigation.navigate('DatabaseManager', { collection: 'checkouts' })} theme={theme} /></View>}
                 {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="AOV" value={`₹${stats.aov}`} icon="chart-line" theme={theme} /></View>}
             </View>
 
@@ -279,7 +279,7 @@ const HomeScreen = ({ navigation }) => {
             )}
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
-                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" theme={theme} /></View>}
+                {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Active Carts" value={stats.activeCarts} icon="cart-outline" onPress={() => navigation.navigate('DatabaseManager', { collection: 'checkouts' })} theme={theme} /></View>}
                 {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="AOV" value={`₹${stats.aov}`} icon="chart-line" theme={theme} /></View>}
             </View>
 

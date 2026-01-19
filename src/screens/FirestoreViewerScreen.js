@@ -127,6 +127,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             setKnownAttributes(prev => {
                 const newEvents = new Set(prev.events);
                 const newStages = new Set(prev.stages);
+                const newStatuses = new Set(prev.statuses || []);
                 const newFinancial = new Set(prev.financialStatuses || []);
                 const newGateways = new Set(prev.paymentGateways || []);
                 let changed = false;
@@ -145,9 +146,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     return changed ? { ...prev, events: newEvents, stages: newStages } : prev;
                 } else if (selectedCollection === 'orders') {
                     documents.forEach(doc => {
-                        // COD Status
+                        // COD Status -> mapped to 'stages'
                         if (doc.cod_status && !newStages.has(doc.cod_status)) {
                             newStages.add(doc.cod_status);
+                            changed = true;
+                        }
+                        // Root Status -> mapped to 'statuses'
+                        if (doc.status && !newStatuses.has(doc.status)) {
+                            newStatuses.add(doc.status);
                             changed = true;
                         }
                         // Financial Status
@@ -165,7 +171,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                             });
                         }
                     });
-                    return changed ? { ...prev, stages: newStages, financialStatuses: newFinancial, paymentGateways: newGateways } : prev;
+                    return changed ? { ...prev, stages: newStages, statuses: newStatuses, financialStatuses: newFinancial, paymentGateways: newGateways } : prev;
                 }
 
                 return prev;
@@ -685,29 +691,54 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 <View style={{ paddingVertical: 8 }}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
                         {(() => {
-                            // Configuration Driven Filters
-                            const FILTER_CONFIG = {
-                                orders: [
-                                    { label: 'All', value: null },
-                                    { label: 'TODAY', field: 'createdAt', operator: '>=', value: 'TODAY_DATE_PLACEHOLDER' }, // Special handling
-                                    { label: 'COD', field: 'status', value: 'COD' },
-                                    { label: 'PAID', field: 'status', value: 'Paid' },
-                                    { label: 'CONFIRMED', field: 'cod_status', value: 'confirmed' },
-                                    { label: 'PENDING', field: 'cod_status', value: 'pending' },
-                                    { label: 'CANCELLED', field: 'cod_status', value: 'cancelled' },
-                                    { label: 'SHIPPED', field: 'cod_status', value: 'shipped' }
-                                ],
-                                checkouts: [
-                                    { label: 'All', value: null },
-                                    { label: 'BEGIN CHECKOUT', field: 'eventType', value: 'BEGIN_CHECKOUT' },
-                                    { label: 'ADD SHIPPING', field: 'eventType', value: 'ADD_SHIPPING_INFO' },
-                                    { label: 'ADD PAYMENT', field: 'eventType', value: 'ADD_PAYMENT_INFO' },
-                                    { label: 'PURCHASE', field: 'eventType', value: 'PURCHASE' },
-                                    { label: 'ABANDONED', field: 'eventType', value: 'ABANDONED' }
-                                ]
-                            };
+                            let filters = [];
 
-                            const filters = FILTER_CONFIG[selectedCollection] || [];
+                            if (selectedCollection === 'orders') {
+                                // FULLY DYNAMIC ORDERS using discovered attributes
+                                filters = [
+                                    { label: 'All', value: null },
+                                    { label: 'TODAY', field: 'createdAt', operator: '>=', value: 'TODAY_DATE_PLACEHOLDER' }
+                                ];
+
+                                // 1. Add Root Statuses (e.g. COD, Paid)
+                                if (knownAttributes.statuses) {
+                                    Array.from(knownAttributes.statuses).sort().forEach(s => {
+                                        filters.push({ label: String(s).toUpperCase(), value: s, field: 'status' });
+                                    });
+                                }
+
+                                // 2. Add COD/Fulfillment Statuses (e.g. Confirmed, Pending)
+                                if (knownAttributes.stages) {
+                                    Array.from(knownAttributes.stages).sort().forEach(s => {
+                                        filters.push({ label: String(s).toUpperCase(), value: s, field: 'cod_status' });
+                                    });
+                                }
+                            } else if (selectedCollection === 'checkouts') {
+                                // FULLY DYNAMIC / DATA-DRIVEN for Checkouts using discovered attributes
+                                filters = [{ label: 'All', value: null }];
+
+                                // 1. Add Event Types
+                                if (knownAttributes.events) {
+                                    Array.from(knownAttributes.events).sort().forEach(evt => {
+                                        filters.push({
+                                            label: String(evt).replace(/_/g, ' '),
+                                            value: evt,
+                                            field: 'eventType'
+                                        });
+                                    });
+                                }
+
+                                // 2. Add Stages
+                                if (knownAttributes.stages) {
+                                    Array.from(knownAttributes.stages).sort().forEach(stage => {
+                                        filters.push({
+                                            label: String(stage),
+                                            value: stage,
+                                            field: 'latest_stage'
+                                        });
+                                    });
+                                }
+                            }
 
                             return filters.map((f, index) => {
                                 // Calculate dynamic values if needed
