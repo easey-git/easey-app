@@ -662,11 +662,14 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
 
                                 <TouchableWithoutFeedback onPress={(e) => e.stopPropagation?.()}>
                                     <View style={{
+                                        alignSelf: 'flex-start',
+                                        maxWidth: 280,
+                                        width: '100%',
                                         flexDirection: 'row',
                                         alignItems: 'center',
                                         backgroundColor: theme.colors.elevation.level2,
-                                        borderRadius: 16,
-                                        paddingVertical: 6,
+                                        borderRadius: 20, // More rounded pill shape
+                                        paddingVertical: 4,
                                         paddingHorizontal: 8,
                                         borderWidth: 1,
                                         borderColor: theme.colors.outlineVariant
