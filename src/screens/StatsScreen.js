@@ -502,7 +502,7 @@ const StatsScreen = ({ navigation }) => {
             collection(db, "orders"),
             where("createdAt", ">=", startDate),
             orderBy("createdAt", "desc"),
-            limit(2000) // Increased limit for robust historical data
+            limit(500) // Reduced from 2000 to 500 for better performance
         );
 
         const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
@@ -614,7 +614,7 @@ const StatsScreen = ({ navigation }) => {
         const qCheckouts = query(
             collection(db, "checkouts"),
             orderBy("updatedAt", "desc"),
-            limit(100)
+            limit(50) // Reduced from 100 to 50 for better performance
         );
 
         const unsubscribeCheckouts = onSnapshot(qCheckouts, (snapshot) => {

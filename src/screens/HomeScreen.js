@@ -121,7 +121,12 @@ const HomeScreen = ({ navigation }) => {
             setLoading(false);
         });
 
-        const cartsQuery = query(collection(db, "checkouts"), where("updatedAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))), orderBy("updatedAt", "desc"));
+        const cartsQuery = query(
+            collection(db, "checkouts"),
+            where("updatedAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))),
+            orderBy("updatedAt", "desc"),
+            limit(50) // Reduced from implicit all to 50
+        );
         const unsubCarts = onSnapshot(cartsQuery, (snapshot) => {
             let activeCount = 0;
             snapshot.forEach(doc => {

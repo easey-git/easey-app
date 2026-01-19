@@ -1026,4 +1026,17 @@ const styles = StyleSheet.create({
     }
 });
 
-export default DocItem;
+// Custom comparison function for better memoization
+const areEqual = (prevProps, nextProps) => {
+    // Only re-render if these specific props change
+    return (
+        prevProps.item.id === nextProps.item.id &&
+        prevProps.isSelected === nextProps.isSelected &&
+        prevProps.selectedCollection === nextProps.selectedCollection &&
+        prevProps.item.voiceNoteUrl === nextProps.item.voiceNoteUrl &&
+        prevProps.item.cod_status === nextProps.item.cod_status &&
+        prevProps.item.adminEdited === nextProps.item.adminEdited
+    );
+};
+
+export default memo(DocItem, areEqual);

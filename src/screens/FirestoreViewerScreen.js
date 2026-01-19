@@ -92,10 +92,26 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Filter Documents
+    // Pagination state
+    const [lastDoc, setLastDoc] = useState(null);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const PAGE_SIZE = 25; // Reduced from 100 for better performance
+
+    // Filter Documents with debouncing
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+        }, 300); // 300ms debounce
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
     const filteredDocuments = React.useMemo(() => {
-        if (!searchQuery) return documents;
-        const query = searchQuery.toLowerCase();
+        if (!debouncedSearchQuery) return documents;
+        const query = debouncedSearchQuery.toLowerCase();
         return documents.filter(doc =>
             (doc.customerName && doc.customerName.toLowerCase().includes(query)) ||
             (doc.orderNumber && String(doc.orderNumber).toLowerCase().includes(query)) ||
@@ -103,7 +119,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             (doc.email && doc.email.toLowerCase().includes(query)) ||
             (doc.id && doc.id.toLowerCase().includes(query))
         );
-    }, [documents, searchQuery]);
+    }, [documents, debouncedSearchQuery]);
 
     // ... (Dialog States remain same)
     const [confirmVisible, setConfirmVisible] = useState(false);
@@ -221,8 +237,16 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     }, [documents, selectedCollection]);
 
-    const fetchDocuments = async () => {
-        setLoading(true);
+    const fetchDocuments = async (isLoadMore = false) => {
+        if (isLoadMore) {
+            if (!hasMore || loadingMore) return;
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+            setLastDoc(null);
+            setHasMore(true);
+        }
+
         try {
             let constraints = [];
 
@@ -257,7 +281,12 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
             // Sort by newest first
             constraints.push(orderBy(sortField, 'desc'));
-            constraints.push(limit(100));
+
+            // Pagination
+            if (isLoadMore && lastDoc) {
+                constraints.push(startAfter(lastDoc));
+            }
+            constraints.push(limit(PAGE_SIZE));
 
             const q = query(collection(db, selectedCollection), ...constraints);
 
@@ -268,7 +297,21 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 ref: doc.ref,
                 ...doc.data()
             }));
-            setDocuments(docs);
+
+            // Update pagination state
+            if (snapshot.docs.length > 0) {
+                setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+                setHasMore(snapshot.docs.length === PAGE_SIZE);
+            } else {
+                setHasMore(false);
+            }
+
+            // Append or replace documents
+            if (isLoadMore) {
+                setDocuments(prev => [...prev, ...docs]);
+            } else {
+                setDocuments(docs);
+            }
         } catch (error) {
             console.error("Error fetching docs:", error);
             if (error.code === 'failed-precondition' || error.message.includes('index')) {
@@ -277,7 +320,12 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 showSnackbar("Failed to fetch documents", true);
             }
         }
-        setLoading(false);
+
+        if (isLoadMore) {
+            setLoadingMore(false);
+        } else {
+            setLoading(false);
+        }
     };
 
     const toggleSelection = (id) => {
@@ -1152,6 +1200,26 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 initialNumToRender={10}
                 maxToRenderPerBatch={10}
                 windowSize={5}
+                removeClippedSubviews={true}
+                updateCellsBatchingPeriod={50}
+                onEndReached={() => fetchDocuments(true)}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={() => (
+                    loadingMore ? (
+                        <View style={{ padding: 20, alignItems: 'center' }}>
+                            <ActivityIndicator size="small" color={theme.colors.primary} />
+                            <Text variant="bodySmall" style={{ marginTop: 8, color: theme.colors.outline }}>
+                                Loading more...
+                            </Text>
+                        </View>
+                    ) : !hasMore && filteredDocuments.length > 0 ? (
+                        <View style={{ padding: 20, alignItems: 'center' }}>
+                            <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
+                                No more items
+                            </Text>
+                        </View>
+                    ) : null
+                )}
                 ListEmptyComponent={() => (
                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
                         {loading ? (
