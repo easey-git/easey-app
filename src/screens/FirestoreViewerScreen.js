@@ -10,6 +10,8 @@ import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
 import { useResponsive } from '../hooks/useResponsive';
+import { DatePickerModal, registerTranslation, en } from 'react-native-paper-dates';
+registerTranslation('en', en);
 
 const FirestoreViewerScreen = ({ navigation, route }) => {
     const { hasPermission, role, user, loading: authLoading } = useAuth();
@@ -50,6 +52,11 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
     // Add Filter State
     const [filter, setFilter] = useState(route.params?.filter || null);
+    const [dateFilter, setDateFilter] = useState('all');
+
+    // Custom Date Picker State
+    const [openDatePicker, setOpenDatePicker] = useState(false);
+    const [customDate, setCustomDate] = useState(undefined);
 
     useEffect(() => {
         const allowed = getAllowedCollections();
@@ -57,11 +64,12 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         if (!allowed.includes(selectedCollection)) {
             setSelectedCollection(allowed[0]);
         }
-        // Clear filter if switching collections, unless it's the initial mount
+        // Clear filter if switching collections
         if (selectedCollection !== route.params?.collection) {
             setFilter(null);
+            setDateFilter('all');
         }
-    }, [getAllowedCollections, selectedCollection]); // Added selectedCollection dependency
+    }, [getAllowedCollections, selectedCollection]);
 
     const [documents, setDocuments] = useState([]);
     const [selectedDoc, setSelectedDoc] = useState(null);
@@ -73,8 +81,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchVisible, setSearchVisible] = useState(false);
 
-    // ... (filteredDocuments memo remains same)
-
+    // Filter Documents
     const filteredDocuments = React.useMemo(() => {
         if (!searchQuery) return documents;
         const query = searchQuery.toLowerCase();
@@ -110,7 +117,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     // 1. Reset Filters & Attributes when Collection Changes
     useEffect(() => {
         setKnownAttributes({ events: new Set(), stages: new Set(), financialStatuses: new Set(), paymentGateways: new Set() });
-        // Optional: Ensure filter is cleared if it's not the initial route param (logic handled elsewhere or acceptable side effect)
     }, [selectedCollection]);
 
     // 2. Fetch Data when Collection OR Filter changes
@@ -118,9 +124,34 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setDocuments([]);
         fetchDocuments();
         setSelectedItems(new Set());
-    }, [selectedCollection, filter]);
+    }, [selectedCollection, filter, dateFilter, customDate]);
 
-    // Update Known Attributes whenever documents successfully load
+    // Helper: Get Date Range
+    const getDateRange = () => {
+        if (customDate) {
+            const start = new Date(customDate);
+            start.setHours(0, 0, 0, 0); // Start of day
+            const end = new Date(customDate);
+            end.setHours(23, 59, 59, 999); // End of day
+            return { start: Timestamp.fromDate(start), end: Timestamp.fromDate(end) };
+        }
+        return { start: null, end: null };
+    };
+
+    const onDismissDatePicker = useCallback(() => {
+        setOpenDatePicker(false);
+    }, [setOpenDatePicker]);
+
+    const onConfirmDatePicker = useCallback(
+        ({ date }) => {
+            setOpenDatePicker(false);
+            setCustomDate(date);
+        },
+        [setOpenDatePicker, setCustomDate]
+    );
+
+    // ... (rest of code)
+
     // Update Known Attributes whenever documents successfully load
     useEffect(() => {
         if (documents.length > 0) {
@@ -183,9 +214,21 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setLoading(true);
         try {
             let constraints = [];
+
+            // 1. Attribute Filters
             if (filter) {
-                const op = filter.operator || "==";
+                const op = filter.operator || ";==";
                 constraints.push(where(filter.field, op, filter.value));
+            }
+
+            // 2. Date Filters
+            if (customDate) { // Updated to only use customDate
+                const { start, end } = getDateRange();
+                // Siloed breakdown: checkouts -> updatedAt, others -> createdAt
+                const dateField = selectedCollection === 'checkouts' ? 'updatedAt' : 'createdAt';
+
+                if (start) constraints.push(where(dateField, '>=', start));
+                if (end) constraints.push(where(dateField, '<=', end));
             }
 
             // Determine correct sort field based on collection schema
@@ -631,6 +674,23 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                         </Button>
                     ) : (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {customDate ? (
+                                <Chip
+                                    mode="flat"
+                                    onClose={() => setCustomDate(undefined)}
+                                    style={{ marginRight: 8, backgroundColor: theme.colors.secondaryContainer }}
+                                    textStyle={{ color: theme.colors.onSecondaryContainer }}
+                                    onPress={() => setOpenDatePicker(true)}
+                                >
+                                    {customDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </Chip>
+                            ) : (
+                                <IconButton
+                                    icon="calendar"
+                                    onPress={() => setOpenDatePicker(true)}
+                                    iconColor={theme.colors.onSurface}
+                                />
+                            )}
                             <IconButton icon="magnify" onPress={() => setSearchVisible(!searchVisible)} />
                             <Appbar.Action icon="refresh" onPress={fetchDocuments} />
                         </View>
@@ -685,10 +745,12 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 />
             </View>
 
-            {/* DYNAMIC FILTERS FOR CHECKOUTS */}
+
+
             {/* DYNAMIC FILTERS FOR DOCUMENTS */}
             {(selectedCollection === 'checkouts' || selectedCollection === 'orders') && (
                 <View style={{ paddingVertical: 8 }}>
+                    <Text variant="labelMedium" style={{ marginBottom: 4, paddingHorizontal: 16, color: theme.colors.outline }}>Attributes</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
                         {(() => {
                             let filters = [];
@@ -696,8 +758,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                             if (selectedCollection === 'orders') {
                                 // FULLY DYNAMIC ORDERS using discovered attributes
                                 filters = [
-                                    { label: 'All', value: null },
-                                    { label: 'TODAY', field: 'createdAt', operator: '>=', value: 'TODAY_DATE_PLACEHOLDER' }
+                                    { label: 'All', value: null }
                                 ];
 
                                 // 1. Add Root Statuses (e.g. COD, Paid)
@@ -744,13 +805,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                 // Calculate dynamic values if needed
                                 let queryValue = f.value;
 
-                                // Handle Special 'TODAY' Logic
-                                if (f.label === 'TODAY') {
-                                    const todayStart = new Date();
-                                    todayStart.setHours(0, 0, 0, 0);
-                                    queryValue = Timestamp.fromDate(todayStart);
-                                }
-
                                 // Selection State Logic
                                 let isSelected = false;
                                 if (!filter && f.value === null) {
@@ -760,8 +814,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                     const configOp = f.operator || '==';
 
                                     if (filter.field === f.field && filterOp === configOp) {
-                                        if (f.label === 'TODAY') isSelected = true;
-                                        else isSelected = filter.value === queryValue;
+                                        isSelected = filter.value === queryValue;
                                     }
                                 }
 
@@ -807,6 +860,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 initialNumToRender={10}
                 maxToRenderPerBatch={10}
                 windowSize={5}
+            />
+            <DatePickerModal
+                locale="en"
+                mode="single"
+                visible={openDatePicker}
+                onDismiss={onDismissDatePicker}
+                date={customDate}
+                onConfirm={onConfirmDatePicker}
             />
             {/* Edit Modal - Full Screen on Mobile, Modal on Desktop */}
             {visible && isMobile ? (
