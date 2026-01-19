@@ -49,15 +49,6 @@ export const TeamBoardCard = ({ style }) => {
                     updatedAt: serverTimestamp()
                 }, { merge: true });
 
-                // Log Activity (Debounced auto-save)
-                ActivityLogService.log(
-                    user.uid,
-                    user.email,
-                    'UPDATE_TEAM_BOARD',
-                    `Updated team board content`,
-                    { contentLength: note.length }
-                );
-
                 // Status is handled by the listener's metadata.hasPendingWrites
             } catch (error) {
                 console.error("Error saving Team Board:", error);
@@ -66,11 +57,11 @@ export const TeamBoardCard = ({ style }) => {
         };
 
         const timeoutId = setTimeout(() => {
-            if (note !== '') saveNote();
-        }, 1000);
+            saveNote();
+        }, 1500); // Increased debounce to 1.5s for stability
 
         return () => clearTimeout(timeoutId);
-    }, [note, user]);
+    }, [note]); // Removed 'user' dependency to prevent re-triggering
 
     // Extract username from email (part before @)
     const getUsername = (email) => {

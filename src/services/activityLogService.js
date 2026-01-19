@@ -1,4 +1,4 @@
-import { collection, serverTimestamp, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, serverTimestamp, doc, updateDoc, writeBatch, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const LOGS_COLLECTION = 'activity_logs';
@@ -17,11 +17,9 @@ export const ActivityLogService = {
         if (!userId) return;
 
         try {
-            const batch = writeBatch(db);
+            // 1. Create Log Entry (CRITICAL - must always succeed)
             const logRef = doc(collection(db, LOGS_COLLECTION));
-            const userRef = doc(db, USERS_COLLECTION, userId);
-
-            // 1. Create Log Entry
+            const batch = writeBatch(db);
             batch.set(logRef, {
                 userId,
                 userEmail,
@@ -30,18 +28,24 @@ export const ActivityLogService = {
                 meta,
                 timestamp: serverTimestamp()
             });
-
-            // 2. Update User Presence (Atomic side-effect)
-            batch.update(userRef, {
-                lastActive: serverTimestamp(),
-                lastAction: action,
-                isOnline: true
-            });
-
             await batch.commit();
 
+            // 2. Update User Presence (OPTIONAL - fire and forget)
+            // Run separately to avoid blocking activity log if user doc doesn't exist
+            try {
+                const userRef = doc(db, USERS_COLLECTION, userId);
+                await updateDoc(userRef, {
+                    lastActive: serverTimestamp(),
+                    lastAction: action,
+                    isOnline: true
+                });
+            } catch (userError) {
+                // User doc might not exist yet - that's okay, log was still created
+                console.warn("User presence update failed (non-critical):", userError.code);
+            }
+
         } catch (error) {
-            console.error("Failed to log activity:", error);
+            console.error("CRITICAL: Failed to log activity:", error.code, error.message);
         }
     },
 
@@ -53,14 +57,13 @@ export const ActivityLogService = {
         if (!userId) return;
         try {
             const userRef = doc(db, USERS_COLLECTION, userId);
-            // We only update if it's been a while? No, Firestone writes are cheap enough for a 5-min heartbeat or on-action.
-            // Let's just update.
-            await updateDoc(userRef, {
+            // Use setDoc with merge to handle missing user documents gracefully
+            await setDoc(userRef, {
                 lastActive: serverTimestamp(),
                 isOnline: true
-            });
+            }, { merge: true });
         } catch (err) {
-            console.warn("Heartbeat failed", err);
+            console.warn("Heartbeat failed:", err.code);
         }
     }
 };
