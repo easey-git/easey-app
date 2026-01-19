@@ -3,9 +3,9 @@ import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Platform } from 
 import { Text, useTheme, Surface, Icon } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { DelhiveryView } from '../components/logistics/DelhiveryView';
+import { useAuth } from '../context/AuthContext';
+import { AccessDenied } from '../components/AccessDenied';
 import { NDRView } from '../components/logistics/NDRView';
-
-
 
 // 1. Service/Feature Registry
 // Currently all features belong to Delhivery. 
@@ -30,7 +30,12 @@ const SERVICES = [
 
 const LogisticsScreen = ({ navigation }) => {
     const theme = useTheme();
+    const { hasPermission } = useAuth();
     const [activeServiceId, setActiveServiceId] = useState('shipments');
+
+    if (!hasPermission('access_logistics')) {
+        return <AccessDenied title="Logistics Restricted" message="You need permission to access logistics operations." />;
+    }
 
     // 2. Dynamic Component Resolution
     const ActiveComponent = SERVICES.find(s => s.id === activeServiceId)?.component || DelhiveryView;

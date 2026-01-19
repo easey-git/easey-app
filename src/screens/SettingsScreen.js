@@ -145,6 +145,7 @@ const styles = StyleSheet.create({
         padding: 20,
         borderRadius: 16,
         marginBottom: 24,
+        marginTop: 16,
     },
     listItem: {
         paddingVertical: 8,
