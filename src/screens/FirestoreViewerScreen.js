@@ -57,6 +57,10 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [openDatePicker, setOpenDatePicker] = useState(false);
     const [customDate, setCustomDate] = useState(undefined);
 
+    // Edit Date Picker State
+    const [editDatePickerVisible, setEditDatePickerVisible] = useState(false);
+    const [editDateParams, setEditDateParams] = useState({ key: null, value: null, parentKey: null });
+
     useEffect(() => {
         const allowed = getAllowedCollections();
         setCollections(allowed);
@@ -233,6 +237,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             const sortMapping = {
                 whatsapp_messages: 'timestamp',
                 checkouts: 'updatedAt',
+                wallet_transactions: 'date',
             };
             const sortField = sortMapping[selectedCollection] || 'createdAt';
 
@@ -399,7 +404,19 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setVisible(true);
     };
 
-    const updateField = (key, value, parentKey = null) => {
+    const handleEditDate = (key, value, parentKey = null) => {
+        // value is { seconds, nanoseconds } or Date object
+        let initialDate = new Date();
+        if (value && value.seconds) {
+            initialDate = new Date(value.seconds * 1000);
+        } else if (value instanceof Date) {
+            initialDate = value;
+        }
+        setEditDateParams({ key, value: initialDate, parentKey });
+        setEditDatePickerVisible(true);
+    };
+
+    const updateField = useCallback((key, value, parentKey = null) => {
         setEditedDoc(prev => {
             if (parentKey) {
                 return {
@@ -412,19 +429,56 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             }
             return { ...prev, [key]: value };
         });
-    };
+    }, []);
+
+    const onConfirmEditDate = useCallback(
+        ({ date }) => {
+            setEditDatePickerVisible(false);
+            if (editDateParams.key) {
+                // Convert to Firestore Timestamp-like object or maintain Date depends on how updateDoc handles it.
+                // updateDoc accepts Date objects.
+                // But local state 'editedDoc' might expect { seconds } if we want to keep consistent rendering before save?
+                // RenderField checks value.seconds.
+                // Let's store as Firestore Timestamp to maintain consistency with RenderField logic
+                const timestamp = Timestamp.fromDate(date);
+                updateField(editDateParams.key, timestamp, editDateParams.parentKey);
+            }
+        },
+        [editDateParams, updateField]
+    );
 
     // Recursive Field Renderer
     const RenderField = ({ label, value, depth = 0, parentKey = null }) => {
         const paddingLeft = depth * 12;
 
-        // 1. Handle Timestamps (Read-only for now)
+        // 1. Handle Timestamps
         if (value && typeof value === 'object' && value.seconds) {
-            const date = new Date(value.seconds * 1000).toLocaleString();
+            const dateObj = new Date(value.seconds * 1000);
+            const dateStr = dateObj.toLocaleString();
+
             return (
                 <View style={[styles.fieldRow, { paddingLeft }]}>
                     <Text variant="labelSmall" style={{ color: theme.colors.primary, fontSize: 11 }}>{label}</Text>
-                    <Text variant="bodySmall" style={{ fontSize: 12 }}>{date}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <TouchableOpacity
+                            disabled={!isEditing}
+                            onPress={() => handleEditDate(label, value, parentKey)}
+                            style={{ flex: 1, paddingVertical: 4, borderBottomWidth: isEditing ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}
+                        >
+                            <Text variant="bodySmall" style={{ fontSize: 12, color: isEditing ? theme.colors.onSurface : theme.colors.onSurfaceVariant }}>
+                                {dateStr}
+                            </Text>
+                        </TouchableOpacity>
+
+                        {isEditing && (
+                            <IconButton
+                                icon="pencil"
+                                size={20}
+                                onPress={() => handleEditDate(label, value, parentKey)}
+                                iconColor={theme.colors.primary}
+                            />
+                        )}
+                    </View>
                 </View>
             );
         }
@@ -867,6 +921,17 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 date={customDate}
                 onConfirm={onConfirmDatePicker}
             />
+
+            <DatePickerModal
+                locale="en"
+                mode="single"
+                visible={editDatePickerVisible}
+                onDismiss={() => setEditDatePickerVisible(false)}
+                date={editDateParams.value}
+                onConfirm={onConfirmEditDate}
+                presentationStyle="pageSheet"
+            />
+
             {/* Edit Modal - Full Screen on Mobile, Modal on Desktop */}
             {visible && isMobile ? (
                 // Mobile: Full-screen overlay
@@ -916,13 +981,33 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
                             // Render timestamp
                             if (value && typeof value === 'object' && value.seconds) {
-                                const date = new Date(value.seconds * 1000).toLocaleString();
+                                const dateObj = new Date(value.seconds * 1000);
+                                const dateStr = dateObj.toLocaleString();
                                 return (
                                     <View key={key} style={{ marginBottom: 16 }}>
                                         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
                                             {key}
                                         </Text>
-                                        <Text variant="bodyLarge">{date}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <TouchableOpacity
+                                                disabled={!isEditing}
+                                                onPress={() => handleEditDate(key, value)}
+                                                style={{ flex: 1, paddingVertical: 4, borderBottomWidth: isEditing ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}
+                                            >
+                                                <Text variant="bodyLarge" style={{ color: isEditing ? theme.colors.onSurface : theme.colors.onSurface }}>
+                                                    {dateStr}
+                                                </Text>
+                                            </TouchableOpacity>
+
+                                            {isEditing && (
+                                                <IconButton
+                                                    icon="pencil"
+                                                    size={20}
+                                                    onPress={() => handleEditDate(key, value)}
+                                                    iconColor={theme.colors.primary}
+                                                />
+                                            )}
+                                        </View>
                                     </View>
                                 );
                             }
@@ -1109,7 +1194,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
                                     // Render timestamp
                                     if (value && typeof value === 'object' && value.seconds) {
-                                        const date = new Date(value.seconds * 1000).toLocaleString();
+                                        const dateObj = new Date(value.seconds * 1000);
+                                        const dateStr = dateObj.toLocaleString();
                                         return (
                                             <View key={key} style={{
                                                 marginBottom: 20,
@@ -1119,7 +1205,26 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                                 <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
                                                     {key}
                                                 </Text>
-                                                <Text variant="bodyLarge">{date}</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <TouchableOpacity
+                                                        disabled={!isEditing}
+                                                        onPress={() => handleEditDate(key, value)}
+                                                        style={{ flex: 1, paddingVertical: 4, borderBottomWidth: isEditing ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}
+                                                    >
+                                                        <Text variant="bodyLarge" style={{ color: isEditing ? theme.colors.onSurface : theme.colors.onSurface }}>
+                                                            {dateStr}
+                                                        </Text>
+                                                    </TouchableOpacity>
+
+                                                    {isEditing && (
+                                                        <IconButton
+                                                            icon="pencil"
+                                                            size={20}
+                                                            onPress={() => handleEditDate(key, value)}
+                                                            iconColor={theme.colors.primary}
+                                                        />
+                                                    )}
+                                                </View>
                                             </View>
                                         );
                                     }

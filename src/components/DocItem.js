@@ -304,17 +304,45 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                             />
                         )}
                         <View style={[styles.textContainer, isMobile && { marginLeft: 8 }]}>
+                            {/* Top Row: Type & Date */}
                             <View style={styles.rowBetween}>
                                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                                    {isIncome ? 'Income' : 'Expense'}
+                                    {item.type ? item.type.toUpperCase() : 'TRANSACTION'}
                                 </Text>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: isIncome ? theme.colors.primary : theme.colors.error }}>
-                                    {isIncome ? '+' : '-'}₹{Math.abs(item.amount || 0).toLocaleString('en-IN')}
-                                </Text>
+                                {item.date && item.date.toDate && (
+                                    <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
+                                        {item.date.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </Text>
+                                )}
                             </View>
-                            <Text variant="bodySmall" numberOfLines={1} style={{ color: theme.colors.onSurfaceVariant }}>
-                                {item.description || 'No Description'}
-                            </Text>
+
+                            {/* Details Grid */}
+                            <View style={{ marginTop: 4 }}>
+                                {/* Category & Amount Row */}
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                                    {item.category ? (
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>{item.category}</Text>
+                                    ) : <View />}
+
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: isIncome ? theme.colors.primary : theme.colors.error }}>
+                                        {isIncome ? '+' : '-'}₹{Math.abs(item.amount || 0).toLocaleString('en-IN')}
+                                    </Text>
+                                </View>
+
+                                {/* Description */}
+                                {item.description && (
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 2 }} numberOfLines={2}>
+                                        {item.description}
+                                    </Text>
+                                )}
+
+                                {/* Created At (Footer) */}
+                                {item.createdAt && item.createdAt.toDate && (
+                                    <Text variant="labelSmall" style={{ color: theme.colors.outlineVariant, fontSize: 10 }}>
+                                        {item.createdAt.toDate().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                )}
+                            </View>
                         </View>
                         <IconButton icon="chevron-right" size={20} />
                     </View>
