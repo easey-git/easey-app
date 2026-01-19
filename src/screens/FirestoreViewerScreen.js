@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'; // Cache bust 1
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Platform } from 'react-native';
-import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon } from 'react-native-paper';
+import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon, ActivityIndicator } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
 import { collection, query, where, limit, getDocs, doc, updateDoc, writeBatch, deleteField, getDocsFromServer, orderBy, startAfter, Timestamp, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -18,7 +18,11 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const theme = useTheme(); // Move theme hook up
 
     if (authLoading) {
-        return <View style={{ flex: 1, backgroundColor: theme.colors.background }} />;
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+            </View>
+        );
     }
 
     if (!hasPermission('access_orders')) {
@@ -247,8 +251,8 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
             const q = query(collection(db, selectedCollection), ...constraints);
 
-            // Force fetch from server to avoid stale cache issues
-            const snapshot = await getDocsFromServer(q);
+            // Use standard getDocs to utilize cache (much faster)
+            const snapshot = await getDocs(q);
             const docs = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ref: doc.ref,
@@ -890,24 +894,16 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                             let filters = [];
 
                             if (selectedCollection === 'orders') {
-                                // FULLY DYNAMIC ORDERS using discovered attributes
+                                // HARDCODED ORDERS FILTERS (Standardized)
                                 filters = [
-                                    { label: 'All', value: null }
+                                    { label: 'ALL', value: null },
+                                    { label: 'COD', value: 'COD', field: 'status' },
+                                    { label: 'PAID', value: 'Paid', field: 'status' },
+                                    { label: 'CONFIRMED', value: 'confirmed', field: 'cod_status' },
+                                    { label: 'PENDING', value: 'pending', field: 'cod_status' },
+                                    { label: 'CANCELLED', value: 'cancelled', field: 'cod_status' },
+                                    { label: 'SHIPPED', value: 'shipped', field: 'cod_status' }
                                 ];
-
-                                // 1. Add Root Statuses (e.g. COD, Paid)
-                                if (knownAttributes.statuses) {
-                                    Array.from(knownAttributes.statuses).sort().forEach(s => {
-                                        filters.push({ label: String(s).toUpperCase(), value: s, field: 'status' });
-                                    });
-                                }
-
-                                // 2. Add COD/Fulfillment Statuses (e.g. Confirmed, Pending)
-                                if (knownAttributes.stages) {
-                                    Array.from(knownAttributes.stages).sort().forEach(s => {
-                                        filters.push({ label: String(s).toUpperCase(), value: s, field: 'cod_status' });
-                                    });
-                                }
                             } else if (selectedCollection === 'checkouts') {
                                 // FULLY DYNAMIC / DATA-DRIVEN for Checkouts using discovered attributes
                                 filters = [{ label: 'All', value: null }];
@@ -984,16 +980,34 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             <Divider />
 
             <FlatList
+                style={{ flex: 1 }}
                 data={filteredDocuments}
                 renderItem={renderDocItem}
                 keyExtractor={item => item.id}
-                contentContainerStyle={{ padding: 12, paddingBottom: 80 }}
+                contentContainerStyle={{ padding: 12, paddingBottom: 80, flexGrow: 1 }}
                 ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
                 refreshing={loading}
                 onRefresh={fetchDocuments}
                 initialNumToRender={10}
                 maxToRenderPerBatch={10}
                 windowSize={5}
+                ListEmptyComponent={() => (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+                        {loading ? (
+                            <ActivityIndicator size="large" color={theme.colors.primary} />
+                        ) : (
+                            <>
+                                <Icon source="file-remove-outline" size={64} color={theme.colors.outline} />
+                                <Text variant="titleMedium" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>
+                                    No records found
+                                </Text>
+                                <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
+                                    Try adjusting your filters
+                                </Text>
+                            </>
+                        )}
+                    </View>
+                )}
             />
             <DatePickerModal
                 locale="en"
