@@ -52,7 +52,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
     // Add Filter State
     const [filter, setFilter] = useState(route.params?.filter || null);
-    const [dateFilter, setDateFilter] = useState('all');
 
     // Custom Date Picker State
     const [openDatePicker, setOpenDatePicker] = useState(false);
@@ -67,7 +66,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         // Clear filter if switching collections
         if (selectedCollection !== route.params?.collection) {
             setFilter(null);
-            setDateFilter('all');
         }
     }, [getAllowedCollections, selectedCollection]);
 
@@ -124,7 +122,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setDocuments([]);
         fetchDocuments();
         setSelectedItems(new Set());
-    }, [selectedCollection, filter, dateFilter, customDate]);
+    }, [selectedCollection, filter, customDate]);
 
     // Helper: Get Date Range
     const getDateRange = () => {
