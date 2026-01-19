@@ -3,7 +3,8 @@ import { View, StyleSheet, FlatList, RefreshControl, ScrollView, useWindowDimens
 import { useAuth } from '../context/AuthContext';
 import { Text, useTheme, Avatar, Surface, IconButton, ActivityIndicator, Chip, Divider, Button, Portal, Dialog, Switch } from 'react-native-paper';
 import { collection, getDocs, query, orderBy, doc, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, functions } from '../config/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { CRMLayout } from '../components/CRMLayout';
 
 const AdminPanelScreen = ({ navigation }) => {
@@ -98,33 +99,71 @@ const AdminPanelScreen = ({ navigation }) => {
 
     const { user: currentUser } = useAuth();
 
+    // Generic Confirmation Dialog State
+    const [confirmDialogVisible, setConfirmDialogVisible] = useState(false);
+    const [confirmConfig, setConfirmConfig] = useState({
+        title: '',
+        message: '',
+        action: null,
+        confirmLabel: 'Confirm',
+        isDestructive: false
+    });
+
     const confirmDelete = (user) => {
-        if (Platform.OS === 'web') {
-            if (window.confirm(`Are you sure you want to delete user ${user.email}? This cannot be undone.`)) {
-                handleDeleteUser(user.id);
-            }
-        } else {
-            Alert.alert(
-                "Delete User",
-                `Are you sure you want to delete user ${user.email}? This cannot be undone.`,
-                [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                        text: "Delete",
-                        style: "destructive",
-                        onPress: () => handleDeleteUser(user.id)
-                    }
-                ]
-            );
-        }
+        setConfirmConfig({
+            title: "Delete User",
+            message: `Are you sure you want to delete user ${user.email}? This cannot be undone.`,
+            action: () => handleDeleteUser(user.id),
+            confirmLabel: "Delete",
+            isDestructive: true
+        });
+        setConfirmDialogVisible(true);
     };
 
     const handleDeleteUser = async (userId) => {
         try {
             await deleteDoc(doc(db, 'users', userId));
+            setConfirmDialogVisible(false);
         } catch (error) {
             console.error("Error deleting user:", error);
             Alert.alert("Error", "Failed to delete user.");
+        }
+    };
+
+
+    const confirmToggleStatus = (user) => {
+        const action = user.disabled ? "Enable" : "Disable";
+        setConfirmConfig({
+            title: `${action} User`,
+            message: `Are you sure you want to ${action.toLowerCase()} account access for ${user.email}?`,
+            action: () => handleToggleStatus(user),
+            confirmLabel: action,
+            isDestructive: !user.disabled // Disable is destructive (red), Enable is neutral
+        });
+        setConfirmDialogVisible(true);
+    };
+
+    const handleToggleStatus = async (user) => {
+        setLoading(true);
+        try {
+            const toggleUserStatus = httpsCallable(functions, 'toggleUserStatus');
+
+            await toggleUserStatus({
+                uid: user.id,
+                disabled: !user.disabled
+            });
+
+            // Optimistic update
+            setUsers(prev => prev.map(u =>
+                u.id === user.id ? { ...u, disabled: !user.disabled } : u
+            ));
+
+            Alert.alert("Success", `User ${!user.disabled ? 'disabled' : 'enabled'} successfully.`);
+        } catch (error) {
+            console.error("Error toggling status:", error);
+            Alert.alert("Error", error.message || "Failed to update user status.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -174,6 +213,12 @@ const AdminPanelScreen = ({ navigation }) => {
                     </View>
                 </View>
                 <View style={{ flexDirection: 'row' }}>
+                    <IconButton
+                        icon={item.disabled ? "account-off" : "account-check"}
+                        iconColor={item.disabled ? theme.colors.error : theme.colors.primary}
+                        onPress={() => confirmToggleStatus(item)}
+                        disabled={currentUser?.uid === item.id}
+                    />
                     <IconButton icon="pencil" onPress={() => openPermissionsDialog(item)} />
                     <IconButton
                         icon="delete"
@@ -278,6 +323,50 @@ const AdminPanelScreen = ({ navigation }) => {
                         <Dialog.Actions>
                             <Button onPress={() => setPermissionsDialogVisible(false)}>Cancel</Button>
                             <Button onPress={handleSavePermissions} mode="contained">Save</Button>
+                        </Dialog.Actions>
+                    </Dialog>
+                </Portal>
+
+                {/* Confirmation Dialog */}
+                <Portal>
+                    <Dialog
+                        visible={confirmDialogVisible}
+                        onDismiss={() => setConfirmDialogVisible(false)}
+                        style={{
+                            width: width > 600 ? 400 : '90%',
+                            alignSelf: 'center',
+                            borderRadius: 12,
+                            backgroundColor: theme.colors.elevation.level3
+                        }}
+                    >
+                        <Dialog.Title style={{ textAlign: 'center', fontSize: 20, fontWeight: 'bold' }}>
+                            {confirmConfig.title}
+                        </Dialog.Title>
+                        <Dialog.Content>
+                            <Text variant="bodyMedium" style={{ textAlign: 'center', color: theme.colors.onSurfaceVariant }}>
+                                {confirmConfig.message}
+                            </Text>
+                        </Dialog.Content>
+                        <Dialog.Actions style={{ justifyContent: 'space-around', paddingBottom: 16 }}>
+                            <Button
+                                mode="outlined"
+                                onPress={() => setConfirmDialogVisible(false)}
+                                style={{ flex: 1, marginRight: 8, borderColor: theme.colors.outline }}
+                                textColor={theme.colors.onSurface}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                mode="contained"
+                                onPress={() => {
+                                    if (confirmConfig.action) confirmConfig.action();
+                                    setConfirmDialogVisible(false);
+                                }}
+                                style={{ flex: 1, marginLeft: 8, backgroundColor: confirmConfig.isDestructive ? theme.colors.error : theme.colors.primary }}
+                                textColor={theme.colors.onError}
+                            >
+                                {confirmConfig.confirmLabel}
+                            </Button>
                         </Dialog.Actions>
                     </Dialog>
                 </Portal>
