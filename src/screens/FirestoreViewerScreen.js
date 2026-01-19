@@ -219,7 +219,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
             // 1. Attribute Filters
             if (filter) {
-                const op = filter.operator || ";==";
+                const op = filter.operator || "==";
                 constraints.push(where(filter.field, op, filter.value));
             }
 
