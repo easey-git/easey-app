@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Image, LayoutAnimation, Platform, UIManager, TouchableOpacity, Animated, FlatList } from 'react-native';
+import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Image, LayoutAnimation, Platform, UIManager, TouchableOpacity, Animated, FlatList, InteractionManager } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text, Surface, ActivityIndicator, Icon, List, Divider, Avatar, useTheme, Button, Chip, Portal, Dialog, ProgressBar, SegmentedButtons } from 'react-native-paper';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
@@ -11,6 +11,8 @@ import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
 import { AccessDenied } from '../components/AccessDenied';
+import { useStaggeredLoad, useLazyLoad } from '../utils/performance';
+
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -477,9 +479,17 @@ const StatsScreen = ({ navigation }) => {
     const [filteredSales, setFilteredSales] = useState(0);
     const [totalOrdersCount, setTotalOrdersCount] = useState(0);
 
+    // Staggered loading: Phase 1 = skeleton, Phase 2 = orders, Phase 3 = checkouts + GA4
+    const loadPhase = useStaggeredLoad();
+
 
 
     useEffect(() => {
+        // Don't start heavy data fetching until Phase 2 (after initial render)
+        if (loadPhase < 2) {
+            return;
+        }
+
         setLoading(true);
         // Determine Start Date based on Time Range
         const now = new Date();
@@ -652,7 +662,7 @@ const StatsScreen = ({ navigation }) => {
             unsubscribeOrders();
             unsubscribeCheckouts();
         };
-    }, [timeRange]); // Re-run when timeRange changes
+    }, [timeRange, loadPhase]); // Re-run when timeRange or loadPhase changes
 
     // NEW: Combined Feed Processor (Orders + Checkouts)
     useEffect(() => {
@@ -717,7 +727,7 @@ const StatsScreen = ({ navigation }) => {
             setRecentActivity(combined);
         };
 
-        const interval = setInterval(updateFeed, 1000);
+        const interval = setInterval(updateFeed, 3000); // Update every 3 seconds instead of 1
         updateFeed();
 
         return () => clearInterval(interval);

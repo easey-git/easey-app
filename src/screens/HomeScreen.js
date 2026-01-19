@@ -9,6 +9,7 @@ import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
 import { LAYOUT } from '../theme/layout';
+import { useStaggeredLoad } from '../utils/performance';
 
 const StatCard = ({ label, value, icon, color, onPress, theme }) => (
     <Surface style={[styles.card, { backgroundColor: color || theme.colors.surfaceVariant }]} elevation={0}>
@@ -45,8 +46,13 @@ const HomeScreen = ({ navigation }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState({ firestore: true, shiprocket: false, shopify: false, vercel: false });
 
+    // Staggered loading to prevent blocking navigation
+    const loadPhase = useStaggeredLoad();
+
     // --- DATA FETCHING LOGIC ---
     useEffect(() => {
+        if (loadPhase < 2) return;
+
         const workQuery = query(collection(db, "orders"), where("cod_status", "in", ["pending", "confirmed"]));
         const unsubscribe = onSnapshot(workQuery, (snapshot) => {
             let pending = 0;
@@ -70,9 +76,11 @@ const HomeScreen = ({ navigation }) => {
         });
 
         return () => { unsubscribe(); unsubToday(); };
-    }, []);
+    }, [loadPhase]);
 
     useEffect(() => {
+        if (loadPhase < 3) return;
+
         const checkWebhookHealth = async () => {
             try {
                 const shiprocketQuery = query(collection(db, "checkouts"), where("updatedAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))), orderBy("updatedAt", "desc"), limit(1));
@@ -94,7 +102,7 @@ const HomeScreen = ({ navigation }) => {
         checkWebhookHealth();
         const interval = setInterval(checkWebhookHealth, 5 * 60 * 1000);
         return () => clearInterval(interval);
-    }, []);
+    }, [loadPhase]);
 
     const fetchStats = useCallback(() => {
         setLoading(true);
@@ -147,7 +155,11 @@ const HomeScreen = ({ navigation }) => {
         return () => { unsubOrders(); unsubCarts(); };
     }, [timeRange]);
 
-    useEffect(() => { const unsubscribe = fetchStats(); return () => unsubscribe && unsubscribe(); }, [fetchStats]);
+    useEffect(() => {
+        if (loadPhase < 2) return;
+        const unsubscribe = fetchStats();
+        return () => unsubscribe && unsubscribe();
+    }, [fetchStats, loadPhase]);
 
     const onRefresh = React.useCallback(() => { setRefreshing(true); fetchStats(); setTimeout(() => setRefreshing(false), 1000); }, [fetchStats]);
 

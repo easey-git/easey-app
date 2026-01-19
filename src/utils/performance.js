@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 
 /**
  * Custom hook for debouncing values
@@ -7,9 +7,9 @@ import { useCallback, useRef, useEffect } from 'react';
  * @returns {any} - Debounced value
  */
 export const useDebounce = (value, delay = 300) => {
-    const [debouncedValue, setDebouncedValue] = React.useState(value);
+    const [debouncedValue, setDebouncedValue] = useState(value);
 
-    React.useEffect(() => {
+    useEffect(() => {
         const handler = setTimeout(() => {
             setDebouncedValue(value);
         }, delay);
@@ -191,4 +191,100 @@ export const createLRUCache = (maxSize = 100) => {
         clear: () => cache.clear(),
         size: () => cache.size
     };
+};
+
+/**
+ * Polyfill for requestIdleCallback
+ */
+const requestIdleCallbackPolyfill = (callback) => {
+    const start = Date.now();
+    return setTimeout(() => {
+        callback({
+            didTimeout: false,
+            timeRemaining: () => Math.max(0, 50 - (Date.now() - start))
+        });
+    }, 1);
+};
+
+const cancelIdleCallbackPolyfill = (id) => {
+    clearTimeout(id);
+};
+
+export const requestIdleCallback = typeof window !== 'undefined' && window.requestIdleCallback
+    ? window.requestIdleCallback
+    : requestIdleCallbackPolyfill;
+
+export const cancelIdleCallback = typeof window !== 'undefined' && window.cancelIdleCallback
+    ? window.cancelIdleCallback
+    : cancelIdleCallbackPolyfill;
+
+/**
+ * Hook to defer heavy operations until after initial render
+ * This prevents lag when navigating between screens
+ */
+export const useLazyLoad = (callback, deps = []) => {
+    const mounted = useRef(false);
+    const idleCallbackId = useRef(null);
+
+    useEffect(() => {
+        mounted.current = true;
+
+        // Defer execution until browser is idle
+        idleCallbackId.current = requestIdleCallback(() => {
+            if (mounted.current) {
+                callback();
+            }
+        });
+
+        return () => {
+            mounted.current = false;
+            if (idleCallbackId.current) {
+                cancelIdleCallback(idleCallbackId.current);
+            }
+        };
+    }, deps);
+};
+
+/**
+ * Hook to stagger data loading in phases
+ * Phase 1: Critical data (immediate)
+ * Phase 2: Important data (after 100ms)
+ * Phase 3: Nice-to-have data (after 300ms)
+ */
+export const useStaggeredLoad = () => {
+    const [phase, setPhase] = useState(1);
+
+    useEffect(() => {
+        const timer1 = setTimeout(() => setPhase(2), 100);
+        const timer2 = setTimeout(() => setPhase(3), 300);
+
+        return () => {
+            clearTimeout(timer1);
+            clearTimeout(timer2);
+        };
+    }, []);
+
+    return phase;
+};
+
+/**
+ * Defer execution until component is visible
+ */
+export const useDeferredValue = (value, delay = 200) => {
+    const [deferredValue, setDeferredValue] = useState(value);
+    const timeoutRef = useRef(null);
+
+    useEffect(() => {
+        timeoutRef.current = setTimeout(() => {
+            setDeferredValue(value);
+        }, delay);
+
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, [value, delay]);
+
+    return deferredValue;
 };

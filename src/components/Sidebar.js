@@ -64,12 +64,14 @@ export const Sidebar = React.memo(({ onClose }) => {
 
     const handleNavigation = (item) => {
         if (!isDesktop) {
-            // Mobile: Close drawer and navigate
-            closeDrawer();
-            // Small buffer to look smooth, though the global drawer persists
-            setTimeout(() => {
-                navigation.navigate(item.route, item.params);
-            }, 150);
+            // Mobile: Navigate immediately, then close drawer
+            // This prevents the lag from waiting for drawer animation
+            navigation.navigate(item.route, item.params);
+
+            // Defer drawer close to next frame to avoid blocking navigation
+            requestAnimationFrame(() => {
+                closeDrawer();
+            });
         } else {
             navigation.navigate(item.route, item.params);
         }
