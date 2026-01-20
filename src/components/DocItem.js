@@ -672,6 +672,18 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                         theme={theme}
                                         numberOfLines={1}
                                     />
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            const phone = item.phone || '';
+                                            // Keep '+' for international calls if present, otherwise just digits
+                                            const cleanPhone = phone.replace(/[^\d+]/g, '');
+                                            Linking.openURL(`tel:${cleanPhone}`);
+                                        }}
+                                        style={{ marginLeft: 12 }}
+                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    >
+                                        <Icon source="phone-outgoing" size={16} color={theme.colors.primary} />
+                                    </TouchableOpacity>
                                 </View>
                             )}
                             <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 4 }}>
