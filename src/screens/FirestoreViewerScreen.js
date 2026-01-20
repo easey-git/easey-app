@@ -14,6 +14,30 @@ import { useResponsive } from '../hooks/useResponsive';
 import { DatePickerModal, registerTranslation, en } from 'react-native-paper-dates';
 registerTranslation('en', en);
 
+const NoteDialog = ({ visible, onDismiss, onSave, value, onChangeText, loading }) => (
+    <Portal>
+        <Dialog visible={visible} onDismiss={onDismiss} style={{ maxWidth: 400, width: '100%', alignSelf: 'center' }}>
+            <Dialog.Title>{value ? 'Edit Note' : 'Add Note'}</Dialog.Title>
+            <Dialog.Content>
+                <TextInput
+                    mode="outlined"
+                    label="Internal Note"
+                    value={value}
+                    onChangeText={onChangeText}
+                    multiline
+                    numberOfLines={4}
+                    placeholder="Enter details about this order..."
+                    autoFocus
+                />
+            </Dialog.Content>
+            <Dialog.Actions>
+                <Button onPress={onDismiss}>Cancel</Button>
+                <Button onPress={onSave} loading={loading} mode="contained">Save</Button>
+            </Dialog.Actions>
+        </Dialog>
+    </Portal>
+);
+
 const FirestoreViewerScreen = ({ navigation, route }) => {
     const { hasPermission, role, user, loading: authLoading } = useAuth();
     const theme = useTheme(); // Move theme hook up
@@ -116,6 +140,11 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [confirmTitle, setConfirmTitle] = useState('');
     const [confirmMessage, setConfirmMessage] = useState('');
     const [pendingAction, setPendingAction] = useState(null);
+
+    // Note Dialog State
+    const [noteDialogVisible, setNoteDialogVisible] = useState(false);
+    const [noteText, setNoteText] = useState('');
+    const [targetNoteDoc, setTargetNoteDoc] = useState(null);
 
     // ... (Snackbar State remains same)
     const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -986,6 +1015,11 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 onDeleteVoice={handleDeleteVoice}
                 onShippedToggle={handleShippedToggle}
                 onCancelToggle={handleCancelToggle}
+                onAddNote={(item) => {
+                    setTargetNoteDoc(item);
+                    setNoteText(item.internal_notes || '');
+                    setNoteDialogVisible(true);
+                }}
             />
         );
     }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection, role, handleCodToggle, handleResetItem, handleAttachVoice, handleDeleteVoice, handleShippedToggle]);
@@ -1651,6 +1685,46 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
+
+            <NoteDialog
+                visible={noteDialogVisible}
+                onDismiss={() => setNoteDialogVisible(false)}
+                value={noteText}
+                onChangeText={setNoteText}
+                loading={loading}
+                onSave={async () => {
+                    if (!targetNoteDoc) return;
+                    setLoading(true);
+                    try {
+                        await updateDoc(doc(db, selectedCollection, targetNoteDoc.id), {
+                            internal_notes: noteText
+                        });
+
+                        // Log Activity
+                        if (user) {
+                            const docIdentifier = targetNoteDoc.order_number ? `#${targetNoteDoc.order_number}` : targetNoteDoc.id;
+                            ActivityLogService.log(
+                                user.uid,
+                                user.email,
+                                'UPDATE_NOTE',
+                                `Updated note for ${docIdentifier}`,
+                                { docId: targetNoteDoc.id, collection: selectedCollection }
+                            );
+                        }
+
+                        // Optimistic Update
+                        setDocuments(prev => prev.map(d => d.id === targetNoteDoc.id ? { ...d, internal_notes: noteText } : d));
+
+                        setNoteDialogVisible(false);
+                        showSnackbar("Note saved successfully");
+                    } catch (error) {
+                        console.error("Error saving note:", error);
+                        showSnackbar("Failed to save note", true);
+                    } finally {
+                        setLoading(false);
+                    }
+                }}
+            />
 
             {/* Success/Error Snackbar */}
             <Snackbar

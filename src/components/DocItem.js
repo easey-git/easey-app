@@ -1,5 +1,5 @@
 import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
-import { View, TouchableOpacity, TouchableWithoutFeedback, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, TouchableWithoutFeedback, StyleSheet, Linking } from 'react-native';
 import { Surface, Checkbox, Avatar, Text, IconButton, Chip, Icon, ActivityIndicator } from 'react-native-paper';
 import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
@@ -60,7 +60,7 @@ const RecoverButton = ({ link, theme }) => {
     );
 };
 
-const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset, onAttachVoice, onDeleteVoice, onShippedToggle, onCancelToggle }) => {
+const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset, onAttachVoice, onDeleteVoice, onShippedToggle, onCancelToggle, onAddNote }) => {
     const { isMobile } = useResponsive();
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
 
@@ -688,9 +688,9 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                         </View>
 
                         {/* Voice Note Section */}
+                        {/* Voice Note & Text Note Section */}
                         <View style={{ marginTop: 8 }}>
                             {item.voiceNoteUrl ? (
-
                                 <TouchableWithoutFeedback onPress={(e) => e.stopPropagation?.()}>
                                     <View style={{
                                         alignSelf: 'flex-start',
@@ -699,11 +699,12 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                         flexDirection: 'row',
                                         alignItems: 'center',
                                         backgroundColor: theme.colors.elevation.level2,
-                                        borderRadius: 20, // More rounded pill shape
+                                        borderRadius: 20,
                                         paddingVertical: 4,
                                         paddingHorizontal: 8,
                                         borderWidth: 1,
-                                        borderColor: theme.colors.outlineVariant
+                                        borderColor: theme.colors.outlineVariant,
+                                        marginBottom: 4
                                     }}>
                                         {/* Play/Pause Button */}
                                         <View style={{
@@ -794,24 +795,93 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                         />
                                     </View>
                                 </TouchableWithoutFeedback>
-                            ) : (
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    {isUploading ? (
+                            ) : null}
+
+                            {/* Action Row: Voice Note & Text Note */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                {/* Voice Note Button (Icon Only) - Show if NO voice note exists */}
+                                {!item.voiceNoteUrl && (
+                                    isUploading ? (
                                         <ActivityIndicator size="small" style={{ marginRight: 8 }} />
                                     ) : (
-                                        <Chip
+                                        <IconButton
                                             icon="microphone"
-                                            mode="outlined"
+                                            mode="contained-tonal"
+                                            size={20}
                                             onPress={handleUpload}
-                                            style={{ borderRadius: 20, borderColor: theme.colors.outlineVariant }}
-                                            textStyle={{ fontSize: 12, fontWeight: 'bold' }}
+                                            iconColor={theme.colors.primary}
+                                            containerColor={theme.colors.secondaryContainer}
+                                            style={{ margin: 0, width: 32, height: 32 }}
+                                        />
+                                    )
+                                )}
+
+                                {/* WhatsApp Button */}
+                                {(item.phone || item.phone_number || item.phoneNormalized) && (
+                                    <IconButton
+                                        icon="whatsapp"
+                                        mode="contained-tonal"
+                                        size={20}
+                                        onPress={() => {
+                                            // Extract and clean phone number
+                                            const phone = item.phone || item.phone_number || item.phoneNormalized;
+                                            if (phone) {
+                                                const cleanPhone = phone.replace(/[^\d+]/g, ''); // Keep plus sign if present
+                                                Linking.openURL(`whatsapp://send?phone=${cleanPhone}`);
+                                            }
+                                        }}
+                                        iconColor="#25D366"
+                                        containerColor={theme.colors.surfaceVariant}
+                                        style={{ margin: 0, width: 32, height: 32 }}
+                                    />
+                                )}
+
+                                {/* Add Text Note Button: Show if NO note exists */}
+                                {!item.internal_notes && (
+                                    <IconButton
+                                        icon="note-plus-outline"
+                                        mode="contained-tonal"
+                                        size={20}
+                                        onPress={() => onAddNote && onAddNote(item)}
+                                        iconColor={theme.colors.onSurfaceVariant}
+                                        containerColor={theme.colors.surfaceVariant}
+                                        style={{ margin: 0, width: 32, height: 32 }}
+                                    />
+                                )}
+
+                                {/* Compact Inline Note Chip (If note exists) */}
+                                {item.internal_notes && (
+                                    <TouchableOpacity
+                                        onPress={() => onAddNote && onAddNote(item)}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            backgroundColor: theme.colors.yellowContainer || '#fffbeb',
+                                            borderRadius: 6,
+                                            height: 22,
+                                            paddingHorizontal: 6,
+                                            borderWidth: 1,
+                                            borderColor: '#fcd34d',
+                                            maxWidth: 150
+                                        }}
+                                    >
+                                        <Icon source="text-box-outline" size={12} color="#b45309" />
+                                        <Text
+                                            variant="bodySmall"
+                                            numberOfLines={1}
+                                            style={{
+                                                marginLeft: 4,
+                                                color: '#78350f',
+                                                fontSize: 10,
+                                                flexShrink: 1,
+                                                fontWeight: '600'
+                                            }}
                                         >
-                                            Add Note
-                                        </Chip>
-                                    )}
-                                </View>
-                            )
-                            }
+                                            {item.internal_notes}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
                         </View>
 
                         {/* Bottom Row: Tags (Status chips flow naturally here) */}
@@ -1038,7 +1108,8 @@ const areEqual = (prevProps, nextProps) => {
         prevProps.selectedCollection === nextProps.selectedCollection &&
         prevProps.item.voiceNoteUrl === nextProps.item.voiceNoteUrl &&
         prevProps.item.cod_status === nextProps.item.cod_status &&
-        prevProps.item.adminEdited === nextProps.item.adminEdited
+        prevProps.item.adminEdited === nextProps.item.adminEdited &&
+        prevProps.item.internal_notes === nextProps.item.internal_notes
     );
 };
 
