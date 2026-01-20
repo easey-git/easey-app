@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Text, useTheme, Surface, Appbar, Icon, ActivityIndicator, Chip, Button, SegmentedButtons, DataTable, FAB, Menu, IconButton, Portal, Dialog, TextInput, Switch } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
@@ -363,12 +363,38 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
 // Campaigns Tab (WITH MANAGEMENT)
 // ============================================================================
 const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fetchData }) => {
+    const { user } = useAuth(); // Get user from auth context
     const [menuVisible, setMenuVisible] = useState({});
+    const [togglingCampaigns, setTogglingCampaigns] = useState({}); // Track which campaigns are being toggled
+    const [localCampaignsData, setLocalCampaignsData] = useState(null); // Local state for optimistic updates
+
+    // Sync local state with prop changes
+    useEffect(() => {
+        if (campaignsData) {
+            setLocalCampaignsData(campaignsData);
+        }
+    }, [campaignsData]);
 
     const toggleCampaignStatus = async (campaignId, currentStatus) => {
-        try {
-            const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+        const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
 
+        // Mark campaign as toggling
+        setTogglingCampaigns(prev => ({ ...prev, [campaignId]: true }));
+
+        // Optimistic update - immediately update UI
+        setLocalCampaignsData(prevData => {
+            if (!prevData) return prevData;
+            return {
+                ...prevData,
+                campaigns: prevData.campaigns.map(campaign =>
+                    campaign.id === campaignId
+                        ? { ...campaign, status: newStatus }
+                        : campaign
+                )
+            };
+        });
+
+        try {
             const response = await fetch(`${BASE_URL}/campaign-management`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -387,15 +413,46 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                         'TOGGLE_CAMPAIGN_STATUS',
                         `Toggled campaign ${campaignId} status to ${newStatus}`,
                         { campaignId, newStatus }
-                    );
+                    ).catch(err => console.error('Activity log error:', err));
                 }
-                fetchData(); // Refresh data
+                // Success - optimistic update is already applied
             } else {
+                // Rollback optimistic update on error
+                setLocalCampaignsData(prevData => {
+                    if (!prevData) return prevData;
+                    return {
+                        ...prevData,
+                        campaigns: prevData.campaigns.map(campaign =>
+                            campaign.id === campaignId
+                                ? { ...campaign, status: currentStatus }
+                                : campaign
+                        )
+                    };
+                });
                 const errorData = await response.json();
-                Alert.alert('Error', 'Failed to update campaign: ' + (errorData.error || 'Unknown error'));
+                Alert.alert('Toggle Failed', errorData.error || 'Could not update campaign status. Please try again.');
             }
         } catch (error) {
-            Alert.alert('Error', error.message);
+            // Rollback optimistic update on error
+            setLocalCampaignsData(prevData => {
+                if (!prevData) return prevData;
+                return {
+                    ...prevData,
+                    campaigns: prevData.campaigns.map(campaign =>
+                        campaign.id === campaignId
+                            ? { ...campaign, status: currentStatus }
+                            : campaign
+                    )
+                };
+            });
+            Alert.alert('Network Error', 'Could not connect to server. Please check your connection and try again.');
+        } finally {
+            // Remove toggling state
+            setTogglingCampaigns(prev => {
+                const updated = { ...prev };
+                delete updated[campaignId];
+                return updated;
+            });
         }
     };
 
@@ -515,7 +572,10 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
         );
     }
 
-    if (!campaignsData) {
+    // Use local data for rendering (with optimistic updates)
+    const displayData = localCampaignsData || campaignsData;
+
+    if (!displayData) {
         return (
             <View style={{ padding: 32, alignItems: 'center' }}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -530,28 +590,28 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
             </Text>
 
             {/* Summary */}
-            {campaignsData.summary && (
+            {displayData.summary && (
                 <Surface style={[styles.summaryCard, { backgroundColor: theme.colors.primaryContainer }]} elevation={1}>
                     <Text variant="titleMedium" style={{ color: theme.colors.onPrimaryContainer, marginBottom: 16, opacity: 0.9 }}>Today's Performance</Text>
                     <View style={styles.metricsRow}>
                         <View style={styles.metricItem}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Spend</Text>
                             <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }} numberOfLines={1} adjustsFontSizeToFit>
-                                ₹{campaignsData.summary.spend?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                ₹{displayData.summary.spend?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                             </Text>
                         </View>
                         <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
                         <View style={styles.metricItem}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>ROAS</Text>
                             <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }} numberOfLines={1} adjustsFontSizeToFit>
-                                {campaignsData.summary.roas?.toFixed(2)}x
+                                {displayData.summary.roas?.toFixed(2)}x
                             </Text>
                         </View>
                         <View style={[styles.metricDivider, { backgroundColor: theme.colors.onPrimaryContainer, opacity: 0.2 }]} />
                         <View style={styles.metricItem}>
                             <Text variant="labelMedium" style={{ color: theme.colors.onPrimaryContainer, opacity: 0.7 }}>Purchases</Text>
                             <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }} numberOfLines={1} adjustsFontSizeToFit>
-                                {campaignsData.summary.purchases}
+                                {displayData.summary.purchases}
                             </Text>
                         </View>
                     </View>
@@ -562,11 +622,11 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
             {/* Campaigns List */}
             <View style={{ marginTop: 16, marginBottom: 12 }}>
                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onBackground }}>
-                    Campaigns ({campaignsData.campaigns?.length || 0})
+                    Campaigns ({displayData.campaigns?.length || 0})
                 </Text>
             </View>
 
-            {campaignsData.campaigns && campaignsData.campaigns.map((campaign, index) => (
+            {displayData.campaigns && displayData.campaigns.map((campaign, index) => (
                 <Surface key={index} style={[styles.campaignCard, { backgroundColor: theme.colors.elevation.level1, borderColor: theme.colors.outlineVariant }]} elevation={1}>
                     <View style={styles.campaignHeader}>
                         <View style={{ flex: 1, marginRight: 12 }}>
@@ -631,13 +691,24 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                             </TouchableOpacity>
                         </View>
 
-                        {/* Direct Toggle Switch */}
-                        <Switch
-                            value={campaign.status === 'ACTIVE'}
-                            onValueChange={() => toggleCampaignStatus(campaign.id, campaign.status)}
-                            color={theme.colors.primary}
-                            style={{ alignSelf: 'center' }}
-                        />
+                        {/* Direct Toggle Switch with Loading Indicator */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            alignSelf: 'center',
+                            gap: 12,
+                            opacity: togglingCampaigns[campaign.id] ? 0.6 : 1
+                        }}>
+                            {togglingCampaigns[campaign.id] && (
+                                <ActivityIndicator size="small" color={theme.colors.primary} />
+                            )}
+                            <Switch
+                                value={campaign.status === 'ACTIVE'}
+                                onValueChange={() => toggleCampaignStatus(campaign.id, campaign.status)}
+                                color={theme.colors.primary}
+                                disabled={togglingCampaigns[campaign.id]}
+                            />
+                        </View>
                     </View>
 
                     {campaign.performance && (
