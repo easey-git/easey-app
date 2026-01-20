@@ -204,69 +204,112 @@ const AdminPanelScreen = ({ navigation }) => {
         }
     };
 
-    const renderItem = ({ item }) => (
-        <Surface style={[styles.userCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={0}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Avatar.Text
-                    size={48}
-                    label={item.email ? item.email.charAt(0).toUpperCase() : "U"}
-                    style={{ backgroundColor: theme.colors.primaryContainer }}
-                    color={theme.colors.onPrimaryContainer}
-                />
-                <View style={{ marginLeft: 16, flex: 1 }}>
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
-                        {item.email}
-                    </Text>
-                    {item.displayName && item.displayName !== item.email && item.displayName !== 'User' && (
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                            {item.displayName}
+    const renderItem = ({ item }) => {
+        const isMobile = width < 600;
+
+        return (
+            <Surface style={[
+                styles.userCard,
+                {
+                    backgroundColor: theme.colors.elevation.level1,
+                    padding: isMobile ? 12 : 16
+                }
+            ]} elevation={0}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                    {/* Avatar */}
+                    <Avatar.Text
+                        size={isMobile ? 40 : 48}
+                        label={item.email ? item.email.charAt(0).toUpperCase() : "U"}
+                        style={{ backgroundColor: theme.colors.primaryContainer }}
+                        color={theme.colors.onPrimaryContainer}
+                    />
+
+                    {/* User Info */}
+                    <View style={{ marginLeft: isMobile ? 12 : 16, flex: 1, minWidth: 0 }}>
+                        <Text
+                            variant={isMobile ? "bodyLarge" : "titleMedium"}
+                            style={{ fontWeight: 'bold', color: theme.colors.onSurface }}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.65}
+                        >
+                            {item.email}
                         </Text>
-                    )}
-                    <View style={{ flexDirection: 'row', marginTop: 12, alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                        <View style={{
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: item.role === 'admin' ? theme.colors.primary : theme.colors.outline,
-                            paddingHorizontal: 10,
-                            paddingVertical: 4,
-                            backgroundColor: item.role === 'admin' ? theme.colors.primaryContainer : 'transparent',
-                        }}>
-                            <Text style={{
-                                fontSize: 12,
-                                fontWeight: 'bold',
-                                color: item.role === 'admin' ? theme.colors.primary : theme.colors.onSurfaceVariant
-                            }}>
-                                {item.role === 'admin' ? 'Admin' : 'User'}
+                        {item.displayName && item.displayName !== item.email && item.displayName !== 'User' && (
+                            <Text
+                                variant="bodySmall"
+                                style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}
+                                numberOfLines={1}
+                                adjustsFontSizeToFit
+                                minimumFontScale={0.7}
+                            >
+                                {item.displayName}
                             </Text>
-                        </View>
-                        {item.permissions && item.permissions.slice(0, 2).map(perm => (
-                            <View key={perm} style={{ backgroundColor: theme.colors.surfaceVariant, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                                <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant }}>{perm.replace('_', ' ')}</Text>
-                            </View>
-                        ))}
-                        {item.permissions && item.permissions.length > 2 && (
-                            <Text style={{ fontSize: 10, color: theme.colors.outline }}>+{item.permissions.length - 2} more</Text>
                         )}
+
+                        {/* Role and Permissions */}
+                        <View style={{ flexDirection: 'row', marginTop: 8, alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                            <View style={{
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: item.role === 'admin' ? theme.colors.primary : theme.colors.outline,
+                                paddingHorizontal: 8,
+                                paddingVertical: 3,
+                                backgroundColor: item.role === 'admin' ? theme.colors.primaryContainer : 'transparent',
+                            }}>
+                                <Text style={{
+                                    fontSize: 11,
+                                    fontWeight: 'bold',
+                                    color: item.role === 'admin' ? theme.colors.primary : theme.colors.onSurfaceVariant
+                                }}>
+                                    {item.role === 'admin' ? 'Admin' : 'User'}
+                                </Text>
+                            </View>
+                            {!isMobile && item.permissions && item.permissions.slice(0, 2).map(perm => (
+                                <View key={perm} style={{ backgroundColor: theme.colors.surfaceVariant, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                    <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant }}>{perm.replace('_', ' ')}</Text>
+                                </View>
+                            ))}
+                            {!isMobile && item.permissions && item.permissions.length > 2 && (
+                                <Text style={{ fontSize: 10, color: theme.colors.outline }}>+{item.permissions.length - 2} more</Text>
+                            )}
+                            {isMobile && item.permissions && item.permissions.length > 0 && (
+                                <Text style={{ fontSize: 10, color: theme.colors.outline }}>
+                                    {item.permissions.length} permission{item.permissions.length !== 1 ? 's' : ''}
+                                </Text>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* Action Buttons */}
+                    <View style={{ flexDirection: 'row', marginLeft: isMobile ? 4 : 8, flexShrink: 0 }}>
+                        <IconButton
+                            icon={item.disabled ? "account-off" : "account-check"}
+                            iconColor={item.disabled ? theme.colors.error : theme.colors.primary}
+                            onPress={() => confirmToggleStatus(item)}
+                            disabled={currentUser?.uid === item.id}
+                            size={isMobile ? 20 : 24}
+                            style={{ margin: 0 }}
+                        />
+                        <IconButton
+                            icon="pencil"
+                            onPress={() => openPermissionsDialog(item)}
+                            size={isMobile ? 20 : 24}
+                            style={{ margin: 0 }}
+                        />
+                        <IconButton
+                            icon="delete"
+                            iconColor={theme.colors.error}
+                            onPress={() => confirmDelete(item)}
+                            disabled={currentUser?.uid === item.id}
+                            size={isMobile ? 20 : 24}
+                            style={{ margin: 0 }}
+                        />
                     </View>
                 </View>
-                <View style={{ flexDirection: 'row' }}>
-                    <IconButton
-                        icon={item.disabled ? "account-off" : "account-check"}
-                        iconColor={item.disabled ? theme.colors.error : theme.colors.primary}
-                        onPress={() => confirmToggleStatus(item)}
-                        disabled={currentUser?.uid === item.id}
-                    />
-                    <IconButton icon="pencil" onPress={() => openPermissionsDialog(item)} />
-                    <IconButton
-                        icon="delete"
-                        iconColor={theme.colors.error}
-                        onPress={() => confirmDelete(item)}
-                        disabled={currentUser?.uid === item.id}
-                    />
-                </View>
-            </View>
-        </Surface>
-    );
+            </Surface>
+        );
+    };
     return (
         <CRMLayout title="Admin Panel" navigation={navigation} scrollable={false}>
             <View style={{ flex: 1 }}>
@@ -295,8 +338,8 @@ const AdminPanelScreen = ({ navigation }) => {
                         data={users}
                         renderItem={renderItem}
                         keyExtractor={item => item.id}
-                        contentContainerStyle={{ padding: 16 }}
-                        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+                        contentContainerStyle={{ padding: width < 600 ? 12 : 16 }}
+                        ItemSeparatorComponent={() => <View style={{ height: width < 600 ? 8 : 12 }} />}
                         ListEmptyComponent={
                             <View style={{ alignItems: 'center', marginTop: 50 }}>
                                 <Text style={{ color: theme.colors.outline }}>No users found.</Text>
