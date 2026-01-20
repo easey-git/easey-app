@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'; // Cache bust 1
-import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Platform, KeyboardAvoidingView } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon, ActivityIndicator } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
 import { collection, query, where, limit, getDocs, doc, updateDoc, writeBatch, deleteField, getDocsFromServer, orderBy, startAfter, Timestamp, deleteDoc } from 'firebase/firestore';
@@ -13,6 +13,88 @@ import { AccessDenied } from '../components/AccessDenied';
 import { useResponsive } from '../hooks/useResponsive';
 import { DatePickerModal, registerTranslation, en } from 'react-native-paper-dates';
 registerTranslation('en', en);
+
+// Reusable Field Editor Component (Moved outside to prevent re-creation on render)
+const EditFieldItem = ({ k, value, isEditing, onUpdate, onEditDate, theme, style }) => {
+    // Render timestamp
+    if (value && typeof value === 'object' && value.seconds) {
+        const dateObj = new Date(value.seconds * 1000);
+        const dateStr = dateObj.toLocaleString();
+        return (
+            <View style={style}>
+                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+                    {k}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <TouchableOpacity
+                        disabled={!isEditing}
+                        onPress={() => onEditDate(k, value)}
+                        style={{ flex: 1, paddingVertical: 4, borderBottomWidth: isEditing ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}
+                    >
+                        <Text variant="bodyLarge" style={{ color: isEditing ? theme.colors.onSurface : theme.colors.onSurface }}>
+                            {dateStr}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {isEditing && (
+                        <IconButton
+                            icon="pencil"
+                            size={20}
+                            onPress={() => onEditDate(k, value)}
+                            iconColor={theme.colors.primary}
+                        />
+                    )}
+                </View>
+            </View>
+        );
+    }
+
+    // Render boolean
+    if (typeof value === 'boolean') {
+        return (
+            <View style={[style, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }]}>
+                <Text variant="bodyLarge">{k}</Text>
+                {isEditing ? (
+                    <Switch
+                        value={value}
+                        onValueChange={(val) => onUpdate(k, val)}
+                        color={theme.colors.primary}
+                    />
+                ) : (
+                    <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
+                        {value ? 'Yes' : 'No'}
+                    </Text>
+                )}
+            </View>
+        );
+    }
+
+    // Render string/number
+    const fullWidthFields = ['address1', 'address2', 'note', 'notes', 'description'];
+    const isFullWidth = fullWidthFields.includes(k);
+
+    return (
+        <View style={style}>
+            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+                {k}
+            </Text>
+            {isEditing ? (
+                <TextInput
+                    mode="outlined"
+                    value={String(value)}
+                    onChangeText={(text) => onUpdate(k, text)}
+                    style={{ backgroundColor: theme.colors.surface }}
+                    multiline={isFullWidth}
+                    numberOfLines={isFullWidth ? 3 : 1}
+                />
+            ) : (
+                <Text variant="bodyLarge" selectable>
+                    {String(value) || '—'}
+                </Text>
+            )}
+        </View>
+    );
+};
 
 const NoteDialog = ({ visible, onDismiss, onSave, value, onChangeText, loading }) => (
     <Portal>
@@ -682,103 +764,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         [editDateParams, updateField]
     );
 
-    // Recursive Field Renderer
-    const RenderField = ({ label, value, depth = 0, parentKey = null }) => {
-        const paddingLeft = depth * 12;
 
-        // 1. Handle Timestamps
-        if (value && typeof value === 'object' && value.seconds) {
-            const dateObj = new Date(value.seconds * 1000);
-            const dateStr = dateObj.toLocaleString();
-
-            return (
-                <View style={[styles.fieldRow, { paddingLeft }]}>
-                    <Text variant="labelSmall" style={{ color: theme.colors.primary, fontSize: 11 }}>{label}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <TouchableOpacity
-                            disabled={!isEditing}
-                            onPress={() => handleEditDate(label, value, parentKey)}
-                            style={{ flex: 1, paddingVertical: 4, borderBottomWidth: isEditing ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}
-                        >
-                            <Text variant="bodySmall" style={{ fontSize: 12, color: isEditing ? theme.colors.onSurface : theme.colors.onSurfaceVariant }}>
-                                {dateStr}
-                            </Text>
-                        </TouchableOpacity>
-
-                        {isEditing && (
-                            <IconButton
-                                icon="pencil"
-                                size={20}
-                                onPress={() => handleEditDate(label, value, parentKey)}
-                                iconColor={theme.colors.primary}
-                            />
-                        )}
-                    </View>
-                </View>
-            );
-        }
-
-        // 2. Handle Arrays/Objects (Nested)
-        if (value && typeof value === 'object') {
-            // Skip rawJson field for cleanliness, or show as text area
-            if (label === 'rawJson') return null;
-
-            return (
-                <List.Accordion
-                    title={label}
-                    titleStyle={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 12 }}
-                    style={{ backgroundColor: theme.colors.surface, paddingLeft: Math.max(0, paddingLeft - 12), paddingVertical: 0, minHeight: 36 }}
-                >
-                    {Object.entries(value).map(([k, v]) => (
-                        <RenderField
-                            key={k}
-                            label={Array.isArray(value) ? `Item ${parseInt(k) + 1} ` : k}
-                            value={v}
-                            depth={depth + 1}
-                            // Editing nested arrays/objects is complex, making read-only for deep nesting in this version
-                            parentKey={depth === 0 ? label : null}
-                        />
-                    ))}
-                </List.Accordion>
-            );
-        }
-
-        // 3. Handle Booleans
-        if (typeof value === 'boolean') {
-            return (
-                <View style={[styles.fieldRow, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft }]}>
-                    <Text variant="bodySmall" style={{ fontSize: 12 }}>{label}</Text>
-                    {isEditing ? (
-                        <Switch
-                            value={value}
-                            onValueChange={(val) => updateField(label, val, parentKey)}
-                            color={theme.colors.primary}
-                        />
-                    ) : (
-                        <Text variant="bodySmall" style={{ fontWeight: 'bold', fontSize: 12 }}>{value ? 'True' : 'False'}</Text>
-                    )}
-                </View>
-            );
-        }
-
-        // 4. Handle Strings/Numbers
-        return (
-            <View style={[styles.fieldRow, { paddingLeft }]}>
-                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 11 }}>{label}</Text>
-                {isEditing ? (
-                    <TextInput
-                        mode="outlined"
-                        value={String(value)}
-                        onChangeText={(text) => updateField(label, text, parentKey)}
-                        style={{ backgroundColor: theme.colors.surface, height: 36, fontSize: 12 }}
-                        dense
-                    />
-                ) : (
-                    <Text variant="bodySmall" selectable style={{ fontSize: 12 }}>{String(value)}</Text>
-                )}
-            </View>
-        );
-    };
 
     const renderCollectionItem = ({ item }) => (
         <TouchableOpacity
@@ -1024,87 +1010,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         );
     }, [selectedItems, selectedCollection, theme, showDocDetails, toggleSelection, role, handleCodToggle, handleResetItem, handleAttachVoice, handleDeleteVoice, handleShippedToggle]);
 
-    // Reusable Field Editor Component to ensure consistency across Mobile/Desktop views
-    const EditFieldItem = ({ k, value, isEditing, onUpdate, onEditDate, theme, style }) => {
-        // Render timestamp
-        if (value && typeof value === 'object' && value.seconds) {
-            const dateObj = new Date(value.seconds * 1000);
-            const dateStr = dateObj.toLocaleString();
-            return (
-                <View style={style}>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
-                        {k}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <TouchableOpacity
-                            disabled={!isEditing}
-                            onPress={() => onEditDate(k, value)}
-                            style={{ flex: 1, paddingVertical: 4, borderBottomWidth: isEditing ? 1 : 0, borderBottomColor: theme.colors.outlineVariant }}
-                        >
-                            <Text variant="bodyLarge" style={{ color: isEditing ? theme.colors.onSurface : theme.colors.onSurface }}>
-                                {dateStr}
-                            </Text>
-                        </TouchableOpacity>
 
-                        {isEditing && (
-                            <IconButton
-                                icon="pencil"
-                                size={20}
-                                onPress={() => onEditDate(k, value)}
-                                iconColor={theme.colors.primary}
-                            />
-                        )}
-                    </View>
-                </View>
-            );
-        }
-
-        // Render boolean
-        if (typeof value === 'boolean') {
-            return (
-                <View style={[style, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }]}>
-                    <Text variant="bodyLarge">{k}</Text>
-                    {isEditing ? (
-                        <Switch
-                            value={value}
-                            onValueChange={(val) => onUpdate(k, val)}
-                            color={theme.colors.primary}
-                        />
-                    ) : (
-                        <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
-                            {value ? 'Yes' : 'No'}
-                        </Text>
-                    )}
-                </View>
-            );
-        }
-
-        // Render string/number
-        const fullWidthFields = ['address1', 'address2', 'note', 'notes', 'description'];
-        const isFullWidth = fullWidthFields.includes(k);
-
-        return (
-            <View style={style}>
-                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
-                    {k}
-                </Text>
-                {isEditing ? (
-                    <TextInput
-                        mode="outlined"
-                        value={String(value)}
-                        onChangeText={(text) => onUpdate(k, text)}
-                        style={{ backgroundColor: theme.colors.surface }}
-                        multiline={isFullWidth}
-                        numberOfLines={isFullWidth ? 3 : 1}
-                    />
-                ) : (
-                    <Text variant="bodyLarge" selectable>
-                        {String(value) || '—'}
-                    </Text>
-                )}
-            </View>
-        );
-    };
 
     const { isMobile } = useResponsive();
 
@@ -1395,15 +1301,18 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             {/* Edit Modal - Full Screen on Mobile, Modal on Desktop */}
             {visible && isMobile ? (
                 // Mobile: Full-screen overlay
-                <View style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: theme.colors.background,
-                    zIndex: 1000
-                }}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: theme.colors.background,
+                        zIndex: 1000
+                    }}
+                >
                     {/* Header */}
                     <View style={{
                         flexDirection: 'row',
@@ -1520,7 +1429,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                             </>
                         )}
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             ) : visible && !isMobile ? (
                 // Desktop: Modal
                 <Portal>
