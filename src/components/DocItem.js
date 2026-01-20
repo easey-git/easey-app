@@ -1,5 +1,5 @@
 import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
-import { View, TouchableOpacity, TouchableWithoutFeedback, StyleSheet, Linking } from 'react-native';
+import { View, TouchableOpacity, TouchableWithoutFeedback, StyleSheet, Linking, Platform } from 'react-native';
 import { Surface, Checkbox, Avatar, Text, IconButton, Chip, Icon, ActivityIndicator } from 'react-native-paper';
 import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
@@ -826,8 +826,25 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                             // Extract and clean phone number
                                             const phone = item.phone || item.phone_number || item.phoneNormalized;
                                             if (phone) {
-                                                const cleanPhone = phone.replace(/[^\d+]/g, ''); // Keep plus sign if present
-                                                Linking.openURL(`whatsapp://send?phone=${cleanPhone}`);
+                                                // WA usually requires phone number without '+', just country code + digits.
+                                                // However, we'll keep the cleaning logic but ensure it works for URLs.
+                                                const cleanPhone = phone.replace(/[^\d]/g, ''); // Standardizing: Just digits (e.g. 919876543210)
+
+                                                let url = `whatsapp://send?phone=${cleanPhone}`;
+                                                if (Platform.OS === 'web') {
+                                                    url = `https://web.whatsapp.com/send?phone=${cleanPhone}`;
+                                                }
+
+                                                Linking.canOpenURL(url).then(supported => {
+                                                    if (supported || Platform.OS === 'web') {
+                                                        Linking.openURL(url);
+                                                    } else {
+                                                        // Fallback for mobile if whatsapp:// not supported (not installed)
+                                                        Linking.openURL(`https://wa.me/${cleanPhone}`);
+                                                    }
+                                                }).catch(() => {
+                                                    Linking.openURL(`https://wa.me/${cleanPhone}`);
+                                                });
                                             }
                                         }}
                                         iconColor="#25D366"
