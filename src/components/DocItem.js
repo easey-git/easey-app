@@ -549,9 +549,43 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 )}
                             </View>
 
+                            {/* Action Row: WhatsApp (Matches Orders Layout) */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                {(item.phone || item.phone_number || item.phoneNormalized) && (
+                                    <IconButton
+                                        icon="whatsapp"
+                                        mode="contained-tonal"
+                                        size={20}
+                                        onPress={() => {
+                                            const phone = item.phone || item.phone_number || item.phoneNormalized;
+                                            if (phone) {
+                                                const cleanPhone = phone.replace(/[^\d]/g, '');
+                                                let url = `whatsapp://send?phone=${cleanPhone}`;
+                                                if (Platform.OS === 'web') {
+                                                    url = `https://web.whatsapp.com/send?phone=${cleanPhone}`;
+                                                }
+
+                                                Linking.canOpenURL(url).then(supported => {
+                                                    if (supported || Platform.OS === 'web') {
+                                                        Linking.openURL(url);
+                                                    } else {
+                                                        Linking.openURL(`https://wa.me/${cleanPhone}`);
+                                                    }
+                                                }).catch(() => {
+                                                    Linking.openURL(`https://wa.me/${cleanPhone}`);
+                                                });
+                                            }
+                                        }}
+                                        iconColor="#25D366"
+                                        containerColor={theme.colors.surfaceVariant}
+                                        style={{ margin: 0, width: 32, height: 32 }}
+                                    />
+                                )}
+                            </View>
+
                             {/* Bottom Row: Status, Payment & Recovery Link */}
-                            <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                                <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', alignItems: 'center', flex: 1 }}>
                                     <Chip
                                         mode="flat"
                                         compact
@@ -578,10 +612,12 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 </View>
 
                                 {(item.checkout_url || item.custom_attributes?.landing_page_url) && (
-                                    <RecoverButton
-                                        link={item.checkout_url || item.custom_attributes?.landing_page_url}
-                                        theme={theme}
-                                    />
+                                    <View style={{ flexShrink: 0 }}>
+                                        <RecoverButton
+                                            link={item.checkout_url || item.custom_attributes?.landing_page_url}
+                                            theme={theme}
+                                        />
+                                    </View>
                                 )}
                             </View>
                         </View>
@@ -810,7 +846,7 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                             ) : null}
 
                             {/* Action Row: Voice Note & Text Note */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                                 {/* Voice Note Button (Icon Only) - Show if NO voice note exists */}
                                 {!item.voiceNoteUrl && (
                                     isUploading ? (
