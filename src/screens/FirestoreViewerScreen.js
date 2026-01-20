@@ -1164,7 +1164,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             <View style={{ paddingVertical: 12 }}>
                 <FlatList
                     horizontal
-                    data={collections}
+                    data={customDate ? collections.filter(c => ['orders', 'checkouts'].includes(c)) : collections}
                     renderItem={({ item }) => (
                         <TouchableOpacity
                             onPress={() => {
