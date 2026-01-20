@@ -60,6 +60,91 @@ const RecoverButton = ({ link, theme }) => {
     );
 };
 
+// Format milliseconds to MM:SS
+const formatTime = (millis) => {
+    if (!millis) return '0:00';
+    const minutes = Math.floor(millis / 60000);
+    const seconds = Math.floor((millis % 60000) / 1000);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+};
+
+// Helper to extract product name safely
+const getProductName = (item) => {
+    const products = item.items || item.line_items || item.cart?.items || [];
+    if (products.length > 0) {
+        const firstProduct = products[0];
+        const productName = firstProduct.name || firstProduct.title || 'Unknown Product';
+        const extraCount = products.length - 1;
+        return `${productName}${extraCount > 0 ? ` +${extraCount} more` : ''}`;
+    }
+    return null;
+};
+
+// Helper to extract location safely
+const getKeyLocation = (item) => {
+    // Try explicit addresses first, then customer default, then fallback to root properties
+    const addr = item.shipping_address || item.billing_address || item.customer?.default_address || item.default_address || item;
+
+    // Some payloads (like Shiprocket) might have 'city' at root, others in address objs
+    const city = addr.city || item.city;
+    const state = addr.province_code || addr.province || addr.state || item.province || item.state;
+
+    if (city && state) return `${city}, ${state}`;
+    if (city) return city;
+    return null;
+};
+
+// Helper to extract Traffic Source
+const getTrafficSource = (item) => {
+    // Check Root fields OR nested attributes (common in Shopify/Fastrr)
+    const source = item.referring_site ||
+        item.landing_site ||
+        item.custom_attributes?.landing_page_url ||
+        item.cart_attributes?.landing_page_url ||
+        item.note_attributes?.landing_page_url ||
+        '';
+
+    if (!source) return null;
+
+    const lowerSource = source.toLowerCase();
+
+    // 1. Google Ads (gclid is definitive)
+    if (lowerSource.includes('gclid') || lowerSource.includes('google')) return { label: 'Google', icon: 'google' };
+
+    // 2. Instagram (Specific checks first)
+    if (lowerSource.includes('instagram') ||
+        lowerSource.includes('utm_source=ig') ||
+        lowerSource.includes('android-app://com.instagram') ||
+        lowerSource.includes('ios-app://com.instagram')) {
+        return { label: 'Instagram', icon: 'instagram' };
+    }
+
+    // 3. Facebook
+    if (lowerSource.includes('facebook') || lowerSource.includes('fbclid')) return { label: 'Facebook', icon: 'facebook' };
+
+    // 4. Other Socials
+    if (lowerSource.includes('youtube') || lowerSource.includes('yt')) return { label: 'YouTube', icon: 'youtube' };
+    if (lowerSource.includes('whatsapp') || lowerSource.includes('wa.me')) return { label: 'WhatsApp', icon: 'whatsapp' };
+
+    // 5. Direct / Generic
+    if (lowerSource.startsWith('http')) return { label: 'Web', icon: 'web' };
+
+    return null;
+};
+
+// Helper to extract Discount Code (String or Object)
+const getDiscountCode = (item) => {
+    if (item.discount_codes && item.discount_codes.length > 0) {
+        const first = item.discount_codes[0];
+        if (typeof first === 'string') return first;
+        if (typeof first === 'object' && first.code) return first.code;
+    }
+    if (item.applied_discount && item.applied_discount.title) { // Common in Shopify Orders
+        return item.applied_discount.title;
+    }
+    return null;
+};
+
 const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, onToggle, onCodToggle, isAdmin, onReset, onAttachVoice, onDeleteVoice, onShippedToggle, onCancelToggle, onAddNote }) => {
     const { isMobile } = useResponsive();
     const isCOD = (item.paymentMethod === 'COD' || item.gateway === 'COD' || item.status === 'COD');
@@ -76,14 +161,6 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
     useEffect(() => {
         return sound ? () => { sound.unloadAsync(); } : undefined;
     }, [sound]);
-
-    // Format milliseconds to MM:SS
-    const formatTime = (millis) => {
-        if (!millis) return '0:00';
-        const minutes = Math.floor(millis / 60000);
-        const seconds = Math.floor((millis % 60000) / 1000);
-        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-    };
 
     const handlePlayPause = async () => {
         if (!item.voiceNoteUrl) return;
@@ -364,87 +441,10 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
             isConverted ? theme.colors.onPrimaryContainer :
                 theme.colors.onSecondaryContainer;
 
-        // Helper to extract product name safely
-        const getProductName = () => {
-            const products = item.items || item.line_items || item.cart?.items || [];
-            if (products.length > 0) {
-                const firstProduct = products[0];
-                const productName = firstProduct.name || firstProduct.title || 'Unknown Product';
-                const extraCount = products.length - 1;
-                return `${productName}${extraCount > 0 ? ` +${extraCount} more` : ''}`;
-            }
-            return null;
-        };
-
-        // Helper to extract location safely
-        const getKeyLocation = () => {
-            // Try explicit addresses first, then customer default, then fallback to root properties
-            const addr = item.shipping_address || item.billing_address || item.customer?.default_address || item.default_address || item;
-
-            // Some payloads (like Shiprocket) might have 'city' at root, others in address objs
-            const city = addr.city || item.city;
-            const state = addr.province_code || addr.province || addr.state || item.province || item.state;
-
-            if (city && state) return `${city}, ${state}`;
-            if (city) return city;
-            return null;
-        };
-
-        // Helper to extract Traffic Source
-        const getTrafficSource = () => {
-            // Check Root fields OR nested attributes (common in Shopify/Fastrr)
-            const source = item.referring_site ||
-                item.landing_site ||
-                item.custom_attributes?.landing_page_url || // <-- ADDED THIS BASED ON JSON
-                item.cart_attributes?.landing_page_url ||
-                item.note_attributes?.landing_page_url ||
-                '';
-
-            if (!source) return null;
-
-            const lowerSource = source.toLowerCase();
-
-            // 1. Google Ads (gclid is definitive)
-            if (lowerSource.includes('gclid') || lowerSource.includes('google')) return { label: 'Google', icon: 'google' };
-
-            // 2. Instagram (Specific checks first)
-            if (lowerSource.includes('instagram') ||
-                lowerSource.includes('utm_source=ig') ||
-                lowerSource.includes('android-app://com.instagram') ||
-                lowerSource.includes('ios-app://com.instagram')) {
-                return { label: 'Instagram', icon: 'instagram' };
-            }
-
-            // 3. Facebook
-            if (lowerSource.includes('facebook') || lowerSource.includes('fbclid')) return { label: 'Facebook', icon: 'facebook' };
-
-            // 4. Other Socials
-            if (lowerSource.includes('youtube') || lowerSource.includes('yt')) return { label: 'YouTube', icon: 'youtube' };
-            if (lowerSource.includes('whatsapp') || lowerSource.includes('wa.me')) return { label: 'WhatsApp', icon: 'whatsapp' };
-
-            // 5. Direct / Generic
-            if (lowerSource.startsWith('http')) return { label: 'Web', icon: 'web' };
-
-            return null;
-        };
-
-        const productName = getProductName();
-        const locationText = getKeyLocation();
-        const trafficSource = getTrafficSource();
-
-        // Helper to extract Discount Code (String or Object)
-        const getDiscountCode = () => {
-            if (item.discount_codes && item.discount_codes.length > 0) {
-                const first = item.discount_codes[0];
-                if (typeof first === 'string') return first;
-                if (typeof first === 'object' && first.code) return first.code;
-            }
-            if (item.applied_discount && item.applied_discount.title) { // Common in Shopify Orders
-                return item.applied_discount.title;
-            }
-            return null;
-        };
-        const discountCode = getDiscountCode();
+        const productName = getProductName(item);
+        const locationText = getKeyLocation(item);
+        const trafficSource = getTrafficSource(item);
+        const discountCode = getDiscountCode(item);
 
         const rtoRisk = item.rtoPredict; // 'low', 'high', etc.
 
@@ -629,8 +629,11 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
     }
 
     // Default rendering (Orders, etc.) - CARD STYLE (Industry Standard)
+    const productName = getProductName(item);
     return (
         <Surface style={[styles.docCard, { backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface }]} elevation={1}>
+
+
             <TouchableOpacity
                 onPress={() => onPress(item)}
                 onLongPress={() => onToggle(item.id)}
@@ -660,20 +663,11 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 </Text>
                                 {/* Price moved to Left (under Name) - applied Order # style (Small/Subtle) */}
                                 {/* Product Name Display */}
-                                {(() => {
-                                    const products = item.items || item.line_items || item.cart?.items || [];
-                                    if (products.length > 0) {
-                                        const firstProduct = products[0];
-                                        const productName = firstProduct.name || firstProduct.title || 'Unknown Product';
-                                        const extraCount = products.length - 1;
-                                        return (
-                                            <Text variant="bodyMedium" numberOfLines={1} style={{ color: theme.colors.secondary, marginTop: 2 }}>
-                                                {productName}{extraCount > 0 ? ` +${extraCount} more` : ''}
-                                            </Text>
-                                        );
-                                    }
-                                    return null;
-                                })()}
+                                {productName && (
+                                    <Text variant="bodyMedium" numberOfLines={1} style={{ color: theme.colors.secondary, marginTop: 2 }}>
+                                        {productName}
+                                    </Text>
+                                )}
 
                                 {item.totalPrice && (
                                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2, fontWeight: 'bold' }}>
@@ -1174,7 +1168,11 @@ const areEqual = (prevProps, nextProps) => {
         prevProps.item.voiceNoteUrl === nextProps.item.voiceNoteUrl &&
         prevProps.item.cod_status === nextProps.item.cod_status &&
         prevProps.item.adminEdited === nextProps.item.adminEdited &&
-        prevProps.item.internal_notes === nextProps.item.internal_notes
+        prevProps.item.internal_notes === nextProps.item.internal_notes &&
+        // New checks for completeness
+        prevProps.item.phone === nextProps.item.phone &&
+        prevProps.item.stage === nextProps.item.stage &&
+        prevProps.item.latest_stage === nextProps.item.latest_stage
     );
 };
 
