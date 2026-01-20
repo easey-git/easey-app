@@ -113,14 +113,6 @@ const MetaScreen = ({ navigation }) => {
         }
     };
 
-    if (loading && !refreshing) {
-        return (
-            <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-            </View>
-        );
-    }
-
     const StatusBadge = ({ status, color }) => (
         <View style={[styles.badge, { backgroundColor: color + '15', borderColor: color + '30' }]}>
             <Text style={[styles.badgeText, { color: color }]}>
@@ -136,79 +128,84 @@ const MetaScreen = ({ navigation }) => {
             scrollable={false}
             actions={<Appbar.Action icon="refresh" onPress={onRefresh} />}
         >
-            <View style={styles.container}>
-                {/* Tab Navigation */}
-                <View style={[styles.tabBar, { backgroundColor: 'transparent' }]}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
-                        <SegmentedButtons
-                            value={activeTab}
-                            onValueChange={setActiveTab}
-                            buttons={[
-                                {
-                                    value: 'overview',
-                                    label: 'Overview',
-                                    icon: width < 380 ? undefined : 'view-dashboard',
-                                    labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
-                                },
-                                {
-                                    value: 'campaigns',
-                                    label: 'Campaigns',
-                                    icon: width < 380 ? undefined : 'bullhorn',
-                                    labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
-                                },
-                                {
-                                    value: 'analytics',
-                                    label: 'Analytics',
-                                    icon: width < 380 ? undefined : 'chart-line',
-                                    labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
-                                },
+            {loading && !refreshing ? (
+                <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                </View>
+            ) : (
+                <View style={styles.container}>
+                    {/* Tab Navigation */}
+                    <View style={[styles.tabBar, { backgroundColor: 'transparent' }]}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
+                            <SegmentedButtons
+                                value={activeTab}
+                                onValueChange={setActiveTab}
+                                buttons={[
+                                    {
+                                        value: 'overview',
+                                        label: 'Overview',
+                                        icon: width < 380 ? undefined : 'view-dashboard',
+                                        labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
+                                    },
+                                    {
+                                        value: 'campaigns',
+                                        label: 'Campaigns',
+                                        icon: width < 380 ? undefined : 'bullhorn',
+                                        labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
+                                    },
+                                    {
+                                        value: 'analytics',
+                                        label: 'Analytics',
+                                        icon: width < 380 ? undefined : 'chart-line',
+                                        labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
+                                    },
 
-                            ]}
-                            style={styles.segmentedButtons}
-                        />
+                                ]}
+                                style={styles.segmentedButtons}
+                            />
+                        </ScrollView>
+                    </View>
+
+                    {/* Tab Content */}
+                    <ScrollView
+                        contentContainerStyle={styles.content}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+                    >
+                        {activeTab === 'overview' && (
+                            <OverviewTab
+                                accountData={accountData}
+                                error={error}
+                                theme={theme}
+                                getAlertColor={getAlertColor}
+                                getStatusColor={getStatusColor}
+                                fetchData={fetchData}
+                            />
+                        )}
+
+                        {activeTab === 'campaigns' && (
+                            <CampaignsTab
+                                campaignsData={campaignsData}
+                                error={error}
+                                theme={theme}
+                                getCampaignStatusColor={getCampaignStatusColor}
+                                fetchData={fetchData}
+                            />
+                        )}
+
+                        {activeTab === 'analytics' && (
+                            <AnalyticsTab
+                                analyticsData={analyticsData}
+                                error={error}
+                                theme={theme}
+                                fetchData={fetchData}
+                                datePreset={datePreset}
+                                setDatePreset={setDatePreset}
+                            />
+                        )}
+
                     </ScrollView>
                 </View>
-
-                {/* Tab Content */}
-                <ScrollView
-                    contentContainerStyle={styles.content}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
-                >
-                    {activeTab === 'overview' && (
-                        <OverviewTab
-                            accountData={accountData}
-                            error={error}
-                            theme={theme}
-                            getAlertColor={getAlertColor}
-                            getStatusColor={getStatusColor}
-                            fetchData={fetchData}
-                        />
-                    )}
-
-                    {activeTab === 'campaigns' && (
-                        <CampaignsTab
-                            campaignsData={campaignsData}
-                            error={error}
-                            theme={theme}
-                            getCampaignStatusColor={getCampaignStatusColor}
-                            fetchData={fetchData}
-                        />
-                    )}
-
-                    {activeTab === 'analytics' && (
-                        <AnalyticsTab
-                            analyticsData={analyticsData}
-                            error={error}
-                            theme={theme}
-                            fetchData={fetchData}
-                            datePreset={datePreset}
-                            setDatePreset={setDatePreset}
-                        />
-                    )}
-
-
-                </ScrollView>
-            </View>
+            )}
         </CRMLayout>
     );
 };
