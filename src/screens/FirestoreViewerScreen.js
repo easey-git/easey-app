@@ -1105,15 +1105,29 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     ) : (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             {customDate ? (
-                                <Chip
-                                    mode="flat"
-                                    onClose={() => setCustomDate(undefined)}
-                                    style={{ marginRight: 8, backgroundColor: theme.colors.secondaryContainer }}
-                                    textStyle={{ color: theme.colors.onSecondaryContainer }}
-                                    onPress={() => setOpenDatePicker(true)}
-                                >
-                                    {customDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                </Chip>
+                                <View style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme.colors.secondaryContainer,
+                                    borderRadius: 18,
+                                    marginRight: 8,
+                                    height: 32,
+                                    paddingLeft: 12,
+                                    paddingRight: 6
+                                }}>
+                                    <TouchableOpacity onPress={() => setOpenDatePicker(true)}>
+                                        <Text style={{ color: theme.colors.onSecondaryContainer, fontSize: 13, fontWeight: '600' }}>
+                                            {customDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => setCustomDate(undefined)}
+                                        style={{ marginLeft: 6 }}
+                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    >
+                                        <Icon source="close-circle" size={18} color={theme.colors.onSecondaryContainer} />
+                                    </TouchableOpacity>
+                                </View>
                             ) : (
                                 <IconButton
                                     icon="calendar"
