@@ -846,8 +846,8 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 </Chip>
                             )}
 
-                            {/* COD Confirmation Status (Active if COD and NOT Shipped and NOT Cancelled) */}
-                            {(isCOD && selectedCollection !== 'checkouts' && item.cod_status !== 'shipped' && item.cod_status !== 'cancelled') && (
+                            {/* Order Confirmation Status (Active for all orders that are NOT Shipped and NOT Cancelled) */}
+                            {(selectedCollection !== 'checkouts' && item.cod_status !== 'shipped' && item.cod_status !== 'cancelled') && (
                                 <Chip
                                     mode="flat"
                                     compact
