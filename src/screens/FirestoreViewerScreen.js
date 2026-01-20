@@ -109,17 +109,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    const filteredDocuments = React.useMemo(() => {
-        if (!debouncedSearchQuery) return documents;
-        const query = debouncedSearchQuery.toLowerCase();
-        return documents.filter(doc =>
-            (doc.customerName && doc.customerName.toLowerCase().includes(query)) ||
-            (doc.orderNumber && String(doc.orderNumber).toLowerCase().includes(query)) ||
-            (doc.phone && String(doc.phone).includes(query)) ||
-            (doc.email && doc.email.toLowerCase().includes(query)) ||
-            (doc.id && doc.id.toLowerCase().includes(query))
-        );
-    }, [documents, debouncedSearchQuery]);
+    const filteredDocuments = documents;
 
     // ... (Dialog States remain same)
     const [confirmVisible, setConfirmVisible] = useState(false);
@@ -151,7 +141,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setDocuments([]);
         fetchDocuments();
         setSelectedItems(new Set());
-    }, [selectedCollection, filter, customDate]);
+    }, [selectedCollection, filter, customDate, debouncedSearchQuery]);
 
     // Helper: Get Date Range
     const getDateRange = () => {
@@ -239,7 +229,9 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
     const fetchDocuments = async (isLoadMore = false) => {
         if (isLoadMore) {
-            if (!hasMore || loadingMore) return;
+            if (!hasMore || loadingMore || loading) return;
+            // Safety check: cannot load more without a cursor
+            if (!lastDoc) return;
             setLoadingMore(true);
         } else {
             setLoading(true);
@@ -248,6 +240,101 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
 
         try {
+            // 0. Server-Side Search (Industry Standard Pattern for Firestore)
+            if (debouncedSearchQuery && debouncedSearchQuery.trim().length > 0) {
+                const searchText = debouncedSearchQuery.trim();
+                const colRef = collection(db, selectedCollection);
+                const searchQueries = [];
+
+                // Helper to generate case permutations (e.g., "john" -> ["john", "John", "JOHN"])
+                const getPermutations = (text) => {
+                    const lower = text.toLowerCase();
+                    const upper = text.toUpperCase();
+                    const title = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+                    return Array.from(new Set([text, lower, upper, title]));
+                };
+
+                const permutations = getPermutations(searchText);
+
+                // 1. ID Match (Exact) - All Collections
+                searchQueries.push(query(colRef, where('id', '==', searchText)));
+
+                // 2. Collection Specific Fields
+                if (selectedCollection === 'orders' || selectedCollection === 'checkouts') {
+                    // Order Number (Numeric & String)
+                    if (!isNaN(searchText)) {
+                        const numVal = Number(searchText);
+                        searchQueries.push(query(colRef, where('orderNumber', '==', numVal)));
+                        searchQueries.push(query(colRef, where('order_number', '==', numVal)));
+                        // Also try string numeric
+                        searchQueries.push(query(colRef, where('orderNumber', '==', searchText)));
+                    }
+
+                    // Phone (Exact & Prefix) - Phone usually doesn't need case permutations
+                    searchQueries.push(query(colRef, where('phone', '>=', searchText), where('phone', '<=', searchText + '\uf8ff')));
+
+                    // Email (Try permutations)
+                    permutations.forEach(term => {
+                        searchQueries.push(query(colRef, where('email', '==', term)));
+                    });
+
+                    // Customer Name & First Name (Prefix - Permutations)
+                    permutations.forEach(term => {
+                        searchQueries.push(query(colRef, where('customerName', '>=', term), where('customerName', '<=', term + '\uf8ff')));
+                        searchQueries.push(query(colRef, where('first_name', '>=', term), where('first_name', '<=', term + '\uf8ff')));
+                    });
+                }
+
+                if (selectedCollection === 'whatsapp_messages') {
+                    searchQueries.push(query(colRef, where('phone', '>=', searchText), where('phone', '<=', searchText + '\uf8ff')));
+                    searchQueries.push(query(colRef, where('phoneNormalized', '>=', searchText), where('phoneNormalized', '<=', searchText + '\uf8ff')));
+                }
+
+                if (selectedCollection === 'wallet_transactions') {
+                    permutations.forEach(term => {
+                        searchQueries.push(query(colRef, where('description', '>=', term), where('description', '<=', term + '\uf8ff')));
+                        searchQueries.push(query(colRef, where('category', '==', term)));
+                    });
+                }
+
+                // Execute all queries in parallel
+                const results = await Promise.all(searchQueries.map(q => getDocs(q)));
+
+                // Deduplicate & Merge Logic
+                const mergedDocs = new Map();
+                results.forEach(snapshot => {
+                    snapshot.docs.forEach(doc => {
+                        mergedDocs.set(doc.id, {
+                            id: doc.id,
+                            ref: doc.ref,
+                            ...doc.data()
+                        });
+                    });
+                });
+
+                const finalDocs = Array.from(mergedDocs.values());
+
+                // Client-side Sort
+                finalDocs.sort((a, b) => {
+                    const getDate = (d) => {
+                        if (d.createdAt?.seconds) return d.createdAt.seconds;
+                        if (d.timestamp?.seconds) return d.timestamp.seconds;
+                        if (d.date?.seconds) return d.date.seconds;
+                        if (d.updatedAt?.seconds) return d.updatedAt.seconds;
+                        return 0;
+                    };
+                    return getDate(b) - getDate(a);
+                });
+
+                setDocuments(finalDocs);
+
+                // Update State
+                setHasMore(false);
+                setLoading(false);
+                setLoadingMore(false);
+                return; // Exit fetchDocuments early
+            }
+
             let constraints = [];
 
             // 1. Attribute Filters
@@ -1034,7 +1121,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                                     iconColor={theme.colors.onSurface}
                                 />
                             )}
-                            <Appbar.Action icon="refresh" onPress={fetchDocuments} />
+                            <Appbar.Action icon="refresh" onPress={() => fetchDocuments()} />
                         </View>
                     )}
                 </View>
