@@ -655,6 +655,9 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 <Text variant="labelSmall" style={{ color: theme.colors.outline, marginTop: 2 }}>
                                     {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : ''}
                                 </Text>
+                                <Text variant="labelSmall" style={{ color: theme.colors.outline, fontSize: 10, marginTop: 0 }}>
+                                    {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                </Text>
                             </View>
                         </View>
 
