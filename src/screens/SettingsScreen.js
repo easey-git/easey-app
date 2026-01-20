@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, useTheme, Appbar, List, Switch, Divider, Surface, Avatar, Button, Dialog, Portal } from 'react-native-paper';
+import { Text, useTheme, Appbar, List, Switch, Divider, Surface, Avatar, Button, Dialog, Portal, ActivityIndicator } from 'react-native-paper';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { usePreferences } from '../context/PreferencesContext';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,7 @@ const SettingsScreen = ({ navigation }) => {
     const { user, logout, isAdmin } = useAuth();
     const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+    const [themeLoading, setThemeLoading] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -49,19 +50,40 @@ const SettingsScreen = ({ navigation }) => {
             <List.Section title="Appearance">
                 <List.Item
                     title="Dark Mode"
+                    description="Toggle application theme"
                     left={props => <List.Icon {...props} icon="theme-light-dark" />}
-                    right={() => <Switch value={isThemeDark} onValueChange={() => {
-                        toggleTheme();
-                        if (user) {
-                            ActivityLogService.log(
-                                user.uid,
-                                user.email,
-                                'UPDATE_PREFERENCE',
-                                `Changed theme to ${!isThemeDark ? 'Dark' : 'Light'}`,
-                                { type: 'theme', value: !isThemeDark }
-                            );
-                        }
-                    }} />}
+                    right={() => (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {themeLoading && <ActivityIndicator animating={true} size="small" style={{ marginRight: 12 }} />}
+                            <Switch
+                                value={isThemeDark}
+                                disabled={themeLoading}
+                                onValueChange={async () => {
+                                    setThemeLoading(true);
+                                    // Add a small delay for better visual feedback
+                                    const minLoadTime = new Promise(resolve => setTimeout(resolve, 600));
+
+                                    try {
+                                        await toggleTheme();
+                                        if (user) {
+                                            await ActivityLogService.log(
+                                                user.uid,
+                                                user.email,
+                                                'UPDATE_PREFERENCE',
+                                                `Changed theme to ${!isThemeDark ? 'Dark' : 'Light'}`,
+                                                { type: 'theme', value: !isThemeDark }
+                                            );
+                                        }
+                                        await minLoadTime;
+                                    } catch (error) {
+                                        console.error("Theme toggle failed:", error);
+                                    } finally {
+                                        setThemeLoading(false);
+                                    }
+                                }}
+                            />
+                        </View>
+                    )}
                     style={styles.listItem}
                 />
             </List.Section>
