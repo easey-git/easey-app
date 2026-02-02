@@ -526,15 +526,17 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     };
 
-    const toggleSelection = (id) => {
-        const newSelected = new Set(selectedItems);
-        if (newSelected.has(id)) {
-            newSelected.delete(id);
-        } else {
-            newSelected.add(id);
-        }
-        setSelectedItems(newSelected);
-    };
+    const toggleSelection = useCallback((id) => {
+        setSelectedItems(prev => {
+            const newSelected = new Set(prev);
+            if (newSelected.has(id)) {
+                newSelected.delete(id);
+            } else {
+                newSelected.add(id);
+            }
+            return newSelected;
+        });
+    }, []);
 
     const handleBulkDelete = () => {
         if (selectedItems.size === 0) return;
