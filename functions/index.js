@@ -24,3 +24,6 @@ exports.toggleUserStatus = manageUsers.toggleUserStatus;
 // Export Utilities (Scheduled)
 const utilsTriggers = require('./triggers/utils');
 exports.cleanupOldLogs = utilsTriggers.cleanupOldLogs;
+// Export Wallet Triggers (Search Indexing)
+const walletTriggers = require('./triggers/wallet');
+exports.maintainTransactionIndex = walletTriggers.maintainTransactionIndex;
