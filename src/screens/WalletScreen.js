@@ -566,22 +566,6 @@ const WalletScreen = ({ navigation }) => {
 
     const ListHeader = useMemo(() => (
         <View style={{ paddingBottom: 16, paddingTop: 16 }}>
-            <Banner
-                visible={needsMigration && !isMigrating}
-                actions={[
-                    { label: 'Fix Search Index', onPress: handleMigration }
-                ]}
-                icon="database-cog"
-            >
-                Search optimization available. Update your transactions to simpler, faster search?
-            </Banner>
-            {isMigrating && (
-                <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
-                    <Text variant="bodySmall" style={{ marginBottom: 4 }}>Optimizing Database...</Text>
-                    <ProgressBar indeterminate />
-                </View>
-            )}
-
             <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
                 <SegmentedButtons
                     value={timeRange}
@@ -689,17 +673,6 @@ const WalletScreen = ({ navigation }) => {
                 </View>
             </View>
 
-            <Searchbar
-                placeholder="Search all transactions..."
-                onChangeText={setSearchQuery}
-                value={searchQuery}
-                style={{ marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 16, height: 46, marginHorizontal: 16 }}
-                inputStyle={{ minHeight: 0, alignSelf: 'center' }}
-                iconColor={theme.colors.onSurfaceVariant}
-                placeholderTextColor={theme.colors.onSurfaceVariant}
-                elevation={0}
-            />
-
             {
                 sections.length === 0 && !dataLoading && (
                     <View style={{ alignItems: 'center', padding: 40, opacity: 0.5 }}>
@@ -709,7 +682,7 @@ const WalletScreen = ({ navigation }) => {
                 )
             }
         </View >
-    ), [timeRange, globalStats, itemStats, theme, filterType, searchQuery, sections.length, statsLoading, dataLoading, needsMigration, isMigrating]);
+    ), [timeRange, globalStats, itemStats, theme, filterType, sections.length, statsLoading, dataLoading]);
 
     const handleSave = useCallback(async () => {
         if (!hasPermission('manage_wallet')) {
@@ -825,6 +798,42 @@ const WalletScreen = ({ navigation }) => {
             fullWidth={true}
             actions={<Appbar.Action icon="plus" onPress={() => setVisible(true)} />}
         >
+            <View style={{ backgroundColor: theme.colors.background }}>
+                <Banner
+                    visible={needsMigration && !isMigrating}
+                    actions={[
+                        { label: 'Fix Search Index', onPress: handleMigration }
+                    ]}
+                    icon="database-cog"
+                    style={{ marginBottom: 0 }}
+                >
+                    Search optimization available. Update your transactions to simpler, faster search?
+                </Banner>
+                {isMigrating && (
+                    <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+                        <Text variant="bodySmall" style={{ marginBottom: 4 }}>Optimizing Database...</Text>
+                        <ProgressBar indeterminate />
+                    </View>
+                )}
+
+                <Searchbar
+                    placeholder="Search all transactions..."
+                    onChangeText={setSearchQuery}
+                    value={searchQuery}
+                    style={{
+                        margin: 16,
+                        marginBottom: 8,
+                        backgroundColor: theme.colors.surface,
+                        borderRadius: 16,
+                        height: 46
+                    }}
+                    inputStyle={{ minHeight: 0, alignSelf: 'center' }}
+                    iconColor={theme.colors.onSurfaceVariant}
+                    placeholderTextColor={theme.colors.onSurfaceVariant}
+                    elevation={0}
+                />
+            </View>
+
             {dataLoading ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" />
