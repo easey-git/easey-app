@@ -504,7 +504,10 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                             {/* Middle Row: Product Name & Price */}
                             <View style={{ marginTop: 2 }}>
                                 {productName && (
-                                    <Text variant="bodyMedium" numberOfLines={1} style={{ color: theme.colors.secondary }}>
+                                    <Text
+                                        variant="bodyMedium"
+                                        style={{ color: theme.colors.secondary }}
+                                    >
                                         {productName}
                                     </Text>
                                 )}
@@ -664,7 +667,10 @@ const DocItem = memo(({ item, isSelected, selectedCollection, theme, onPress, on
                                 {/* Price moved to Left (under Name) - applied Order # style (Small/Subtle) */}
                                 {/* Product Name Display */}
                                 {productName && (
-                                    <Text variant="bodyMedium" numberOfLines={1} style={{ color: theme.colors.secondary, marginTop: 2 }}>
+                                    <Text
+                                        variant="bodyMedium"
+                                        style={{ color: theme.colors.secondary, marginTop: 2 }}
+                                    >
                                         {productName}
                                     </Text>
                                 )}
