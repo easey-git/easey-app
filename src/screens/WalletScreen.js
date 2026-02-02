@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, SectionList, ScrollView } from 'react-native';
-import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar } from 'react-native-paper';
-import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDoc } from 'firebase/firestore';
+import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar, Banner, ProgressBar } from 'react-native-paper';
+import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDoc, getDocs, startAfter } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { WalletService } from '../services/walletService';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
@@ -90,10 +90,51 @@ const WalletScreen = ({ navigation }) => {
     const [dataLoading, setDataLoading] = useState(true);
     const [displayLimit, setDisplayLimit] = useState(50); // Pagination Limit
 
+    // Migration State
+    const [isMigrating, setIsMigrating] = useState(false);
+    const [needsMigration, setNeedsMigration] = useState(false);
+
+    useEffect(() => {
+        // Check if migration is needed (if recent transactions miss 'keywords')
+        if (transactions.length > 0 && transactions[0]) {
+            if (!transactions[0].keywords) {
+                setNeedsMigration(true);
+            }
+        }
+    }, [transactions]);
+
+    const handleMigration = async () => {
+        setIsMigrating(true);
+        try {
+            await WalletService.migrateSearchIndex();
+            showSnackbar("Search optimization complete!");
+            setNeedsMigration(false);
+            // Refresh to get new data
+            fetchTransactions(true);
+        } catch (e) {
+            console.error(e);
+            showSnackbar("Migration failed. Check console.", true);
+        } finally {
+            setIsMigrating(false);
+        }
+    };
+
     // Filters
     const [timeRange, setTimeRange] = useState('month'); // 'week' | 'month' | 'all'
     const [filterType, setFilterType] = useState('all'); // 'all' | 'income' | 'expense'
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+    // Debounce Search
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+        }, 500);
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [searchQuery]);
 
     // Form State
     const [amount, setAmount] = useState('');
@@ -302,92 +343,133 @@ const WalletScreen = ({ navigation }) => {
     }, [timeRange]);
 
 
+    const [lastDocument, setLastDocument] = useState(null);
+    const [hasMore, setHasMore] = useState(true);
+
+    // Reset list when filters change
     useEffect(() => {
-        setDataLoading(true);
+        // setTransactions([]); // Don't clear immediately to prevent layout jump
+        setLastDocument(null);
+        setHasMore(false); // Hide load more while loading new filter
+        fetchTransactions(true);
+    }, [filterType, timeRange, debouncedSearchQuery]);
 
-        let startDate = new Date();
-        let queryConstraints = [orderBy("date", "desc")];
+    const fetchTransactions = useCallback(async (isReset = false) => {
+        if (!hasMore && !isReset) return;
+        if (loading && !isReset) return; // Prevent duplicate pending
 
-        if (timeRange === 'week') {
-            startDate.setDate(startDate.getDate() - 7);
-            queryConstraints.push(where("date", ">=", startDate));
-        } else if (timeRange === 'month') {
-            startDate.setMonth(startDate.getMonth() - 1);
-            queryConstraints.push(where("date", ">=", startDate));
-        }
+        // Don't show full screen loader for pagination, only for initial load
+        if (isReset) setDataLoading(true);
 
-        const listQuery = query(collection(db, "wallet_transactions"), ...queryConstraints, limit(displayLimit));
+        try {
+            let qConstraints = [];
 
-        const unsubscribe = onSnapshot(listQuery, (snapshot) => {
+            // 1. Search Query (Highest Priority constraint)
+            if (debouncedSearchQuery.trim().length > 0) {
+                // INDUSTRY STANDARD: Array-Contains Search
+                // Matches "server" in "Monthly Server Costs"
+                // Requires "keywords" field in docs (migrated via Banner)
+                const term = debouncedSearchQuery.trim().split(' ')[0].toLowerCase();
+
+                // Note: This requires index: 'keywords' (Arrays) + 'date' (Desc)
+                // If index is missing, Firestore will throw error with link to create it.
+                qConstraints.push(where('keywords', 'array-contains', term));
+                qConstraints.push(orderBy('date', 'desc'));
+            } else {
+                // Default Sort
+                qConstraints.push(orderBy('date', 'desc'));
+            }
+
+            // 2. Type Filter
+            // If searching, we ignore tabs to search GLOBALLY across all transaction types.
+            if (debouncedSearchQuery.trim().length === 0 && filterType !== 'all') {
+                qConstraints.push(where('type', '==', filterType));
+            }
+
+            // 3. Date Filter
+            // If searching text, we skip date filtering to strictly avoid needing N*M indexes.
+            if (debouncedSearchQuery.trim().length === 0) {
+                if (timeRange === 'week') {
+                    let d = new Date();
+                    d.setDate(d.getDate() - 7);
+                    qConstraints.push(where('date', '>=', d));
+                } else if (timeRange === 'month') {
+                    let d = new Date();
+                    d.setMonth(d.getMonth() - 1);
+                    qConstraints.push(where('date', '>=', d));
+                }
+            }
+
+            // 4. Pagination
+            qConstraints.push(limit(50));
+            if (!isReset && lastDocument) {
+                qConstraints.push(startAfter(lastDocument));
+            }
+
+            const q = query(collection(db, "wallet_transactions"), ...qConstraints);
+            const snapshot = await getDocs(q);
+
             const list = [];
             snapshot.forEach((doc) => {
                 list.push({ id: doc.id, ...doc.data() });
             });
-            setTransactions(list);
-            setDataLoading(false);
-        }, (error) => {
-            console.error("Error fetching transactions: ", error);
-            setDataLoading(false);
-            showSnackbar("Failed to load transactions", true);
-        });
 
-        return () => unsubscribe();
-    }, [timeRange, showSnackbar, displayLimit]);
-
-    useEffect(() => {
-        if (type === 'income') {
-            setCategory(INCOME_CATEGORIES[0]);
-        } else {
-            setCategory(EXPENSE_CATEGORIES[0]);
-        }
-    }, [type]);
-
-    const handleSave = useCallback(async () => {
-        if (!hasPermission('manage_wallet')) {
-            showSnackbar("Permission denied: Cannot manage wallet", true);
-            return;
-        }
-
-        if (!amount || !description) {
-            showSnackbar("Please enter both amount and description", true);
-            return;
-        };
-
-        const numericAmount = parseFloat(amount);
-        if (isNaN(numericAmount) || numericAmount <= 0) {
-            showSnackbar("Please enter a valid positive amount", true);
-            return;
-        }
-
-        setLoading(true);
-
-        try {
-            await WalletService.addTransaction({
-                amount: numericAmount,
-                description: description.trim(),
-                category,
-                type,
-                userId: user?.uid,
-                userEmail: user?.email
-            });
-            setVisible(false);
-            setAmount('');
-            setDescription('');
-            const defaultType = 'expense';
-            setType(defaultType);
-            setCategory(EXPENSE_CATEGORIES[0]);
-
-            if (Platform.OS !== 'web') {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (isReset) {
+                setTransactions(list);
+            } else {
+                setTransactions(prev => [...prev, ...list]);
             }
-            showSnackbar("Transaction saved successfully");
+
+            setLastDocument(snapshot.docs[snapshot.docs.length - 1]);
+            setHasMore(snapshot.docs.length === 50);
+            setDataLoading(false);
+
         } catch (error) {
-            console.error("Error adding transaction: ", error);
-            showSnackbar("Could not save. Check your connection.", true);
-        } finally {
-            setLoading(false);
+            console.error("Fetch error:", error);
+            // Check for Missing Index Error
+            if (error.message.includes("requires an index")) {
+                showSnackbar("Missing Index! Check Console for Link.", true);
+                console.log("CREATE INDEX LINK:", error.message);
+            } else {
+                showSnackbar("Could not load transactions.", true);
+            }
+            setDataLoading(false);
         }
-    }, [amount, description, category, type, showSnackbar, hasPermission]);
+    }, [filterType, timeRange, debouncedSearchQuery, lastDocument, hasMore, loading, showSnackbar]);
+
+    const loadMore = () => {
+        if (!dataLoading && hasMore) {
+            fetchTransactions(false);
+        }
+    };
+
+    // Client-side grouping (cheap for 20-50 items)
+    const sections = useMemo(() => {
+        const groups = transactions.reduce((acc, t) => {
+            const dateObj = t.date?.toDate ? t.date.toDate() : new Date();
+            const dateKey = dateObj.toDateString();
+
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            let title = dateObj.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+            if (dateKey === today.toDateString()) title = "Today";
+            else if (dateKey === yesterday.toDateString()) title = "Yesterday";
+
+            if (!acc[dateKey]) {
+                acc[dateKey] = { title, data: [] };
+            }
+            acc[dateKey].data.push(t);
+            return acc;
+        }, {});
+
+        // Sort keys desc (Date) if not searching. If searching, the order might be by description first.
+        // We can just rely on the order they came in (which is usually correct enough via query)
+        // But map order isn't guaranteed.
+        // Let's rely on the query order logic.
+        return Object.values(groups);
+    }, [transactions]);
 
     const handleDelete = useCallback(async (id) => {
         if (!hasPermission('manage_wallet')) {
@@ -400,6 +482,10 @@ const WalletScreen = ({ navigation }) => {
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 await WalletService.deleteTransaction(id, user?.uid, user?.email);
+
+                // Refresh list after delete
+                // Ideally we should just remove it from local state to avoid full re-fetch
+                setTransactions(prev => prev.filter(t => t.id !== id));
             }
 
             if (Platform.OS !== 'web') {
@@ -410,7 +496,7 @@ const WalletScreen = ({ navigation }) => {
             console.error("Error deleting transaction: ", error);
             showSnackbar("Failed to delete transaction", true);
         }
-    }, [showSnackbar, hasPermission]);
+    }, [showSnackbar, hasPermission, user]);
 
     const confirmDelete = useCallback((id) => {
         if (Platform.OS === 'web') {
@@ -433,58 +519,7 @@ const WalletScreen = ({ navigation }) => {
         }
     }, [handleDelete]);
 
-    const filteredTransactions = useMemo(() => {
-        return transactions.filter(t => {
-            const matchesType = filterType === 'all' || t.type === filterType;
-            const query = searchQuery.toLowerCase();
 
-            const dateObj = t.date?.toDate ? t.date.toDate() : new Date();
-            const dateString = dateObj.toLocaleDateString().toLowerCase();
-            const dateStringFull = dateObj.toLocaleDateString(undefined, { dateStyle: 'long' }).toLowerCase();
-
-            const today = new Date();
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            const isToday = dateObj.toDateString() === today.toDateString();
-            const isYesterday = dateObj.toDateString() === yesterday.toDateString();
-
-            const matchesSearch = !query ||
-                (t.description && t.description.toLowerCase().includes(query)) ||
-                (t.category && t.category.toLowerCase().includes(query)) ||
-                (t.amount && t.amount.toString().includes(query)) ||
-                (t.type && t.type.toLowerCase().includes(query)) ||
-                (dateString.includes(query)) ||
-                (dateStringFull.includes(query)) ||
-                (dateObj.toDateString().toLowerCase().includes(query)) ||
-                (query === 'today' && isToday) ||
-                (query === 'yesterday' && isYesterday);
-
-            return matchesType && matchesSearch;
-        });
-    }, [transactions, filterType, searchQuery]);
-
-    const sections = useMemo(() => {
-        const groups = filteredTransactions.reduce((acc, t) => {
-            const dateObj = t.date?.toDate ? t.date.toDate() : new Date();
-            const dateKey = dateObj.toDateString();
-
-            const today = new Date();
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-
-            let title = dateObj.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-            if (dateKey === today.toDateString()) title = "Today";
-            else if (dateKey === yesterday.toDateString()) title = "Yesterday";
-
-            if (!acc[dateKey]) {
-                acc[dateKey] = { title, data: [] };
-            }
-            acc[dateKey].data.push(t);
-            return acc;
-        }, {});
-
-        return Object.values(groups);
-    }, [filteredTransactions]);
 
     const renderTransactionItem = useCallback(({ item }) => (
         <TouchableOpacity onLongPress={() => confirmDelete(item.id)} delayLongPress={500}>
@@ -531,6 +566,22 @@ const WalletScreen = ({ navigation }) => {
 
     const ListHeader = useMemo(() => (
         <View style={{ paddingBottom: 16, paddingTop: 16 }}>
+            <Banner
+                visible={needsMigration && !isMigrating}
+                actions={[
+                    { label: 'Fix Search Index', onPress: handleMigration }
+                ]}
+                icon="database-cog"
+            >
+                Search optimization available. Update your transactions to simpler, faster search?
+            </Banner>
+            {isMigrating && (
+                <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+                    <Text variant="bodySmall" style={{ marginBottom: 4 }}>Optimizing Database...</Text>
+                    <ProgressBar indeterminate />
+                </View>
+            )}
+
             <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
                 <SegmentedButtons
                     value={timeRange}
@@ -639,7 +690,7 @@ const WalletScreen = ({ navigation }) => {
             </View>
 
             <Searchbar
-                placeholder="Search transactions"
+                placeholder="Search all transactions..."
                 onChangeText={setSearchQuery}
                 value={searchQuery}
                 style={{ marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 16, height: 46, marginHorizontal: 16 }}
@@ -650,7 +701,7 @@ const WalletScreen = ({ navigation }) => {
             />
 
             {
-                filteredTransactions.length === 0 && (
+                sections.length === 0 && !dataLoading && (
                     <View style={{ alignItems: 'center', padding: 40, opacity: 0.5 }}>
                         <Icon source="wallet-outline" size={64} color={theme.colors.onSurfaceVariant} />
                         <Text variant="bodyLarge" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>No transactions found</Text>
@@ -658,7 +709,54 @@ const WalletScreen = ({ navigation }) => {
                 )
             }
         </View >
-    ), [timeRange, globalStats, itemStats, theme, filterType, searchQuery, filteredTransactions.length, statsLoading]);
+    ), [timeRange, globalStats, itemStats, theme, filterType, searchQuery, sections.length, statsLoading, dataLoading, needsMigration, isMigrating]);
+
+    const handleSave = useCallback(async () => {
+        if (!hasPermission('manage_wallet')) {
+            showSnackbar("Permission denied: Cannot manage wallet", true);
+            return;
+        }
+
+        if (!amount || !description) {
+            showSnackbar("Please enter both amount and description", true);
+            return;
+        };
+
+        const numericAmount = parseFloat(amount);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+            showSnackbar("Please enter a valid positive amount", true);
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            await WalletService.addTransaction({
+                amount: numericAmount,
+                description: description.trim(),
+                category,
+                type,
+                userId: user?.uid,
+                userEmail: user?.email
+            });
+            setVisible(false);
+            setAmount('');
+            setDescription('');
+            const defaultType = 'expense';
+            setType(defaultType);
+            setCategory(EXPENSE_CATEGORIES[0]);
+
+            if (Platform.OS !== 'web') {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+            showSnackbar("Transaction saved successfully");
+        } catch (error) {
+            console.error("Error adding transaction: ", error);
+            showSnackbar("Could not save. Check your connection.", true);
+        } finally {
+            setLoading(false);
+        }
+    }, [amount, description, category, type, showSnackbar, hasPermission, user]);
 
     const renderModalContent = () => (
         <>
@@ -743,14 +841,16 @@ const WalletScreen = ({ navigation }) => {
                         )}
                         ListFooterComponent={
                             <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-                                <Button
-                                    mode="text"
-                                    onPress={() => setDisplayLimit(prev => prev + 20)}
-                                    loading={dataLoading}
-                                    textColor={theme.colors.secondary}
-                                >
-                                    Load More
-                                </Button>
+                                {hasMore && (
+                                    <Button
+                                        mode="text"
+                                        onPress={loadMore}
+                                        loading={dataLoading}
+                                        textColor={theme.colors.secondary}
+                                    >
+                                        Load More
+                                    </Button>
+                                )}
                             </View>
                         }
                         keyExtractor={item => item.id}

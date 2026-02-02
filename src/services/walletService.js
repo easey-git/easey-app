@@ -1,4 +1,4 @@
-import { collection, doc, runTransaction, getDocs, query, serverTimestamp, orderBy, limit, startAfter } from 'firebase/firestore';
+import { collection, doc, runTransaction, getDocs, query, serverTimestamp, orderBy, limit, startAfter, increment, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ActivityLogService } from './activityLogService';
 
@@ -32,41 +32,31 @@ export const WalletService = {
                 const statsRef = doc(db, STATS_COLLECTION, STATS_DOC_ID);
                 const statsSnap = await transaction.get(statsRef);
 
-                let stats = statsSnap.exists()
-                    ? statsSnap.data()
-                    : { balance: 0, income: 0, expense: 0, categoryBreakdown: { income: {}, expense: {} } };
-
-                // Ensure structure exists
-                if (!stats.categoryBreakdown) stats.categoryBreakdown = { income: {}, expense: {} };
-                if (!stats.categoryBreakdown.income) stats.categoryBreakdown.income = {};
-                if (!stats.categoryBreakdown.expense) stats.categoryBreakdown.expense = {};
-
-                // Description Breakdown (New Feature)
-                if (!stats.descriptionBreakdown) stats.descriptionBreakdown = { income: {}, expense: {} };
-                if (!stats.descriptionBreakdown.income) stats.descriptionBreakdown.income = {};
-                if (!stats.descriptionBreakdown.expense) stats.descriptionBreakdown.expense = {};
-
-                // 3. Calculate New Stats
+                // 3. Increment Stats (Atomic)
                 const amount = parseFloat(transactionData.amount);
                 const type = transactionData.type; // 'income' | 'expense'
                 const category = transactionData.category || 'Misc';
-                const description = transactionData.description || 'Unknown';
+
+                // Note: We deliberately DO NOT store descriptionBreakdown in the global stats doc anymore.
+                // It causes "Document Too Large" errors as descriptions vary wildly.
 
                 if (type === 'income') {
-                    stats.income = (stats.income || 0) + amount;
-                    stats.balance = (stats.balance || 0) + amount;
-                    stats.categoryBreakdown.income[category] = (stats.categoryBreakdown.income[category] || 0) + amount;
-                    stats.descriptionBreakdown.income[description] = (stats.descriptionBreakdown.income[description] || 0) + amount;
+                    transaction.update(statsRef, {
+                        income: increment(amount),
+                        balance: increment(amount),
+                        [`categoryBreakdown.income.${category}`]: increment(amount)
+                    });
                 } else {
-                    stats.expense = (stats.expense || 0) + amount;
-                    stats.balance = (stats.balance || 0) - amount;
-                    stats.categoryBreakdown.expense[category] = (stats.categoryBreakdown.expense[category] || 0) + amount;
-                    stats.descriptionBreakdown.expense[description] = (stats.descriptionBreakdown.expense[description] || 0) + amount;
+                    transaction.update(statsRef, {
+                        expense: increment(amount),
+                        balance: increment(-amount),
+                        [`categoryBreakdown.expense.${category}`]: increment(amount)
+                    });
                 }
 
                 // 4. Commit Writes
-                transaction.set(newTxRef, { ...transactionData, date: serverTimestamp() });
-                transaction.set(statsRef, stats);
+                const keywords = generateKeywords(transactionData.description, transactionData.category, transactionData.amount);
+                transaction.set(newTxRef, { ...transactionData, keywords, date: serverTimestamp() });
             });
 
             // Log Activity
@@ -245,5 +235,91 @@ export const WalletService = {
             console.error("Recalculate failed:", error);
             throw error;
         }
+    },
+
+    /**
+     * MIGRATION UTILITY
+     * Loops through all transactions and adds 'keywords' array for search.
+     * Use this ONCE to enable search on existing data.
+     */
+    migrateSearchIndex: async (onProgress) => {
+        console.log("Starting Search Index Migration...");
+        let lastDoc = null;
+        let hasMore = true;
+        const BATCH_SIZE = 500;
+        let processedCount = 0;
+
+        while (hasMore) {
+            let qConstraints = [orderBy('date', 'desc'), limit(BATCH_SIZE)];
+            if (lastDoc) {
+                qConstraints.push(startAfter(lastDoc));
+            }
+
+            const q = query(collection(db, TRANSACTION_COLLECTION), ...qConstraints);
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                hasMore = false;
+                break;
+            }
+
+            const batch = writeBatch(db);
+            let operationsInBatch = 0;
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                // Check if migration allows skipping? for now force update to ensure consistency
+                const keywords = generateKeywords(data.description, data.category, data.amount);
+
+                // Only update if needed
+                // if (JSON.stringify(data.keywords) !== JSON.stringify(keywords)) {
+                batch.update(doc.ref, { keywords });
+                operationsInBatch++;
+                // }
+            });
+
+            if (operationsInBatch > 0) {
+                await batch.commit();
+            }
+
+            lastDoc = snapshot.docs[snapshot.docs.length - 1];
+            processedCount += snapshot.size;
+            if (onProgress) onProgress(processedCount);
+            console.log(`Migrated ${processedCount} documents...`);
+        }
+        console.log("Migration Complete.");
     }
+};
+
+// --- HELPER FUNCTIONS ---
+
+const generateKeywords = (description = '', category = '', amount = '') => {
+    // Combine fields for broader search
+    const text = `${description} ${category} ${amount}`.toLowerCase();
+
+    // Split by spaces
+    const words = text.split(/\s+/);
+
+    const keywords = new Set();
+
+    // Add whole words
+    words.forEach(w => {
+        if (w.length > 0) keywords.add(w);
+    });
+
+    // Add substrings for prefix search (similar to Algolia)
+    // IMPORTANT: Firestore has a limit on array size & index size. 
+    // We limit to prefixes of the description words only, max length 20.
+    const descWords = (description || '').toLowerCase().split(/\s+/);
+    descWords.forEach(w => {
+        // Add progressive prefixes: "Server" -> "se", "ser", "serv", "serve", "server"
+        // Minimum 2 chars
+        let current = '';
+        for (let i = 0; i < w.length; i++) {
+            current += w[i];
+            if (current.length >= 2) keywords.add(current);
+        }
+    });
+
+    return Array.from(keywords);
 };
