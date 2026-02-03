@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'; // Cache bust 1
+import React, { useEffect, useState, useCallback, useRef } from 'react'; // Cache bust 1
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Platform, KeyboardAvoidingView } from 'react-native';
 import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon, ActivityIndicator } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
@@ -120,6 +120,165 @@ const NoteDialog = ({ visible, onDismiss, onSave, value, onChangeText, loading }
     </Portal>
 );
 
+// --- Helper Functions & Sub-components ---
+
+const validateFilters = (activeFilters) => {
+    if (!activeFilters || activeFilters.length === 0) return true;
+    const fieldGroups = {};
+    activeFilters.forEach(f => {
+        if (!fieldGroups[f.field]) fieldGroups[f.field] = [];
+        fieldGroups[f.field].push(f);
+    });
+    // Firestore Limitation: 'IN' queries can only be performed on one field at a time
+    const fieldsWithMultiple = Object.keys(fieldGroups).filter(k => fieldGroups[k].length > 1);
+    return fieldsWithMultiple.length <= 1;
+};
+
+const buildQueryConstraints = (activeFilters, customDate, selectedCollection, isLoadMore, lastDoc, PAGE_SIZE) => {
+    const constraints = [];
+
+    // 1. Attribute Filters
+    if (activeFilters && activeFilters.length > 0) {
+        const fieldGroups = {};
+        activeFilters.forEach(f => {
+            if (!fieldGroups[f.field]) fieldGroups[f.field] = [];
+            fieldGroups[f.field].push(f);
+        });
+
+        Object.keys(fieldGroups).forEach(field => {
+            const group = fieldGroups[field];
+            const op = group[0].operator || "==";
+
+            if (group.length > 1) {
+                const values = group.map(g => g.value);
+                constraints.push(where(field, 'in', values));
+            } else {
+                let val = group[0].value;
+                // Auto-convert ISO date strings
+                if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
+                    val = new Date(val);
+                }
+                constraints.push(where(field, op, val));
+            }
+        });
+    }
+
+    // 2. Date Filters
+    if (customDate) {
+        const start = new Date(customDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(customDate);
+        end.setHours(23, 59, 59, 999);
+        const startTs = Timestamp.fromDate(start);
+        const endTs = Timestamp.fromDate(end);
+
+        const dateField = selectedCollection === 'checkouts' ? 'updatedAt' : 'createdAt';
+        constraints.push(where(dateField, '>=', startTs));
+        constraints.push(where(dateField, '<=', endTs));
+    }
+
+    // 3. Sort & Pagination
+    const sortMapping = {
+        whatsapp_messages: 'timestamp',
+        checkouts: 'updatedAt',
+        wallet_transactions: 'date',
+    };
+    const sortField = sortMapping[selectedCollection] || 'createdAt';
+    constraints.push(orderBy(sortField, 'desc'));
+
+    if (isLoadMore && lastDoc) {
+        constraints.push(startAfter(lastDoc));
+    }
+    constraints.push(limit(PAGE_SIZE));
+
+    return constraints;
+};
+
+const FilterChips = ({ selectedCollection, knownAttributes, activeFilters, onUpdateFilters }) => {
+    const theme = useTheme();
+
+    if (selectedCollection !== 'checkouts' && selectedCollection !== 'orders') return null;
+
+    let filters = [];
+    if (selectedCollection === 'orders') {
+        filters = [
+            { label: 'ALL', value: null },
+            { label: 'COD', value: 'COD', field: 'status' },
+            { label: 'PAID', value: 'Paid', field: 'status' },
+            { label: 'CONFIRMED', value: 'confirmed', field: 'cod_status' },
+            { label: 'PENDING', value: 'pending', field: 'cod_status' },
+            { label: 'CANCELLED', value: 'cancelled', field: 'cod_status' },
+            { label: 'SHIPPED', value: 'shipped', field: 'cod_status' }
+        ];
+    } else if (selectedCollection === 'checkouts') {
+        filters = [{ label: 'All', value: null }];
+        if (knownAttributes.events) {
+            Array.from(knownAttributes.events).sort().forEach(evt => {
+                filters.push({ label: String(evt).replace(/_/g, ' '), value: evt, field: 'eventType' });
+            });
+        }
+        if (knownAttributes.stages) {
+            Array.from(knownAttributes.stages).sort().forEach(stage => {
+                filters.push({ label: String(stage), value: stage, field: 'latest_stage' });
+            });
+        }
+    }
+
+    const handlePress = (f) => {
+        if (f.value === null) {
+            onUpdateFilters([]);
+        } else {
+            const newFilter = {
+                field: f.field,
+                operator: f.operator || '==',
+                value: f.value,
+                label: f.label
+            };
+
+            const exists = activeFilters.find(af => af.field === newFilter.field && af.value === newFilter.value);
+            if (exists) {
+                onUpdateFilters(activeFilters.filter(p => p !== exists));
+            } else {
+                onUpdateFilters([...activeFilters, newFilter]);
+            }
+        }
+    };
+
+    return (
+        <View style={{ paddingVertical: 8 }}>
+            <Text variant="labelMedium" style={{ marginBottom: 4, paddingHorizontal: 16, color: theme.colors.outline }}>
+                Filter Attributes
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+                {filters.map((f, index) => {
+                    const isSelected = f.value === null
+                        ? activeFilters.length === 0
+                        : activeFilters.some(af => af.field === f.field && af.value === f.value);
+
+                    return (
+                        <Chip
+                            key={`${index}-${f.label}`}
+                            icon={isSelected ? 'check' : undefined}
+                            onPress={() => handlePress(f)}
+                            style={{
+                                backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface,
+                                borderColor: isSelected ? theme.colors.secondaryContainer : theme.colors.outlineVariant,
+                                borderWidth: 1
+                            }}
+                            textStyle={{
+                                fontWeight: isSelected ? '700' : '400',
+                                color: isSelected ? theme.colors.onSecondaryContainer : theme.colors.onSurface
+                            }}
+                        >
+                            {f.label}
+                        </Chip>
+                    );
+                })}
+            </ScrollView>
+        </View>
+    );
+};
+
 const FirestoreViewerScreen = ({ navigation, route }) => {
     const { hasPermission, role, user, loading: authLoading } = useAuth();
     const theme = useTheme(); // Move theme hook up
@@ -161,8 +320,11 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         return allowed.includes(paramCollection) ? paramCollection : allowed[0];
     });
 
-    // Add Filter State
-    const [filter, setFilter] = useState(route.params?.filter || null);
+    // Add Filter State (Array support)
+    const [activeFilters, setActiveFilters] = useState(() => {
+        const initial = route.params?.filter;
+        return initial ? [initial] : [];
+    });
 
     // Custom Date Picker State
     const [openDatePicker, setOpenDatePicker] = useState(false);
@@ -183,11 +345,17 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         if (!allowed.includes(selectedCollection)) {
             setSelectedCollection(allowed[0]);
         }
-        // Clear filter if switching collections
-        if (selectedCollection !== route.params?.collection) {
-            setFilter(null);
-        }
     }, [getAllowedCollections, selectedCollection]);
+
+    // Clear filters when collection changes (skip initial mount to preserve params)
+    const isFirstRun = useRef(true);
+    useEffect(() => {
+        if (isFirstRun.current) {
+            isFirstRun.current = false;
+            return;
+        }
+        setActiveFilters([]);
+    }, [selectedCollection]);
 
     const [documents, setDocuments] = useState([]);
     const [selectedDoc, setSelectedDoc] = useState(null);
@@ -252,7 +420,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setDocuments([]);
         fetchDocuments();
         setSelectedItems(new Set());
-    }, [selectedCollection, filter, customDate, debouncedSearchQuery]);
+    }, [selectedCollection, activeFilters, customDate, debouncedSearchQuery]);
 
     // Helper: Get Date Range
     const getDateRange = () => {
@@ -446,45 +614,22 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 return; // Exit fetchDocuments early
             }
 
-            let constraints = [];
-
-            // 1. Attribute Filters
-            if (filter) {
-                const op = filter.operator || "==";
-                let val = filter.value;
-                // Auto-convert ISO date strings to Date objects for Firestore comparison
-                if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
-                    val = new Date(val);
-                }
-                constraints.push(where(filter.field, op, val));
+            // 1. Validate Filters
+            if (!validateFilters(activeFilters)) {
+                showSnackbar("Firestore Limit: Cannot filter multiple fields with 'OR' conditions simultaneously.", true);
+                setLoading(false);
+                return;
             }
 
-            // 2. Date Filters
-            if (customDate) {
-                const { start, end } = getDateRange();
-                // Siloed breakdown: checkouts -> updatedAt, others -> createdAt
-                const dateField = selectedCollection === 'checkouts' ? 'updatedAt' : 'createdAt';
-
-                if (start) constraints.push(where(dateField, '>=', start));
-                if (end) constraints.push(where(dateField, '<=', end));
-            }
-
-            // Determine correct sort field based on collection schema
-            const sortMapping = {
-                whatsapp_messages: 'timestamp',
-                checkouts: 'updatedAt',
-                wallet_transactions: 'date',
-            };
-            const sortField = sortMapping[selectedCollection] || 'createdAt';
-
-            // Sort by newest first
-            constraints.push(orderBy(sortField, 'desc'));
-
-            // Pagination
-            if (isLoadMore && lastDoc) {
-                constraints.push(startAfter(lastDoc));
-            }
-            constraints.push(limit(PAGE_SIZE));
+            // 2. Build Query
+            const constraints = buildQueryConstraints(
+                activeFilters,
+                customDate,
+                selectedCollection,
+                isLoadMore,
+                lastDoc,
+                PAGE_SIZE
+            );
 
             const q = query(collection(db, selectedCollection), ...constraints);
 
@@ -1110,7 +1255,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     renderItem={({ item }) => (
                         <TouchableOpacity
                             onPress={() => {
-                                setFilter(null);
+                                setActiveFilters([]);
                                 setSelectedCollection(item);
                             }}
                             style={[
@@ -1138,96 +1283,12 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
 
             {/* DYNAMIC FILTERS FOR DOCUMENTS */}
-            {(selectedCollection === 'checkouts' || selectedCollection === 'orders') && (
-                <View style={{ paddingVertical: 8 }}>
-                    <Text variant="labelMedium" style={{ marginBottom: 4, paddingHorizontal: 16, color: theme.colors.outline }}>Attributes</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
-                        {(() => {
-                            let filters = [];
-
-                            if (selectedCollection === 'orders') {
-                                // HARDCODED ORDERS FILTERS (Standardized)
-                                filters = [
-                                    { label: 'ALL', value: null },
-                                    { label: 'COD', value: 'COD', field: 'status' },
-                                    { label: 'PAID', value: 'Paid', field: 'status' },
-                                    { label: 'CONFIRMED', value: 'confirmed', field: 'cod_status' },
-                                    { label: 'PENDING', value: 'pending', field: 'cod_status' },
-                                    { label: 'CANCELLED', value: 'cancelled', field: 'cod_status' },
-                                    { label: 'SHIPPED', value: 'shipped', field: 'cod_status' }
-                                ];
-                            } else if (selectedCollection === 'checkouts') {
-                                // FULLY DYNAMIC / DATA-DRIVEN for Checkouts using discovered attributes
-                                filters = [{ label: 'All', value: null }];
-
-                                // 1. Add Event Types
-                                if (knownAttributes.events) {
-                                    Array.from(knownAttributes.events).sort().forEach(evt => {
-                                        filters.push({
-                                            label: String(evt).replace(/_/g, ' '),
-                                            value: evt,
-                                            field: 'eventType'
-                                        });
-                                    });
-                                }
-
-                                // 2. Add Stages
-                                if (knownAttributes.stages) {
-                                    Array.from(knownAttributes.stages).sort().forEach(stage => {
-                                        filters.push({
-                                            label: String(stage),
-                                            value: stage,
-                                            field: 'latest_stage'
-                                        });
-                                    });
-                                }
-                            }
-
-                            return filters.map((f, index) => {
-                                // Calculate dynamic values if needed
-                                let queryValue = f.value;
-
-                                // Selection State Logic
-                                let isSelected = false;
-                                if (!filter && f.value === null) {
-                                    isSelected = true;
-                                } else if (filter && f.value !== null) {
-                                    const filterOp = filter.operator || '==';
-                                    const configOp = f.operator || '==';
-
-                                    if (filter.field === f.field && filterOp === configOp) {
-                                        isSelected = filter.value === queryValue;
-                                    }
-                                }
-
-                                return (
-                                    <Chip
-                                        key={`${f.field}-${f.label}-${index}`}
-                                        icon={isSelected ? 'check' : undefined}
-                                        onPress={() => setFilter(f.value !== null ? {
-                                            field: f.field,
-                                            operator: f.operator || '==',
-                                            value: queryValue,
-                                            label: f.label
-                                        } : null)}
-                                        style={{
-                                            backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface,
-                                            borderColor: isSelected ? theme.colors.secondaryContainer : theme.colors.outlineVariant,
-                                            borderWidth: 1
-                                        }}
-                                        textStyle={{
-                                            fontWeight: isSelected ? '700' : '400',
-                                            color: isSelected ? theme.colors.onSecondaryContainer : theme.colors.onSurface
-                                        }}
-                                    >
-                                        {f.label}
-                                    </Chip>
-                                );
-                            });
-                        })()}
-                    </ScrollView>
-                </View>
-            )}
+            <FilterChips
+                selectedCollection={selectedCollection}
+                knownAttributes={knownAttributes}
+                activeFilters={activeFilters}
+                onUpdateFilters={setActiveFilters}
+            />
 
             <Divider />
 
