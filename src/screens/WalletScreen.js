@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
+import { useResponsive } from '../hooks/useResponsive';
 
 const EXPENSE_CATEGORIES = ['Business', 'Share', 'Split', 'Misc'];
 const INCOME_CATEGORIES = ['Remittance', 'Fund', 'Share', 'Investment', 'Misc'];
@@ -79,6 +80,7 @@ const StatChart = ({ title, data, theme }) => {
 const WalletScreen = ({ navigation }) => {
     const theme = useTheme();
     const { hasPermission, user } = useAuth();
+    const { isDesktop } = useResponsive();
 
     if (!hasPermission('access_wallet')) {
         return <AccessDenied title="Wallet Restricted" message="You need permission to access financial records." />;
@@ -566,18 +568,21 @@ const WalletScreen = ({ navigation }) => {
 
     const ListHeader = useMemo(() => (
         <View style={{ paddingBottom: 16, paddingTop: 16 }}>
-            <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
-                <SegmentedButtons
-                    value={timeRange}
-                    onValueChange={setTimeRange}
-                    buttons={[
-                        { value: 'week', label: '7 Days' },
-                        { value: 'month', label: '30 Days' },
-                        { value: 'all', label: 'All Time' },
-                    ]}
-                    style={{ marginBottom: 0 }}
-                />
-            </View>
+            {!isDesktop && (
+                <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
+                    <SegmentedButtons
+                        value={timeRange}
+                        onValueChange={setTimeRange}
+                        buttons={[
+                            { value: 'week', label: '7 Days' },
+                            { value: 'month', label: '30 Days' },
+                            { value: 'all', label: 'All Time' },
+                        ]}
+                        density="small"
+                        style={{ marginBottom: 0 }}
+                    />
+                </View>
+            )}
 
             <View style={[styles.balanceCard, { backgroundColor: 'transparent', paddingHorizontal: 0, marginHorizontal: 16, padding: 0 }]}>
                 <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>NET WORTH</Text>
@@ -682,7 +687,7 @@ const WalletScreen = ({ navigation }) => {
                 )
             }
         </View >
-    ), [timeRange, globalStats, itemStats, theme, filterType, sections.length, statsLoading, dataLoading]);
+    ), [timeRange, globalStats, itemStats, theme, filterType, sections.length, statsLoading, dataLoading, isDesktop]);
 
     const handleSave = useCallback(async () => {
         if (!hasPermission('manage_wallet')) {
@@ -796,7 +801,24 @@ const WalletScreen = ({ navigation }) => {
             navigation={navigation}
             scrollable={false}
             fullWidth={true}
-            actions={<Appbar.Action icon="plus" onPress={() => setVisible(true)} />}
+            actions={
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                    {isDesktop && (
+                        <SegmentedButtons
+                            value={timeRange}
+                            onValueChange={setTimeRange}
+                            buttons={[
+                                { value: 'week', label: '7 Days' },
+                                { value: 'month', label: '30 Days' },
+                                { value: 'all', label: 'All Time' },
+                            ]}
+                            density="small"
+                            style={{ minWidth: 320 }}
+                        />
+                    )}
+                    <Appbar.Action icon="plus" onPress={() => setVisible(true)} />
+                </View>
+            }
         >
             <View style={{ backgroundColor: theme.colors.background }}>
                 <Banner
