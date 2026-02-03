@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, SectionList, ScrollView } from 'react-native';
 import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar, Banner, ProgressBar } from 'react-native-paper';
-import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDoc, getDocs, startAfter } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDoc, getDocs, startAfter, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { WalletService } from '../services/walletService';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
@@ -92,34 +92,7 @@ const WalletScreen = ({ navigation }) => {
     const [dataLoading, setDataLoading] = useState(true);
     const [displayLimit, setDisplayLimit] = useState(50); // Pagination Limit
 
-    // Migration State
-    const [isMigrating, setIsMigrating] = useState(false);
-    const [needsMigration, setNeedsMigration] = useState(false);
 
-    useEffect(() => {
-        // Check if migration is needed (if recent transactions miss 'keywords')
-        if (transactions.length > 0 && transactions[0]) {
-            if (!transactions[0].keywords) {
-                setNeedsMigration(true);
-            }
-        }
-    }, [transactions]);
-
-    const handleMigration = async () => {
-        setIsMigrating(true);
-        try {
-            await WalletService.migrateSearchIndex();
-            showSnackbar("Search optimization complete!");
-            setNeedsMigration(false);
-            // Refresh to get new data
-            fetchTransactions(true);
-        } catch (e) {
-            console.error(e);
-            showSnackbar("Migration failed. Check console.", true);
-        } finally {
-            setIsMigrating(false);
-        }
-    };
 
     // Filters
     const [timeRange, setTimeRange] = useState('month'); // 'week' | 'month' | 'all'
@@ -709,7 +682,7 @@ const WalletScreen = ({ navigation }) => {
         setLoading(true);
 
         try {
-            await WalletService.addTransaction({
+            const { id: newId, keywords } = await WalletService.addTransaction({
                 amount: numericAmount,
                 description: description.trim(),
                 category,
@@ -717,6 +690,20 @@ const WalletScreen = ({ navigation }) => {
                 userId: user?.uid,
                 userEmail: user?.email
             });
+
+            // Optimistic UI Update
+            const newTransaction = {
+                id: newId,
+                amount: numericAmount,
+                description: description.trim(),
+                category,
+                type,
+                keywords, // Include keywords to prevent false "Migration Needed" alert
+                date: Timestamp.fromDate(new Date()), // Mock Firestore Timestamp
+                userId: user?.uid
+            };
+            setTransactions(prev => [newTransaction, ...prev]);
+
             setVisible(false);
             setAmount('');
             setDescription('');
@@ -821,22 +808,7 @@ const WalletScreen = ({ navigation }) => {
             }
         >
             <View style={{ backgroundColor: theme.colors.background }}>
-                <Banner
-                    visible={needsMigration && !isMigrating}
-                    actions={[
-                        { label: 'Fix Search Index', onPress: handleMigration }
-                    ]}
-                    icon="database-cog"
-                    style={{ marginBottom: 0 }}
-                >
-                    Search optimization available. Update your transactions to simpler, faster search?
-                </Banner>
-                {isMigrating && (
-                    <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-                        <Text variant="bodySmall" style={{ marginBottom: 4 }}>Optimizing Database...</Text>
-                        <ProgressBar indeterminate />
-                    </View>
-                )}
+
 
                 <Searchbar
                     placeholder="Search all transactions..."

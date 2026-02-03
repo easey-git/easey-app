@@ -24,7 +24,7 @@ export const WalletService = {
      */
     addTransaction: async (transactionData, userId, userEmail) => {
         try {
-            await runTransaction(db, async (transaction) => {
+            const result = await runTransaction(db, async (transaction) => {
                 // 1. Create Ref for new Transaction
                 const newTxRef = doc(collection(db, TRANSACTION_COLLECTION));
 
@@ -57,6 +57,7 @@ export const WalletService = {
                 // 4. Commit Writes
                 const keywords = generateKeywords(transactionData.description, transactionData.category, transactionData.amount);
                 transaction.set(newTxRef, { ...transactionData, keywords, date: serverTimestamp() });
+                return { id: newTxRef.id, keywords };
             });
 
             // Log Activity
@@ -70,7 +71,7 @@ export const WalletService = {
                 );
             }
 
-            return true;
+            return result;
         } catch (error) {
             console.error("WalletService.addTransaction failed:", error);
             throw error;
