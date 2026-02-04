@@ -463,6 +463,7 @@ const StatsScreen = ({ navigation }) => {
     const [rawOrders, setRawOrders] = useState([]);
     const [rawCheckouts, setRawCheckouts] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
 
     // Refs for sound logic
     const lastMaxTimestampRef = React.useRef(0);
@@ -664,6 +665,10 @@ const StatsScreen = ({ navigation }) => {
         };
     }, [timeRange, loadPhase]); // Re-run when timeRange or loadPhase changes
 
+    useEffect(() => {
+        if (!loading) setInitialLoading(false);
+    }, [loading]);
+
     // NEW: Combined Feed Processor (Orders + Checkouts)
     useEffect(() => {
         const updateFeed = () => {
@@ -786,16 +791,13 @@ const StatsScreen = ({ navigation }) => {
         return { icon: 'cart-outline', color: theme.colors.secondary, bg: theme.colors.secondaryContainer };
     };
 
-    if (loading) {
-        return (
-            <View style={[styles.container, styles.center, { backgroundColor: theme.colors.background }]}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-            </View>
-        );
-    }
-
     return (
         <CRMLayout title="Overview" navigation={navigation} scrollable={true} fullWidth={true}>
+            {initialLoading && loading && (
+                <View style={[styles.loadingOverlay, { backgroundColor: theme.colors.background }]}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                </View>
+            )}
             <View style={[styles.sectionContainer, { marginBottom: 16 }]}>
                 <SegmentedButtons
                     value={timeRange}
@@ -1041,6 +1043,13 @@ const StatsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { justifyContent: 'center', alignItems: 'center' },
+    loadingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+        opacity: 0.9,
+    },
     sectionContainer: { marginTop: 16, paddingHorizontal: 16 },
     gridContainer: { flexDirection: 'row', gap: 12 },
     card: {

@@ -6,13 +6,21 @@ import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { ActivityLogService } from '../services/activityLogService';
 
+let lastTeamBoardCache = {
+    content: '',
+    lastEditedBy: '',
+    hasValue: false,
+};
+
 export const TeamBoardCard = ({ style }) => {
     const theme = useTheme();
     const { user } = useAuth();
-    const [note, setNote] = useState('');
-    const [status, setStatus] = useState('Loading...');
-    const [lastEditedBy, setLastEditedBy] = useState('');
+    const [note, setNote] = useState(lastTeamBoardCache.hasValue ? lastTeamBoardCache.content : '');
+    const [status, setStatus] = useState(lastTeamBoardCache.hasValue ? 'Live' : 'Loading...');
+    const [lastEditedBy, setLastEditedBy] = useState(lastTeamBoardCache.hasValue ? lastTeamBoardCache.lastEditedBy : '');
     const isFirstLoad = useRef(true);
+    const lastServerContentRef = useRef('');
+    const isApplyingRemoteRef = useRef(false);
 
     // 1. Real-time Listener for Shared Team Board
     useEffect(() => {
@@ -20,11 +28,22 @@ export const TeamBoardCard = ({ style }) => {
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                setNote(data.content || '');
+                const nextContent = data.content || '';
+                lastServerContentRef.current = nextContent;
+                isApplyingRemoteRef.current = true;
+                setNote((prev) => (prev === nextContent ? prev : nextContent));
+                isApplyingRemoteRef.current = false;
                 if (data.lastEditedBy) setLastEditedBy(data.lastEditedBy);
+                lastTeamBoardCache = {
+                    content: nextContent,
+                    lastEditedBy: data.lastEditedBy || '',
+                    hasValue: true,
+                };
             } else {
                 setNote('');
                 setLastEditedBy('');
+                lastServerContentRef.current = '';
+                lastTeamBoardCache = { content: '', lastEditedBy: '', hasValue: false };
             }
             if (isFirstLoad.current) {
                 setStatus('Live');
@@ -41,6 +60,8 @@ export const TeamBoardCard = ({ style }) => {
     // 2. Auto-Save Logic (Debounced)
     useEffect(() => {
         if (isFirstLoad.current) return;
+        if (isApplyingRemoteRef.current) return;
+        if (note === lastServerContentRef.current) return;
 
         const saveNote = async () => {
             if (!user) return;
