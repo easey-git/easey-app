@@ -185,7 +185,7 @@ function AppStack() {
   return (
     <View style={{ flex: 1, backgroundColor: activeTheme.colors.background, position: 'relative' }}>
       <StatusBar barStyle={isThemeDark ? "light-content" : "dark-content"} backgroundColor={activeTheme.colors.background} />
-      {user && isDesktop && <Sidebar floating={!isSidebarPinned} />}
+      {user && isDesktop && <Sidebar floating />}
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
