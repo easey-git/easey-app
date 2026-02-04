@@ -2,17 +2,17 @@ import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { useTheme, Appbar } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Sidebar } from './Sidebar';
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveContainer } from './ResponsiveContainer';
 import { useDrawer } from '../context/DrawerContext';
 import { ActivityLogService } from '../services/activityLogService';
 import { useAuth } from '../context/AuthContext';
+import { LAYOUT } from '../theme/layout';
 
 export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeader = true, scrollable = true, fullWidth = false, actions, floatingButton }) => {
     const theme = useTheme();
     const { isDesktop } = useResponsive();
-    const { openDrawer } = useDrawer();
+    const { openDrawer, isSidebarPinned } = useDrawer();
     const { user } = useAuth();
 
     // Activity Logging
@@ -39,13 +39,17 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right', 'bottom']}>
-            {/* Desktop Sidebar - Always visible on Desktop */}
-            {isDesktop && <Sidebar />}
-
-            {/* Mobile Sidebar is handled globally in App.js via Context/Portal */}
+            {/* Sidebar is rendered globally (desktop) or via MobileDrawer (mobile) */}
 
             {/* Main Content Area */}
-            <View style={styles.main}>
+            <View
+                style={[
+                    styles.main,
+                    isDesktop && {
+                        paddingLeft: isSidebarPinned ? LAYOUT.drawerWidth : LAYOUT.drawerCollapsedWidth
+                    }
+                ]}
+            >
                 {/* Header */}
                 {showHeader && (
                     <Appbar.Header
@@ -111,4 +115,3 @@ const styles = StyleSheet.create({
         zIndex: 10,
     }
 });
-

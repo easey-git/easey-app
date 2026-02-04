@@ -31,4 +31,5 @@ export const LAYOUT = {
 
     // Component Dimensions
     drawerWidth: 280,
+    drawerCollapsedWidth: 76,
 };

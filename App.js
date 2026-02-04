@@ -30,6 +30,9 @@ import { AccessDenied } from './src/components/AccessDenied';
 
 import { DrawerProvider } from './src/context/DrawerContext';
 import { MobileDrawer } from './src/components/MobileDrawer';
+import { Sidebar } from './src/components/Sidebar';
+import { useResponsive } from './src/hooks/useResponsive';
+import { useDrawer } from './src/context/DrawerContext';
 
 // Wrapper to protect Admin Panel route at navigation level
 const AdminPanelWrapper = (props) => {
@@ -71,6 +74,8 @@ function AppStack() {
   const { isThemeDark, biometricsEnabled, preferencesLoaded } = usePreferences();
   const [isLocked, setIsLocked] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const { isDesktop } = useResponsive();
+  const { isSidebarPinned } = useDrawer();
 
   const activeTheme = isThemeDark ? CombinedDarkTheme : CombinedLightTheme;
 
@@ -178,8 +183,9 @@ function AppStack() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: activeTheme.colors.background }}>
+    <View style={{ flex: 1, backgroundColor: activeTheme.colors.background, position: 'relative' }}>
       <StatusBar barStyle={isThemeDark ? "light-content" : "dark-content"} backgroundColor={activeTheme.colors.background} />
+      {user && isDesktop && <Sidebar floating={!isSidebarPinned} />}
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
