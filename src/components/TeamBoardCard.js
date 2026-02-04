@@ -11,8 +11,8 @@ export const TeamBoardCard = ({ style }) => {
     const { user } = useAuth();
     const [note, setNote] = useState('');
     const [status, setStatus] = useState('Loading...');
+    const [lastEditedBy, setLastEditedBy] = useState('');
     const isFirstLoad = useRef(true);
-    const lastEditedByRef = useRef(null);
 
     // 1. Real-time Listener for Shared Team Board
     useEffect(() => {
@@ -21,11 +21,14 @@ export const TeamBoardCard = ({ style }) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setNote(data.content || '');
-                if (data.lastEditedBy) lastEditedByRef.current = data.lastEditedBy;
+                if (data.lastEditedBy) setLastEditedBy(data.lastEditedBy);
             } else {
                 setNote('');
+                setLastEditedBy('');
             }
-            setStatus(docSnap.metadata.hasPendingWrites ? 'Saving...' : 'Live');
+            if (isFirstLoad.current) {
+                setStatus('Live');
+            }
             isFirstLoad.current = false;
         }, (error) => {
             console.error("Error fetching Team Board:", error);
@@ -42,6 +45,7 @@ export const TeamBoardCard = ({ style }) => {
         const saveNote = async () => {
             if (!user) return;
             try {
+                setStatus('Saving...');
                 const docRef = doc(db, 'system', 'team_board');
                 await setDoc(docRef, {
                     content: note,
@@ -49,7 +53,7 @@ export const TeamBoardCard = ({ style }) => {
                     updatedAt: serverTimestamp()
                 }, { merge: true });
 
-                // Status is handled by the listener's metadata.hasPendingWrites
+                setStatus('Live');
             } catch (error) {
                 console.error("Error saving Team Board:", error);
                 setStatus('Error');
@@ -61,7 +65,7 @@ export const TeamBoardCard = ({ style }) => {
         }, 1500); // Increased debounce to 1.5s for stability
 
         return () => clearTimeout(timeoutId);
-    }, [note]); // Removed 'user' dependency to prevent re-triggering
+    }, [note, user]); // Include user for correct attribution when switching accounts
 
     // Extract username from email (part before @)
     const getUsername = (email) => {
@@ -99,9 +103,9 @@ export const TeamBoardCard = ({ style }) => {
                 activeUnderlineColor="transparent"
                 textColor={theme.colors.onSurfaceVariant}
             />
-            {lastEditedByRef.current && (
+            {lastEditedBy && (
                 <Text variant="labelSmall" style={{ color: theme.colors.outline, marginTop: 8, alignSelf: 'flex-end', opacity: 0.7 }}>
-                    Last edit: {getUsername(lastEditedByRef.current)}
+                    Last edit: {getUsername(lastEditedBy)}
                 </Text>
             )}
         </Surface>
