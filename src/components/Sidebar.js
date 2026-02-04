@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, Image, ScrollView, Pressable, Animated, Easing, Platform } from 'react-native';
+import { View, StyleSheet, Image, ScrollView, Pressable, Platform } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { Text, useTheme, Drawer, Avatar, IconButton } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import { LAYOUT } from '../theme/layout';
@@ -7,7 +8,19 @@ import { useNavigation } from '@react-navigation/native';
 import { useDrawer } from '../context/DrawerContext';
 import { useResponsive } from '../hooks/useResponsive';
 
-export const Sidebar = React.memo(({ onClose, floating = false }) => {
+const MENU_ITEMS = [
+    { label: 'Dashboard', icon: 'view-dashboard', route: 'Home' }, // Always visible
+    { label: 'Orders', icon: 'package-variant', route: 'DatabaseManager', params: { collection: 'orders' }, permission: 'access_orders' },
+    { label: 'Logistics', icon: 'truck-delivery', route: 'Logistics', permission: 'access_logistics' },
+    { label: 'Analytics', icon: 'chart-bar', route: 'Stats', permission: 'access_analytics' },
+    { label: 'Wallet', icon: 'wallet-outline', route: 'Wallet', permission: 'access_wallet' },
+    { label: 'WhatsApp', icon: 'whatsapp', route: 'WhatsAppManager', permission: 'access_whatsapp' },
+    { label: 'Meta', icon: 'infinity', route: 'Meta', permission: 'access_campaigns' },
+    { label: 'Notes', icon: 'notebook', route: 'Notes' }, // Always visible
+    { label: 'Settings', icon: 'cog', route: 'Settings' }, // Always visible
+];
+
+export const Sidebar = React.memo(({ floating = false }) => {
     const theme = useTheme();
     const { logout, user, role, hasPermission } = useAuth();
     const navigation = useNavigation();
@@ -15,15 +28,12 @@ export const Sidebar = React.memo(({ onClose, floating = false }) => {
     const { isDesktop } = useResponsive();
     const COLLAPSED_WIDTH = LAYOUT.drawerCollapsedWidth || 76;
     const EXPANDED_WIDTH = LAYOUT.drawerWidth;
-    const widthAnim = React.useRef(new Animated.Value(
+    const widthValue = useSharedValue(
         isDesktop
             ? ((isSidebarPinned || isSidebarExpanded) ? EXPANDED_WIDTH : COLLAPSED_WIDTH)
             : EXPANDED_WIDTH
-    )).current;
-    const collapseTimeoutRef = React.useRef(null);
-    const openTimeoutRef = React.useRef(null);
+    );
     const [tooltip, setTooltip] = React.useState({ visible: false, label: '', y: 0 });
-    const isTransitioningRef = React.useRef(false);
     const hoverStateRef = React.useRef({ overRail: false, overPanel: false });
 
     // Track active route - use try-catch to handle both navigation contexts
@@ -46,29 +56,20 @@ export const Sidebar = React.memo(({ onClose, floating = false }) => {
 
         // Listen for navigation state changes
         const unsubscribe = navigation.addListener('state', updateRoute);
-        const startSub = navigation.addListener('transitionStart', () => {
-            isTransitioningRef.current = true;
-        });
-        const endSub = navigation.addListener('transitionEnd', () => {
-            isTransitioningRef.current = false;
-        });
-
         return () => {
             unsubscribe();
-            startSub();
-            endSub();
         };
     }, [navigation]);
 
-    // Helper to get display name
-    const getDisplayName = () => {
+    const displayName = React.useMemo(() => {
         if (user?.displayName) return user.displayName;
         if (user?.email) return user.email.split('@')[0];
         return 'User';
-    };
+    }, [user?.displayName, user?.email]);
 
-    const displayName = getDisplayName();
-    const displayRole = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
+    const displayRole = React.useMemo(() => {
+        return role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
+    }, [role]);
 
     React.useEffect(() => {
         if (!isDesktop) setSidebarExpanded(true);
@@ -78,53 +79,29 @@ export const Sidebar = React.memo(({ onClose, floating = false }) => {
         if (isSidebarPinned) setSidebarExpanded(true);
     }, [isSidebarPinned, setSidebarExpanded]);
 
-    React.useEffect(() => {
-        return () => {
-            if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
-            if (openTimeoutRef.current) clearTimeout(openTimeoutRef.current);
-        };
-    }, []);
-
     const expanded = isDesktop ? (isSidebarPinned || isSidebarExpanded) : true;
     React.useEffect(() => {
-        Animated.timing(widthAnim, {
-            toValue: expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
-            duration: 220,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: false,
-        }).start();
-    }, [expanded, widthAnim, EXPANDED_WIDTH, COLLAPSED_WIDTH]);
+        widthValue.value = withTiming(
+            expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
+            {
+                duration: 260,
+                easing: Easing.bezier(0.2, 0, 0, 1),
+            }
+        );
+    }, [expanded, widthValue, EXPANDED_WIDTH, COLLAPSED_WIDTH]);
 
-    const openWithDelay = () => {
-        if (!isDesktop) return;
-        if (isSidebarPinned) return;
-        if (isTransitioningRef.current) return;
-        if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
-        if (openTimeoutRef.current) clearTimeout(openTimeoutRef.current);
-        openTimeoutRef.current = setTimeout(() => {
-            if (isTransitioningRef.current) return;
-            setSidebarExpanded(true);
-        }, 90);
-    };
-
-    const closeWithDelay = () => {
-        if (!isDesktop) return;
-        if (isSidebarPinned) return;
-        if (isTransitioningRef.current) return;
-        if (openTimeoutRef.current) clearTimeout(openTimeoutRef.current);
-        if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
-        collapseTimeoutRef.current = setTimeout(() => {
-            if (isTransitioningRef.current) return;
-            setSidebarExpanded(false);
-        }, 160);
-    };
+    const animatedStyle = useAnimatedStyle(() => {
+        return {
+            width: isDesktop ? widthValue.value : EXPANDED_WIDTH,
+        };
+    }, [isDesktop, EXPANDED_WIDTH]);
 
     const updateHover = () => {
         if (isSidebarPinned) return;
         if (hoverStateRef.current.overRail || hoverStateRef.current.overPanel) {
-            openWithDelay();
+            setSidebarExpanded(true);
         } else {
-            closeWithDelay();
+            setSidebarExpanded(false);
         }
     };
 
@@ -133,19 +110,9 @@ export const Sidebar = React.memo(({ onClose, floating = false }) => {
         toggleSidebarPinned();
     };
 
-    const menuItems = [
-        { label: 'Dashboard', icon: 'view-dashboard', route: 'Home' }, // Always visible
-        { label: 'Orders', icon: 'package-variant', route: 'DatabaseManager', params: { collection: 'orders' }, permission: 'access_orders' },
-        { label: 'Logistics', icon: 'truck-delivery', route: 'Logistics', permission: 'access_logistics' },
-        { label: 'Analytics', icon: 'chart-bar', route: 'Stats', permission: 'access_analytics' },
-        { label: 'Wallet', icon: 'wallet-outline', route: 'Wallet', permission: 'access_wallet' },
-        { label: 'WhatsApp', icon: 'whatsapp', route: 'WhatsAppManager', permission: 'access_whatsapp' },
-        { label: 'Meta', icon: 'infinity', route: 'Meta', permission: 'access_campaigns' },
-        { label: 'Notes', icon: 'notebook', route: 'Notes' }, // Always visible
-        { label: 'Settings', icon: 'cog', route: 'Settings' }, // Always visible
-    ];
-
-    const visibleMenuItems = menuItems.filter(item => !item.permission || hasPermission(item.permission));
+    const visibleMenuItems = React.useMemo(() => {
+        return MENU_ITEMS.filter(item => !item.permission || hasPermission(item.permission));
+    }, [hasPermission]);
 
     const handleNavigation = (item) => {
         if (!isDesktop) {
@@ -201,11 +168,11 @@ export const Sidebar = React.memo(({ onClose, floating = false }) => {
                 }}
                 style={[
                     styles.container,
+                    animatedStyle,
                     {
                         backgroundColor: theme.colors.surface,
                         borderRightColor: theme.colors.outlineVariant,
                         borderRightWidth: isDesktop ? 1 : 0, // Border only on desktop
-                        width: isDesktop ? widthAnim : EXPANDED_WIDTH,
                         ...(
                             expanded
                                 ? Platform.select({
