@@ -215,12 +215,11 @@ export const fetchDelhiveryRemittances = async (page = 1, pageSize = 10) => {
 
     try {
         // HACK: The backend proxy is hardcoded to base "web/api/wallet/".
-        // We Use "../../" to traverse up to "web/" and explicitly valid path "api/remittance/".
-        // This ensures "/api/" is included, preventing "NOT_FOUND" errors.
-        return await executeDelhiveryWalletRequest("../../api/remittance/remittance_listing", params);
+        // We use "../" to traverse up and access "web/api/remittance/".
+        return await executeDelhiveryWalletRequest("../remittance/remittance_listing", params);
     } catch (e) {
         console.error("Remittances Error:", e);
-        return { count: 0, remittance_list: [] };
+        return { count: 0, data: [] }; // Return empty structure
     }
 };
 

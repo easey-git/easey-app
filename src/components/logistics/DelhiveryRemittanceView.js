@@ -19,22 +19,13 @@ export const DelhiveryRemittanceView = () => {
             // Updated mapping based on actual API response
             const list = data?.remittance_list || data?.remittance_list_dict || data?.data || [];
 
-            const totalCount = data?.total_remittance_count || 0;
-            const currentCount = isRefresh ? list.length : remittances.length + list.length;
-
             if (isRefresh) {
                 setRemittances(list);
             } else {
                 setRemittances(prev => [...prev, ...list]);
             }
-
-            // Robust Pagination Check using Total Count
-            if (totalCount > 0) {
-                setHasMore(currentCount < totalCount);
-            } else {
-                // Fallback if total_count is missing: check if list is smaller than requested page size (20)
-                setHasMore(list.length >= 20);
-            }
+            // Simple pagination check
+            if (list.length < 10) setHasMore(false);
 
             // Debug logs
             if (__DEV__) console.log("Remittances Response:", JSON.stringify(data, null, 2));
@@ -100,10 +91,10 @@ export const DelhiveryRemittanceView = () => {
                 contentContainerStyle={styles.listContent}
                 data={remittances}
                 renderItem={renderItem}
-                keyExtractor={(item, index) => item.remittance_id || index.toString()}
+                keyExtractor={(item, index) => item.cn_note_id || index.toString()}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                onEndReached={() => loadMore()}
-                onEndReachedThreshold={0.1}
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.5}
                 ListFooterComponent={loading && !refreshing ? <ActivityIndicator style={{ margin: 20 }} /> : null}
                 ListEmptyComponent={!loading && (
                     <View style={styles.emptyState}>
