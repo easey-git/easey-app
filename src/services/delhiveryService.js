@@ -206,7 +206,7 @@ export const fetchDelhiveryTransactions = async (walletId, startDate, endDate, p
 
 // --- REMITTANCE API ---
 
-export const fetchDelhiveryRemittances = async (page = 1, pageSize = 10) => {
+export const fetchDelhiveryRemittances = async (page = 1, pageSize = 30) => {
     // URL: web/api/remittance/remittance_listing
     const params = {
         page: page.toString(),
