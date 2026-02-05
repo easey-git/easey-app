@@ -16,16 +16,25 @@ export const DelhiveryRemittanceView = () => {
         setLoading(true);
         try {
             const data = await fetchDelhiveryRemittances(pageNum);
-            // Assuming data structure: { data: [...] } or { results: [...] } or just [...]
-            const list = data?.remittance_list_dict || data?.data || data?.results || [];
+            // Updated mapping based on actual API response
+            const list = data?.remittance_list || data?.remittance_list_dict || data?.data || [];
+
+            const totalCount = data?.total_remittance_count || 0;
+            const currentCount = isRefresh ? list.length : remittances.length + list.length;
 
             if (isRefresh) {
                 setRemittances(list);
             } else {
                 setRemittances(prev => [...prev, ...list]);
             }
-            // Simple pagination check
-            if (list.length < 10) setHasMore(false);
+
+            // Robust Pagination Check using Total Count
+            if (totalCount > 0) {
+                setHasMore(currentCount < totalCount);
+            } else {
+                // Fallback if total_count is missing: check if list is smaller than requested page size (20)
+                setHasMore(list.length >= 20);
+            }
 
             // Debug logs
             if (__DEV__) console.log("Remittances Response:", JSON.stringify(data, null, 2));
@@ -59,10 +68,10 @@ export const DelhiveryRemittanceView = () => {
 
     const renderItem = ({ item }) => {
         // Mapping typical fields, adjust based on actual API
-        const amount = item.remitted_amount || item.amount || 0;
-        const date = item.remittance_date || item.date || item.created_at;
-        const ref = item.bank_ref_number || item.reference_id || item.utr || 'N/A';
-        const status = item.status || 'Processed';
+        const amount = item.total_amount || item.remitted_amount || item.amount || 0;
+        const date = item.date || item.remittance_date || item.created_at;
+        const ref = item.remittance_number || item.transaction_id || item.bank_ref_number || 'N/A';
+        const status = item.remittance_status || item.status || 'Processed';
 
         return (
             <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} mode="contained">
@@ -91,10 +100,10 @@ export const DelhiveryRemittanceView = () => {
                 contentContainerStyle={styles.listContent}
                 data={remittances}
                 renderItem={renderItem}
-                keyExtractor={(item, index) => item.cn_note_id || index.toString()}
+                keyExtractor={(item, index) => item.remittance_id || index.toString()}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                onEndReached={loadMore}
-                onEndReachedThreshold={0.5}
+                onEndReached={() => loadMore()}
+                onEndReachedThreshold={0.1}
                 ListFooterComponent={loading && !refreshing ? <ActivityIndicator style={{ margin: 20 }} /> : null}
                 ListEmptyComponent={!loading && (
                     <View style={styles.emptyState}>

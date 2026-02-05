@@ -206,7 +206,7 @@ export const fetchDelhiveryTransactions = async (walletId, startDate, endDate, p
 
 // --- REMITTANCE API ---
 
-export const fetchDelhiveryRemittances = async (page = 1, pageSize = 10) => {
+export const fetchDelhiveryRemittances = async (page = 1, pageSize = 20) => {
     // URL: web/api/remittance/remittance_listing
     const params = {
         page: page.toString(),
@@ -219,7 +219,7 @@ export const fetchDelhiveryRemittances = async (page = 1, pageSize = 10) => {
         return await executeDelhiveryWalletRequest("../remittance/remittance_listing", params);
     } catch (e) {
         console.error("Remittances Error:", e);
-        return { count: 0, data: [] }; // Return empty structure
+        return { count: 0, remittance_list: [] };
     }
 };
 
