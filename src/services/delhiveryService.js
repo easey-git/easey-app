@@ -65,7 +65,11 @@ const executeDelhiveryWalletRequest = async (endpoint, params = {}) => {
             throw new Error(text || `Wallet API Error ${response.status}`);
         }
 
-        return response.json();
+        const data = await response.json();
+        if (__DEV__) {
+            console.log(`[WalletAPI] ${endpoint} Response:`, JSON.stringify(data, null, 2));
+        }
+        return data;
 
     } catch (e) {
         console.error("Execute Wallet Request Error:", e);
@@ -170,7 +174,7 @@ export const fetchDelhiveryNDR = async (page = 1) => {
 export const fetchDelhiveryWalletDetails = async () => {
     // URL: web/api/wallet/wallet_details
     try {
-        return await executeDelhiveryWalletRequest("wallet_details");
+        return await executeDelhiveryWalletRequest("wallet/wallet_details");
     } catch (e) {
         console.error("Wallet Details Error:", e);
         return null; // Return null so UI shows error state/loading gracefully
@@ -178,23 +182,42 @@ export const fetchDelhiveryWalletDetails = async () => {
 };
 
 // Fetches Ledger/Statement
+// Fetches Ledger/Statement
 export const fetchDelhiveryTransactions = async (walletId, startDate, endDate, page = 1) => {
-    if (!walletId) return { results: [] };
-
     // URL: web/api/wallet/transactions
     const params = {
-        wallet_id: walletId,
         start_date: startDate, // YYYY-MM-DD
         end_date: endDate,     // YYYY-MM-DD
         page: page.toString(),
         page_size: '20'
     };
 
+    if (walletId) {
+        params.wallet_id = walletId;
+    }
+
     try {
-        return await executeDelhiveryWalletRequest("transactions", params);
+        return await executeDelhiveryWalletRequest("wallet/transactions", params);
     } catch (e) {
         console.error("Transactions Error:", e);
         return { count: 0, results: [] };
+    }
+};
+
+// --- REMITTANCE API ---
+
+export const fetchDelhiveryRemittances = async (page = 1, pageSize = 10) => {
+    // URL: web/api/remittance/remittance_listing
+    const params = {
+        page: page.toString(),
+        page_size: pageSize.toString()
+    };
+
+    try {
+        return await executeDelhiveryWalletRequest("remittance/remittance_listing", params);
+    } catch (e) {
+        console.error("Remittances Error:", e);
+        return { count: 0, data: [] }; // Return empty structure
     }
 };
 
