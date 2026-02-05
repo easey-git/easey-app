@@ -174,7 +174,7 @@ export const fetchDelhiveryNDR = async (page = 1) => {
 export const fetchDelhiveryWalletDetails = async () => {
     // URL: web/api/wallet/wallet_details
     try {
-        return await executeDelhiveryWalletRequest("wallet/wallet_details");
+        return await executeDelhiveryWalletRequest("wallet_details");
     } catch (e) {
         console.error("Wallet Details Error:", e);
         return null; // Return null so UI shows error state/loading gracefully
@@ -197,7 +197,7 @@ export const fetchDelhiveryTransactions = async (walletId, startDate, endDate, p
     }
 
     try {
-        return await executeDelhiveryWalletRequest("wallet/transactions", params);
+        return await executeDelhiveryWalletRequest("transactions", params);
     } catch (e) {
         console.error("Transactions Error:", e);
         return { count: 0, results: [] };
@@ -214,7 +214,9 @@ export const fetchDelhiveryRemittances = async (page = 1, pageSize = 10) => {
     };
 
     try {
-        return await executeDelhiveryWalletRequest("remittance/remittance_listing", params);
+        // HACK: The backend proxy is hardcoded to base "web/api/wallet/".
+        // We use "../" to traverse up and access "web/api/remittance/".
+        return await executeDelhiveryWalletRequest("../remittance/remittance_listing", params);
     } catch (e) {
         console.error("Remittances Error:", e);
         return { count: 0, data: [] }; // Return empty structure

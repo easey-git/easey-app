@@ -19,8 +19,7 @@ export default async function handler(req, res) {
         }
 
         // Construct Delhivery API URL
-        // Changed to generic web/api base to support wallet, remittance, etc.
-        const baseUrl = "https://ucp-app-gateway.delhivery.com/web/api/";
+        const baseUrl = "https://ucp-app-gateway.delhivery.com/web/api/wallet/";
         // Safe URL construction
         const urlObj = new URL(endpoint, baseUrl);
 
