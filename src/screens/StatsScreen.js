@@ -792,23 +792,46 @@ const StatsScreen = ({ navigation }) => {
     };
 
     return (
-        <CRMLayout title="Overview" navigation={navigation} scrollable={true} fullWidth={true}>
+        <CRMLayout
+            title="Overview"
+            navigation={navigation}
+            scrollable={true}
+            fullWidth={true}
+            actions={
+                isDesktop && (
+                    <SegmentedButtons
+                        value={timeRange}
+                        onValueChange={setTimeRange}
+                        buttons={[
+                            { value: 'today', label: 'Today' },
+                            { value: '7d', label: '7 Days' },
+                            { value: '30d', label: '30 Days' },
+                        ]}
+                        style={{ minWidth: 320 }}
+                        density="small"
+                    />
+                )
+            }
+        >
             {initialLoading && loading && (
                 <View style={[styles.loadingOverlay, { backgroundColor: theme.colors.background }]}>
                     <ActivityIndicator size="large" color={theme.colors.primary} />
                 </View>
             )}
             <View style={[styles.sectionContainer, { marginBottom: 16 }]}>
-                <SegmentedButtons
-                    value={timeRange}
-                    onValueChange={setTimeRange}
-                    buttons={[
-                        { value: 'today', label: 'Today' },
-                        { value: '7d', label: '7 Days' },
-                        { value: '30d', label: '30 Days' },
-                    ]}
-                    style={{ marginBottom: 12 }}
-                />
+                {!isDesktop && (
+                    <SegmentedButtons
+                        value={timeRange}
+                        onValueChange={setTimeRange}
+                        buttons={[
+                            { value: 'today', label: 'Today' },
+                            { value: '7d', label: '7 Days' },
+                            { value: '30d', label: '30 Days' },
+                        ]}
+                        style={{ marginBottom: 12 }}
+                        density="small"
+                    />
+                )}
 
                 <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
                     <View style={[styles.gridContainer, { flex: 1 }]}>
