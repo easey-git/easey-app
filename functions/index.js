@@ -25,5 +25,5 @@ exports.toggleUserStatus = manageUsers.toggleUserStatus;
 const utilsTriggers = require('./triggers/utils');
 exports.cleanupOldLogs = utilsTriggers.cleanupOldLogs;
 // Export Wallet Triggers (Search Indexing)
-const walletTriggers = require('./triggers/wallet');
-exports.maintainTransactionIndex = walletTriggers.maintainTransactionIndex;
+// const walletTriggers = require('./triggers/wallet');
+// exports.maintainTransactionIndex = walletTriggers.maintainTransactionIndex;
