@@ -206,7 +206,7 @@ export const fetchDelhiveryTransactions = async (walletId, startDate, endDate, p
 
 // --- REMITTANCE API ---
 
-export const fetchDelhiveryRemittances = async (page = 1, pageSize = 20) => {
+export const fetchDelhiveryRemittances = async (page = 1, pageSize = 10) => {
     // URL: web/api/remittance/remittance_listing
     const params = {
         page: page.toString(),
@@ -215,8 +215,9 @@ export const fetchDelhiveryRemittances = async (page = 1, pageSize = 20) => {
 
     try {
         // HACK: The backend proxy is hardcoded to base "web/api/wallet/".
-        // We use "../" to traverse up and access "web/api/remittance/".
-        return await executeDelhiveryWalletRequest("../remittance/remittance_listing", params);
+        // We Use "../../" to traverse up to "web/" and explicitly valid path "api/remittance/".
+        // This ensures "/api/" is included, preventing "NOT_FOUND" errors.
+        return await executeDelhiveryWalletRequest("../../api/remittance/remittance_listing", params);
     } catch (e) {
         console.error("Remittances Error:", e);
         return { count: 0, remittance_list: [] };
