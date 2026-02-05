@@ -1,6 +1,7 @@
 export const LOGISTICS_URLS = {
     DELHIVERY_API_BASE: "https://track.delhivery.com/api/v1",
     DELHIVERY_INTERNAL_URL: 'https://easey-app.vercel.app/api/delhivery',
+    DELHIVERY_WALLET_PROXY: 'https://easey-app.vercel.app/api/delhivery-wallet',
 };
 
 export const LOGISTICS_TOKENS = {

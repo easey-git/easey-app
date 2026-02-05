@@ -1,55 +1,79 @@
+import { Platform } from 'react-native';
 import { LOGISTICS_TOKENS, LOGISTICS_URLS } from '../config/logistics';
 
-// Helper function to execute API calls with Token Refresh logic
+// 1. Specific Proxy Request Wrapper for SHIPMENTS
 const executeDelhiveryRequest = async (payload) => {
+    const url = LOGISTICS_URLS.DELHIVERY_INTERNAL_URL;
     let token = LOGISTICS_TOKENS.DELHIVERY_JWT;
-    if (!token) throw new Error("Delhivery Token not found");
 
-    const makeCall = async (t) => {
-        return fetch(LOGISTICS_URLS.DELHIVERY_INTERNAL_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                token: t,
-                payload: payload
-            })
-        });
-    };
+    const makeProxyCall = (t) => fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: t, payload })
+    });
 
-    let response = await makeCall(token);
+    let response = await makeProxyCall(token);
 
-    // Handle Token Expiry
     if (response.status === 401) {
-        if (__DEV__) console.log("Delhivery Token Expired. Attempting Auto-Refresh...");
-        try {
-            const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', {
-                method: 'POST',
-            });
-
-            if (refreshRes.ok) {
-                const refreshData = await refreshRes.json();
-                if (refreshData.token) {
-                    if (__DEV__) console.log("Token Refreshed Successfully!");
-                    LOGISTICS_TOKENS.DELHIVERY_JWT = refreshData.token.replace('Bearer ', '');
-                    token = LOGISTICS_TOKENS.DELHIVERY_JWT;
-                    // Retry Request
-                    response = await makeCall(token);
-                }
-            } else {
-                console.error("Token Refresh Failed:", await refreshRes.text());
+        if (__DEV__) console.log("Delhivery Proxy Token Expired. Attempting Refresh...");
+        const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', { method: 'POST' });
+        if (refreshRes.ok) {
+            const d = await refreshRes.json();
+            if (d.token) {
+                LOGISTICS_TOKENS.DELHIVERY_JWT = d.token.replace('Bearer ', '');
+                token = LOGISTICS_TOKENS.DELHIVERY_JWT;
+                response = await makeProxyCall(token);
             }
-        } catch (e) {
-            console.error("Token Refresh Error:", e);
         }
     }
 
-    if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`API Error ${response.status}: ${text}`);
-    }
-
+    if (!response.ok) throw new Error(await response.text());
     return response.json();
 };
+
+// 2. Specific Proxy Request Wrapper for WALLET
+// Uses the new api/delhivery-wallet.js endpoint to avoid CORS on Web
+const executeDelhiveryWalletRequest = async (endpoint, params = {}) => {
+    const url = LOGISTICS_URLS.DELHIVERY_WALLET_PROXY || 'https://easey-app.vercel.app/api/delhivery-wallet';
+    let token = LOGISTICS_TOKENS.DELHIVERY_JWT;
+
+    const makeProxyCall = (t) => fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: t, endpoint, params })
+    });
+
+    try {
+        let response = await makeProxyCall(token);
+
+        // Handle Token Expiry
+        if (response.status === 401) {
+            if (__DEV__) console.log("Delhivery Wallet Token Expired. Refreshing...");
+            const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', { method: 'POST' });
+            if (refreshRes.ok) {
+                const d = await refreshRes.json();
+                if (d.token) {
+                    LOGISTICS_TOKENS.DELHIVERY_JWT = d.token.replace('Bearer ', '');
+                    token = LOGISTICS_TOKENS.DELHIVERY_JWT;
+                    response = await makeProxyCall(token);
+                }
+            }
+        }
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || `Wallet API Error ${response.status}`);
+        }
+
+        return response.json();
+
+    } catch (e) {
+        console.error("Execute Wallet Request Error:", e);
+        throw e;
+    }
+};
+
+// --- LOGISTICS API ---
 
 export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
     try {
@@ -57,7 +81,7 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
         let allResults = [];
         let currentPage = page;
         let keepFetching = true;
-        const MAX_PAGES = 50; // Safety cap (50k orders)
+        const MAX_PAGES = 50;
 
         if (__DEV__) console.log("Fetching Delhivery Orders (Limitless Mode)...");
 
@@ -75,14 +99,11 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
             };
 
             const data = await executeDelhiveryRequest(payload);
-
-            // Map/Safeguard results
             const results = data.results || (data.data?.packages) || [];
             allResults = [...allResults, ...results];
 
             if (__DEV__) console.log(`✓ fetched page ${currentPage}: ${results.length} items`);
 
-            // If we got fewer items than requested, we reached the end
             if (results.length < PAGE_SIZE) {
                 keepFetching = false;
             } else {
@@ -100,7 +121,7 @@ export const fetchDelhiveryOrders = async (status = 'All', page = 1) => {
 
 export const fetchDelhiveryNDR = async (page = 1) => {
     try {
-        const PAGE_SIZE = 1000; // Increased from 50
+        const PAGE_SIZE = 1000;
         let allResults = [];
         let currentPage = page;
         let keepFetching = true;
@@ -123,8 +144,6 @@ export const fetchDelhiveryNDR = async (page = 1) => {
             };
 
             const data = await executeDelhiveryRequest(payload);
-
-            // API returns 'results' or 'data' fallback
             const results = data.results || data.data || [];
             allResults = [...allResults, ...results];
 
@@ -145,7 +164,40 @@ export const fetchDelhiveryNDR = async (page = 1) => {
     }
 };
 
+// --- WALLET API ---
+
+// Fetches Balance and other wallet metadata
+export const fetchDelhiveryWalletDetails = async () => {
+    // URL: web/api/wallet/wallet_details
+    try {
+        return await executeDelhiveryWalletRequest("wallet_details");
+    } catch (e) {
+        console.error("Wallet Details Error:", e);
+        return null; // Return null so UI shows error state/loading gracefully
+    }
+};
+
+// Fetches Ledger/Statement
+export const fetchDelhiveryTransactions = async (walletId, startDate, endDate, page = 1) => {
+    if (!walletId) return { results: [] };
+
+    // URL: web/api/wallet/transactions
+    const params = {
+        wallet_id: walletId,
+        start_date: startDate, // YYYY-MM-DD
+        end_date: endDate,     // YYYY-MM-DD
+        page: page.toString(),
+        page_size: '20'
+    };
+
+    try {
+        return await executeDelhiveryWalletRequest("transactions", params);
+    } catch (e) {
+        console.error("Transactions Error:", e);
+        return { count: 0, results: [] };
+    }
+};
+
 export const syncDelhiveryStatus = async (awb) => {
-    // Used to update a specific order
-    // ...
+    // Stub
 };

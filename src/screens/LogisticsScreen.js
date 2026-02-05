@@ -6,6 +6,7 @@ import { DelhiveryView } from '../components/logistics/DelhiveryView';
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
 import { NDRView } from '../components/logistics/NDRView';
+import { DelhiveryWalletView } from '../components/logistics/DelhiveryWalletView';
 
 // 1. Logistics Provider Registry
 // This is the single source of truth for all supported carriers.
@@ -32,6 +33,13 @@ const PROVIDERS = [
                 component: NDRView,
                 icon: 'alert-circle-outline',
                 primaryColor: '#F57C00', // Orange for Attention
+            },
+            {
+                id: 'wallet',
+                label: 'Wallet',
+                component: DelhiveryWalletView,
+                icon: 'wallet-outline',
+                primaryColor: '#2E7D32', // Green for Finance
             },
         ]
     },
