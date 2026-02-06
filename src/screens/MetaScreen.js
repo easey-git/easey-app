@@ -136,34 +136,41 @@ const MetaScreen = ({ navigation }) => {
             ) : (
                 <View style={styles.container}>
                     {/* Tab Navigation */}
-                    <View style={[styles.tabBar, { backgroundColor: 'transparent' }]}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
-                            <SegmentedButtons
-                                value={activeTab}
-                                onValueChange={setActiveTab}
-                                buttons={[
-                                    {
-                                        value: 'overview',
-                                        label: 'Overview',
-                                        icon: width < 380 ? undefined : 'view-dashboard',
-                                        labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
-                                    },
-                                    {
-                                        value: 'campaigns',
-                                        label: 'Campaigns',
-                                        icon: width < 380 ? undefined : 'bullhorn',
-                                        labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
-                                    },
-                                    {
-                                        value: 'analytics',
-                                        label: 'Analytics',
-                                        icon: width < 380 ? undefined : 'chart-line',
-                                        labelStyle: { fontSize: width < 380 ? 10 : 12, marginHorizontal: 0 }
-                                    },
-
-                                ]}
-                                style={styles.segmentedButtons}
-                            />
+                    <View style={[styles.tabBar, { backgroundColor: 'transparent', paddingHorizontal: 16 }]}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', paddingVertical: 4 }}>
+                            {[
+                                { id: 'overview', label: 'Overview', icon: 'view-dashboard' },
+                                { id: 'campaigns', label: 'Campaigns', icon: 'bullhorn' },
+                                { id: 'analytics', label: 'Analytics', icon: 'chart-line' }
+                            ].map((tab) => {
+                                const isActive = activeTab === tab.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={tab.id}
+                                        onPress={() => setActiveTab(tab.id)}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            backgroundColor: isActive ? theme.colors.secondaryContainer : 'transparent',
+                                            paddingVertical: 8,
+                                            paddingHorizontal: 20,
+                                            borderRadius: 24,
+                                            marginRight: 12,
+                                            borderWidth: isActive ? 0 : 1,
+                                            borderColor: theme.colors.outlineVariant
+                                        }}
+                                    >
+                                        <Icon source={tab.icon} size={18} color={isActive ? theme.colors.onSecondaryContainer : theme.colors.onSurfaceVariant} />
+                                        <Text style={{
+                                            marginLeft: 8,
+                                            color: isActive ? theme.colors.onSecondaryContainer : theme.colors.onSurfaceVariant,
+                                            fontWeight: isActive ? '700' : '500'
+                                        }}>
+                                            {tab.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </ScrollView>
                     </View>
 
@@ -846,19 +853,40 @@ const AnalyticsTab = ({ analyticsData, error, theme, fetchData, datePreset, setD
 
             {/* Period Selector */}
             <View style={{ marginBottom: 16 }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
-                    <SegmentedButtons
-                        value={datePreset}
-                        onValueChange={setDatePreset}
-                        density="small"
-                        buttons={[
-                            { value: 'today', label: 'Today' },
-                            { value: 'yesterday', label: 'Yesterday' },
-                            { value: 'last_7d', label: 'Last 7d' },
-                            { value: 'this_month', label: 'Month' },
-                        ]}
-                        style={{ marginBottom: 8, minWidth: 380 }} // Ensure enough width for 'Yesterday'
-                    />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', paddingVertical: 4 }}>
+                    {[
+                        { id: 'today', label: 'Today' },
+                        { id: 'yesterday', label: 'Yesterday' },
+                        { id: 'last_7d', label: 'Last 7 Days' },
+                        { id: 'this_month', label: 'This Month' }
+                    ].map((item) => {
+                        const isActive = datePreset === item.id;
+                        return (
+                            <TouchableOpacity
+                                key={item.id}
+                                onPress={() => setDatePreset(item.id)}
+                                style={{
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: isActive ? theme.colors.secondaryContainer : 'transparent',
+                                    paddingVertical: 8,
+                                    paddingHorizontal: 16,
+                                    borderRadius: 20,
+                                    marginRight: 8,
+                                    borderWidth: isActive ? 0 : 1,
+                                    borderColor: theme.colors.outlineVariant
+                                }}
+                            >
+                                <Text style={{
+                                    color: isActive ? theme.colors.onSecondaryContainer : theme.colors.onSurfaceVariant,
+                                    fontWeight: isActive ? '700' : '500',
+                                    fontSize: 13
+                                }}>
+                                    {item.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </ScrollView>
             </View>
 
@@ -1067,11 +1095,9 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         // paddingHorizontal: 0, // Removed padding to prevent text shrinking
     },
-    tabScrollContent: {
-        flexGrow: 1,
-    },
+    // tabScrollContent handled inline
     segmentedButtons: {
-        minWidth: '100%',
+        // dynamic sizing
     },
     content: {
         padding: 12, // Reduced from 16
