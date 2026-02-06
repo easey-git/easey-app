@@ -204,7 +204,7 @@ const NotesScreen = ({ navigation }) => {
     }
 
     return (
-        <CRMLayout title="Notes" navigation={navigation}>
+        <CRMLayout title="Notes" navigation={navigation} fullWidth={true}>
             {/* Search Bar */}
             <View style={styles.searchContainer}>
                 <Surface style={[styles.searchBar, { backgroundColor: theme.colors.elevation.level1 }]} elevation={0}>

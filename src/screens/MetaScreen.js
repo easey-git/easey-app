@@ -126,6 +126,7 @@ const MetaScreen = ({ navigation }) => {
             title="Meta"
             navigation={navigation}
             scrollable={false}
+            fullWidth={true}
             actions={<Appbar.Action icon="refresh" onPress={onRefresh} />}
         >
             {loading && !refreshing ? (

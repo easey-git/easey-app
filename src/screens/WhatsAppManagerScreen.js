@@ -441,7 +441,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     );
 
     return (
-        <CRMLayout title="WhatsApp Manager" navigation={navigation} scrollable={false}>
+        <CRMLayout title="WhatsApp Manager" navigation={navigation} scrollable={false} fullWidth={true}>
             <View style={styles.segmentContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
                     <SegmentedButtons

@@ -90,7 +90,7 @@ const LogisticsScreen = ({ navigation }) => {
     const ActiveComponent = activeFeature ? activeFeature.component : null;
 
     return (
-        <CRMLayout title="Logistics Hub" navigation={navigation}>
+        <CRMLayout title="Logistics Hub" navigation={navigation} fullWidth={true}>
             <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
 
                 {/* 2. Provider Selector (Top Bar) */}

@@ -311,7 +311,7 @@ const AdminPanelScreen = ({ navigation }) => {
         );
     };
     return (
-        <CRMLayout title="Admin Panel" navigation={navigation} scrollable={false}>
+        <CRMLayout title="Admin Panel" navigation={navigation} scrollable={false} fullWidth={true}>
             <View style={{ flex: 1 }}>
                 <View style={{ paddingVertical: 16 }}>
                     <Text variant="headlineSmall" style={{ fontWeight: 'bold', paddingHorizontal: 16 }}>User Management</Text>

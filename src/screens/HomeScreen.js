@@ -198,7 +198,7 @@ const HomeScreen = ({ navigation }) => {
 
     // --- DESKTOP LAYOUT ---
     const DesktopLayout = () => (
-        <View style={{ gap: 24, paddingTop: 24 }}>
+        <View style={{ gap: 24, paddingTop: 24, paddingHorizontal: 24 }}>
             {/* Welcome Section */}
             <View>
                 <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
@@ -210,7 +210,6 @@ const HomeScreen = ({ navigation }) => {
             </View>
 
 
-            {/* Main Stats Row - 6 Columns */}
             {/* Main Stats Row - 6 Columns */}
             <View style={{ flexDirection: 'row', gap: 16 }}>
                 {hasPermission('view_financial_stats') && <View style={{ flex: 1 }}><StatCard label="Total Sales" value={`₹${stats.sales.toLocaleString('en-IN')}`} icon="currency-inr" theme={theme} /></View>}
@@ -247,7 +246,7 @@ const HomeScreen = ({ navigation }) => {
 
     // --- MOBILE LAYOUT ---
     const MobileLayout = () => (
-        <View style={{ gap: 16 }}>
+        <View style={{ gap: 16, paddingHorizontal: 16 }}>
             {/* Welcome Section */}
             <View>
                 <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
@@ -310,6 +309,7 @@ const HomeScreen = ({ navigation }) => {
             navigation={navigation}
             scrollable={true}
             showHeader={true}
+            fullWidth={true}
 
             actions={
                 hasPermission('view_date_filters') && isDesktop && (
