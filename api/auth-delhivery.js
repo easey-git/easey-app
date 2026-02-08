@@ -71,14 +71,27 @@ export default async function handler(req, res) {
         await new Promise(r => setTimeout(r, 500)); // Small pause
 
         // Attempt to click "Continue" button explicitly - finding by text is safest
+        // Attempt to click "Continue" button explicitly - finding by text is safest
         await page.evaluate(() => {
             const buttons = Array.from(document.querySelectorAll('button'));
-            // Look for "Continue", "submit", "next", standard login text
-            const continueBtn = buttons.find(b => {
-                const t = (b.innerText || '').toLowerCase();
-                return t.includes('continue') || t.includes('login') || t.includes('next');
-            });
-            if (continueBtn) continueBtn.click();
+
+            // Priority 1: Exact "Continue"
+            let targetBtn = buttons.find(b => (b.innerText || '').trim().toLowerCase() === 'continue');
+
+            // Priority 2: Contains "Continue"
+            if (!targetBtn) {
+                targetBtn = buttons.find(b => (b.innerText || '').toLowerCase().includes('continue'));
+            }
+
+            // Priority 3: Contains "Login" or "Next", BUT NOT "Google"
+            if (!targetBtn) {
+                targetBtn = buttons.find(b => {
+                    const t = (b.innerText || '').toLowerCase();
+                    return (t.includes('login') || t.includes('next')) && !t.includes('google');
+                });
+            }
+
+            if (targetBtn) targetBtn.click();
         });
 
         // Also press Enter just in case the button click fails or isn't picked up
