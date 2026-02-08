@@ -34,24 +34,34 @@ export const NDRView = () => {
             }
 
             // NDR API returns 'results' array, not 'data'
-            if (data?.results) {
+            if (data?.results && Array.isArray(data.results)) {
                 const mapped = data.results.map(pkg => ({
-                    id: pkg.order_number || 'N/A',
-                    awb: pkg.awb_number || 'N/A',
+                    id: String(pkg.order_number || 'N/A'),
+                    awb: String(pkg.awb_number || 'N/A'),
                     date: pkg.updated_at ? new Date(pkg.updated_at).toLocaleDateString() : 'N/A',
-                    status: pkg.package_status_type || pkg.shipment_status || 'Unknown',
-                    location: pkg.billing_address?.city || 'N/A',
-                    update: pkg.last_update || 'N/A',
+                    status: String(pkg.package_status_type || pkg.shipment_status || 'Unknown'),
+                    location: String(pkg.billing_address?.city || 'N/A'),
+                    update: String(pkg.last_update || 'N/A'),
+
+                    // Customer Details
+                    customerName: String(pkg.addressee || 'Unknown Customer'),
+                    phone: String(pkg.phone || 'N/A'),
+                    amount: String(pkg.cod_amount || 0),
                 }));
                 setAllOrders(mapped);
-            } else if (data?.data) {
+            } else if (data?.data && Array.isArray(data.data)) {
                 const mapped = data.data.map(pkg => ({
-                    id: pkg.oid || 'N/A',
-                    awb: pkg.wbn || 'N/A',
+                    id: String(pkg.oid || 'N/A'),
+                    awb: String(pkg.wbn || 'N/A'),
                     date: pkg.updated_at ? new Date(pkg.updated_at).toLocaleDateString() : 'N/A',
-                    status: pkg.coc?.status || pkg.status || 'Unknown',
-                    location: pkg.dl || 'N/A',
-                    update: pkg.coc?.remarks || 'N/A',
+                    status: String(pkg.coc?.status || pkg.status || 'Unknown'),
+                    location: String(pkg.dl || 'N/A'),
+                    update: String(pkg.coc?.remarks || 'N/A'),
+
+                    // Customer Details (Fallback keys based on common Delhivery patterns)
+                    customerName: String(pkg.name || pkg.consignee || 'Unknown Customer'),
+                    phone: String(pkg.phone || pkg.mobile || 'N/A'),
+                    amount: String(pkg.cod_amount || pkg.collectable_value || 0),
                 }));
                 setAllOrders(mapped);
             } else {
@@ -101,7 +111,9 @@ export const NDRView = () => {
             const query = debouncedSearchQuery.toLowerCase();
             filtered = filtered.filter(order =>
                 order.id.toLowerCase().includes(query) ||
-                order.awb.toLowerCase().includes(query)
+                order.awb.toLowerCase().includes(query) ||
+                order.customerName.toLowerCase().includes(query) ||
+                order.phone.includes(query)
             );
         }
 
@@ -137,7 +149,7 @@ export const NDRView = () => {
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Search */}
             <Searchbar
-                placeholder="Search by AWB or Order ID"
+                placeholder="Search by AWB, Order ID, Name or Phone"
                 onChangeText={setSearchQuery}
                 value={searchQuery}
                 style={[styles.searchbar, { backgroundColor: theme.colors.elevation.level2 }]}
@@ -227,6 +239,11 @@ const OrderItem = React.memo(({ item, theme, getStatusColor }) => {
                             <TouchableOpacity onPress={handleCopy} hitSlop={8}>
                                 <Icon source={copied ? "check" : "content-copy"} size={14} color={copied ? "#4CAF50" : theme.colors.outline} />
                             </TouchableOpacity>
+                        </View>
+                        {/* Customer Details for NDR */}
+                        <View style={{ marginTop: 4 }}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: '700' }}>{item.customerName}</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.phone} • ₹{item.amount}</Text>
                         </View>
                     </View>
                     <View style={styles.statusContainer}>

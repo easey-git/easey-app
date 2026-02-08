@@ -39,24 +39,40 @@ const executeDelhiveryRequest = async (payload) => {
         body: JSON.stringify({ token: t, payload })
     });
 
-    let response = await makeProxyCall(token);
+    try {
+        let response = await makeProxyCall(token);
 
-    if (response.status === 401) {
-        if (__DEV__) console.log("Delhivery Proxy Token Expired. Attempting Refresh...");
-        const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', { method: 'POST' });
-        if (refreshRes.ok) {
-            const d = await refreshRes.json();
-            if (d.token) {
-                const newToken = d.token.replace('Bearer ', '');
-                await cacheToken(newToken); // Save for next time
-                token = newToken;
-                response = await makeProxyCall(token);
+        // If 401, attempted refresh
+        if (response.status === 401) {
+            console.log("Delhivery Proxy Token Expired. Attempting Refresh...");
+            try {
+                const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', { method: 'POST' });
+                if (refreshRes.ok) {
+                    const d = await refreshRes.json();
+                    if (d.token) {
+                        const newToken = d.token.replace('Bearer ', '');
+                        await cacheToken(newToken); // Save for next time
+                        token = newToken;
+                        response = await makeProxyCall(token); // Retry with new token
+                    }
+                }
+            } catch (err) {
+                console.error("Token Refresh Failed:", err);
             }
         }
-    }
 
-    if (!response.ok) throw new Error(await response.text());
-    return response.json();
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Delhivery Request Failed:", response.status, errorText);
+            // Return empty structure instead of throwing to prevent UI crash
+            return { results: [] };
+        }
+
+        return await response.json();
+    } catch (e) {
+        console.error("Execute Request Error:", e);
+        return { results: [] };
+    }
 };
 
 // 2. Specific Proxy Request Wrapper for WALLET

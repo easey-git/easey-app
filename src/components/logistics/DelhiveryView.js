@@ -20,14 +20,20 @@ export const DelhiveryView = () => {
         setLoading(true);
         try {
             const data = await fetchDelhiveryOrders([]);
-            if (data?.results) {
+            if (data?.results && Array.isArray(data.results)) {
                 const mapped = data.results.map(pkg => ({
-                    id: pkg.order_number || 'N/A',
-                    awb: pkg.awb_number || 'N/A',
+                    id: String(pkg.order_number || 'N/A'),
+                    awb: String(pkg.awb_number || 'N/A'),
                     date: pkg.manifest_at ? new Date(pkg.manifest_at).toLocaleDateString() : 'N/A',
-                    status: pkg.shipment_status || 'Unknown',
-                    location: pkg.origin_address?.city || 'N/A',
-                    update: pkg.last_update || 'N/A',
+                    status: String(pkg.shipment_status || 'Unknown'),
+                    location: String(pkg.origin_address?.city || 'N/A'),
+                    update: String(pkg.last_update || 'N/A'),
+
+                    // Customer Details
+                    customerName: String(pkg.addressee || 'Unknown Customer'),
+                    phone: String(pkg.phone || 'N/A'),
+                    payment: String(pkg.payment_method || 'Prepaid'), // COD or Prepaid
+                    amount: String(pkg.cod_amount || 0),
                 }));
                 setAllOrders(mapped);
             } else {
@@ -76,7 +82,9 @@ export const DelhiveryView = () => {
             const query = debouncedSearchQuery.toLowerCase();
             filtered = filtered.filter(order =>
                 order.id.toLowerCase().includes(query) ||
-                order.awb.toLowerCase().includes(query)
+                order.awb.toLowerCase().includes(query) ||
+                order.customerName.toLowerCase().includes(query) ||
+                order.phone.includes(query)
             );
         }
 
@@ -112,7 +120,7 @@ export const DelhiveryView = () => {
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Search */}
             <Searchbar
-                placeholder="Search by AWB or Order ID"
+                placeholder="Search by AWB, Order ID, Name or Phone"
                 onChangeText={setSearchQuery}
                 value={searchQuery}
                 style={[styles.searchbar, { backgroundColor: theme.colors.elevation.level2 }]}
@@ -201,6 +209,11 @@ const OrderItem = React.memo(({ item, theme, getStatusColor }) => {
                             <TouchableOpacity onPress={handleCopy} hitSlop={8}>
                                 <Icon source={copied ? "check" : "content-copy"} size={14} color={copied ? "#4CAF50" : theme.colors.outline} />
                             </TouchableOpacity>
+                        </View>
+                        {/* Customer Info (New) */}
+                        <View style={{ marginTop: 4 }}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: '700' }}>{item.customerName}</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.phone} • {item.payment} (₹{item.amount})</Text>
                         </View>
                     </View>
                     <View style={styles.statusContainer}>
