@@ -1,9 +1,32 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
+import admin from 'firebase-admin';
 
 export const config = {
     maxDuration: 60,
 };
+
+// --- Firebase Init ---
+if (!admin.apps.length) {
+    try {
+        // reuse existing env var
+        const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
+            ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+            : null;
+
+        if (serviceAccount) {
+            admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount)
+            });
+        } else {
+            console.warn("Missing FIREBASE_SERVICE_ACCOUNT key");
+        }
+    } catch (error) {
+        console.error('Firebase Admin Init Error:', error);
+    }
+}
+const db = admin.apps.length ? admin.firestore() : null;
+
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -19,6 +42,29 @@ export default async function handler(req, res) {
     };
 
     try {
+        // 0. Check Database Cache First (Server-Side Robustness)
+        if (db) {
+            try {
+                log("Checking Firestore Cache...");
+                const doc = await db.collection('system_flags').doc('delhivery_token').get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    const now = Date.now();
+                    const diff = now - (data.updatedAt?.toMillis() || 0);
+                    // Cache validity: 6 hours (conservative). Real token lasts longer.
+                    // If < 6 hours old, return it.
+                    if (data.token && diff < 1000 * 60 * 60 * 6) {
+                        log("Returning Cached Token from Firestore (Skip Login)");
+                        return res.status(200).json({ success: true, token: data.token, cached: true });
+                    } else {
+                        log("Firestore Token Expired or Missing. Proceeding to Login...");
+                    }
+                }
+            } catch (err) {
+                log("Firestore Cache Read Error: " + err.message);
+            }
+        }
+
         log("Launching Browser...");
 
         browser = await puppeteer.launch({
@@ -162,6 +208,20 @@ export default async function handler(req, res) {
 
         if (capturedToken) {
             log("Success.");
+
+            // Save to Firestore Cache
+            if (db) {
+                try {
+                    await db.collection('system_flags').doc('delhivery_token').set({
+                        token: capturedToken,
+                        updatedAt: admin.firestore.Timestamp.now()
+                    });
+                    log("Token Saved to Firestore Cache.");
+                } catch (err) {
+                    log("Error saving to Firestore: " + err.message);
+                }
+            }
+
             return res.status(200).json({ success: true, token: capturedToken });
         } else {
             // Check if we can capture current page HTML for debugging

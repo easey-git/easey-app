@@ -1,10 +1,37 @@
 import { Platform } from 'react-native';
 import { LOGISTICS_TOKENS, LOGISTICS_URLS } from '../config/logistics';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const CACHE_KEY = 'DELHIVERY_JWT_CACHE';
+
+// Helper to get token (Storage -> Memory -> Hardcoded)
+const getCachedToken = async () => {
+    try {
+        const cached = await AsyncStorage.getItem(CACHE_KEY);
+        if (cached) return cached;
+    } catch (e) {
+        console.warn('Error reading token cache', e);
+    }
+    return LOGISTICS_TOKENS.DELHIVERY_JWT;
+};
+
+// Helper to save token
+const cacheToken = async (token) => {
+    try {
+        await AsyncStorage.setItem(CACHE_KEY, token);
+        LOGISTICS_TOKENS.DELHIVERY_JWT = token; // Update memory too
+    } catch (e) {
+        console.warn('Error saving token cache', e);
+    }
+};
+
 // 1. Specific Proxy Request Wrapper for SHIPMENTS
 const executeDelhiveryRequest = async (payload) => {
     const url = LOGISTICS_URLS.DELHIVERY_INTERNAL_URL;
-    let token = LOGISTICS_TOKENS.DELHIVERY_JWT;
+
+    // Try to get a working token first
+    let token = await getCachedToken();
 
     const makeProxyCall = (t) => fetch(url, {
         method: 'POST',
@@ -20,8 +47,9 @@ const executeDelhiveryRequest = async (payload) => {
         if (refreshRes.ok) {
             const d = await refreshRes.json();
             if (d.token) {
-                LOGISTICS_TOKENS.DELHIVERY_JWT = d.token.replace('Bearer ', '');
-                token = LOGISTICS_TOKENS.DELHIVERY_JWT;
+                const newToken = d.token.replace('Bearer ', '');
+                await cacheToken(newToken); // Save for next time
+                token = newToken;
                 response = await makeProxyCall(token);
             }
         }
@@ -35,7 +63,9 @@ const executeDelhiveryRequest = async (payload) => {
 // Uses the new api/delhivery-wallet.js endpoint to avoid CORS on Web
 const executeDelhiveryWalletRequest = async (endpoint, params = {}) => {
     const url = LOGISTICS_URLS.DELHIVERY_WALLET_PROXY || 'https://easey-app.vercel.app/api/delhivery-wallet';
-    let token = LOGISTICS_TOKENS.DELHIVERY_JWT;
+
+    // Use cached token
+    let token = await getCachedToken();
 
     const makeProxyCall = (t) => fetch(url, {
         method: 'POST',
@@ -53,8 +83,9 @@ const executeDelhiveryWalletRequest = async (endpoint, params = {}) => {
             if (refreshRes.ok) {
                 const d = await refreshRes.json();
                 if (d.token) {
-                    LOGISTICS_TOKENS.DELHIVERY_JWT = d.token.replace('Bearer ', '');
-                    token = LOGISTICS_TOKENS.DELHIVERY_JWT;
+                    const newToken = d.token.replace('Bearer ', '');
+                    await cacheToken(newToken);
+                    token = newToken;
                     response = await makeProxyCall(token);
                 }
             }
