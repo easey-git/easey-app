@@ -8,9 +8,6 @@ const CACHE_KEY = 'DELHIVERY_JWT_CACHE';
 // Helper to get token (Storage -> Memory -> Hardcoded)
 const getCachedToken = async () => {
     try {
-        // TEMP: Force clear cache to fix 401 loop
-        // await AsyncStorage.removeItem(CACHE_KEY); 
-
         const cached = await AsyncStorage.getItem(CACHE_KEY);
         if (cached) return cached;
     } catch (e) {
@@ -42,50 +39,24 @@ const executeDelhiveryRequest = async (payload) => {
         body: JSON.stringify({ token: t, payload })
     });
 
-    try {
-        let response = await makeProxyCall(token);
+    let response = await makeProxyCall(token);
 
-        // If 401, attempted refresh
-        if (response.status === 401) {
-            console.log("Delhivery Proxy 401. Token used:", token ? token.substring(0, 10) + "..." : "None");
-            console.log("Attempting Refresh...");
-            try {
-                const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', { method: 'POST' });
-                console.log("Refresh Response Status:", refreshRes.status);
-
-                if (refreshRes.ok) {
-                    const d = await refreshRes.json();
-                    console.log("Refresh Response Body:", JSON.stringify(d));
-
-                    if (d.token) {
-                        const newToken = d.token.replace('Bearer ', '');
-                        await cacheToken(newToken); // Save for next time
-                        console.log("New Token Cached. Retrying request...");
-                        token = newToken;
-                        response = await makeProxyCall(token); // Retry with new token
-                    } else {
-                        console.error("Refresh succeeded but no token returned:", d);
-                    }
-                } else {
-                    console.error("Refresh Failed with Status:", refreshRes.status, await refreshRes.text());
-                }
-            } catch (err) {
-                console.error("Token Refresh Exception:", err);
+    if (response.status === 401) {
+        if (__DEV__) console.log("Delhivery Proxy Token Expired. Attempting Refresh...");
+        const refreshRes = await fetch('https://easey-app.vercel.app/api/auth-delhivery', { method: 'POST' });
+        if (refreshRes.ok) {
+            const d = await refreshRes.json();
+            if (d.token) {
+                const newToken = d.token.replace('Bearer ', '');
+                await cacheToken(newToken); // Save for next time
+                token = newToken;
+                response = await makeProxyCall(token);
             }
         }
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Delhivery Request Failed:", response.status, errorText);
-            // Return empty structure instead of throwing to prevent UI crash
-            return { results: [] };
-        }
-
-        return await response.json();
-    } catch (e) {
-        console.error("Execute Request Error:", e);
-        return { results: [] };
     }
+
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
 };
 
 // 2. Specific Proxy Request Wrapper for WALLET
