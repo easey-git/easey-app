@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     let debugInfo = { logs: [] };
 
     const log = (msg) => {
-        if (process.env.NODE_ENV !== 'production') console.log(msg);
+        console.log(msg); // Enable logs in production for debugging
         debugInfo.logs.push({ time: new Date().toISOString(), msg });
     };
 
@@ -109,6 +109,17 @@ export default async function handler(req, res) {
             log("Success.");
             return res.status(200).json({ success: true, token: capturedToken });
         } else {
+            // Check if we can capture current page HTML for debugging
+            let htmlContent = "";
+            try {
+                htmlContent = await page.content();
+            } catch (e) {
+                htmlContent = "Could not capture HTML";
+            }
+            log("Failed to capture token. Dumping debug info...");
+            console.error("Page Title:", title);
+            console.error("Final URL:", finalUrl);
+
             // Failed
             return res.status(500).json({
                 success: false,
@@ -117,7 +128,8 @@ export default async function handler(req, res) {
                     url: finalUrl,
                     title: title,
                     envEmail: !!email,
-                    logs: debugInfo.logs
+                    logs: debugInfo.logs,
+                    htmlSnippet: htmlContent.substring(0, 2000) // First 2k chars
                 }
             });
         }
