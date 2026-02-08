@@ -58,7 +58,7 @@ export default async function handler(req, res) {
 
         // 1. Login Page
         log("Goto Login...");
-        await page.goto('https://one.delhivery.com/v2/login', { waitUntil: 'networkidle2', timeout: 20000 });
+        await page.goto('https://one.delhivery.com/v2/login', { waitUntil: 'networkidle2', timeout: 30000 });
 
         // 2. Email
         const email = process.env.DELHIVERY_EMAIL;
@@ -66,15 +66,29 @@ export default async function handler(req, res) {
         if (!email || !password) throw new Error("Missing Credentials in Env");
 
         log("Typing Email...");
-        await page.waitForSelector('input[type="email"]');
-        await page.type('input[type="email"]', email);
+        await page.waitForSelector('input[name="email"]');
+        await page.type('input[name="email"]', email);
+        await new Promise(r => setTimeout(r, 500)); // Small pause
+
+        // Attempt to click "Continue" button explicitly - finding by text is safest
+        await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            // Look for "Continue", "submit", "next", standard login text
+            const continueBtn = buttons.find(b => {
+                const t = (b.innerText || '').toLowerCase();
+                return t.includes('continue') || t.includes('login') || t.includes('next');
+            });
+            if (continueBtn) continueBtn.click();
+        });
+
+        // Also press Enter just in case the button click fails or isn't picked up
         await page.keyboard.press('Enter');
 
         // 3. Password
         log("Waiting for Password Field...");
-        await page.waitForSelector('input[type="password"]', { timeout: 15000 });
+        await page.waitForSelector('input[name="password"]', { timeout: 15000 });
         log("Typing Password...");
-        await page.type('input[type="password"]', password);
+        await page.type('input[name="password"]', password);
         await page.keyboard.press('Enter');
 
         // 4. Wait for Dashboard
