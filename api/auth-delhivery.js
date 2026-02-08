@@ -97,44 +97,48 @@ export default async function handler(req, res) {
 
         if (currentUrl.includes('ucp-auth') || currentUrl.includes('realms')) {
             log("On SSO Page. Entering Password...");
+
             try {
-                // Keycloak often uses #password or input[type="password"]
-                // Using a broad selector since the ID might change
-                await page.waitForSelector('input[type="password"]', { visible: true, timeout: 10000 });
-                await page.type('input[type="password"]', password);
+                // Correct Selector for Keycloak: #password
+                await page.waitForSelector('#password', { visible: true, timeout: 10000 });
+                await page.type('#password', password);
+
+                // Submit using #kc-login or Enter
+                await new Promise(r => setTimeout(r, 500));
+                await page.evaluate(() => {
+                    const loginBtn = document.getElementById('kc-login');
+                    if (loginBtn) loginBtn.click();
+                });
                 await page.keyboard.press('Enter');
 
-                // Also try clicking the submit button on the SSO page
-                await page.evaluate(() => {
-                    const submitInput = document.querySelector('input[type="submit"]');
-                    const submitBtn = document.querySelector('button[type="submit"]');
-                    const loginBtn = document.querySelector('#kc-login'); // Common Keycloak ID
-                    if (submitInput) submitInput.click();
-                    else if (submitBtn) submitBtn.click();
-                    else if (loginBtn) loginBtn.click();
-                });
             } catch (e) {
-                log("Error entering password on SSO page: " + e.message);
+                log("Error on SSO page: " + e.message);
+                // Backup attempt
+                try {
+                    await page.type('input[type="password"]', password);
+                    await page.keyboard.press('Enter');
+                } catch (err) { }
             }
         } else {
-            // Fallback: If we are still on the first page for some reason, maybe the password field appeared there?
-            log("Not on SSO URL. Checking for password field on current page...");
+            // Fallback: If we didn't redirect, check current page
+            log("Not on SSO URL. Checking for password field here...");
             try {
+                // Original page fallback
                 await page.waitForSelector('input[name="password"]', { timeout: 5000 });
-                log("Found password field on main page.");
                 await page.type('input[name="password"]', password);
                 await page.keyboard.press('Enter');
             } catch (e) {
-                log("No password field found.");
+                log("No password field found on current page.");
             }
         }
 
-        // 4. Wait for Dashboard
+        // 4. Wait for Dashboard Load (Final Step)
         log("Waiting for Dashboard Load...");
         try {
-            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 });
+            // Increase timeout for final redirect
+            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
         } catch (e) {
-            log("Navigation timeout - checking state...");
+            log("Dashboard navigation timeout - checking success state...");
         }
 
 
