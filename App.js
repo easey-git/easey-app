@@ -18,6 +18,7 @@ import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
 import LogisticsScreen from './src/screens/LogisticsScreen';
 import ActivityLogScreen from './src/screens/ActivityLogScreen';
+import { PayUScreen } from './src/screens/PayUScreen';
 
 import AdminPanelScreen from './src/screens/AdminPanelScreen';
 
@@ -248,6 +249,11 @@ function AppStack() {
               name="ActivityLog"
               component={ActivityLogScreen}
               options={{ title: 'Activity Logs' }}
+            />
+            <Stack.Screen
+              name="PayU"
+              component={PayUScreen}
+              options={{ title: 'PayU Dash' }}
             />
 
 

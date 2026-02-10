@@ -16,6 +16,7 @@ const MENU_ITEMS = [
     { label: 'Wallet', icon: 'wallet-outline', route: 'Wallet', permission: 'access_wallet' },
     { label: 'WhatsApp', icon: 'whatsapp', route: 'WhatsAppManager', permission: 'access_whatsapp' },
     { label: 'Meta', icon: 'infinity', route: 'Meta', permission: 'access_campaigns' },
+    { label: 'PayU', icon: 'credit-card-outline', route: 'PayU', permission: 'access_wallet' },
     { label: 'Notes', icon: 'notebook', route: 'Notes' }, // Always visible
     { label: 'Settings', icon: 'cog', route: 'Settings' }, // Always visible
 ];
@@ -191,113 +192,113 @@ export const Sidebar = React.memo(({ floating = false }) => {
                 ]}
                 pointerEvents="auto"
             >
-            {/* Header / Logo */}
-            <View style={[styles.header, !expanded && styles.headerCollapsed]}>
-                <Image
-                    source={theme.dark ? require('../../logo/easey-white.png') : require('../../logo/easey-dark.png')}
-                    style={expanded ? styles.logo : styles.logoCollapsed}
-                    resizeMode="contain"
-                />
-                {expanded && isDesktop && (
-                    <IconButton
-                        icon={isSidebarPinned ? 'pin' : 'pin-outline'}
-                        size={18}
-                        onPress={handleTogglePinned}
-                        style={styles.pinButton}
+                {/* Header / Logo */}
+                <View style={[styles.header, !expanded && styles.headerCollapsed]}>
+                    <Image
+                        source={theme.dark ? require('../../logo/easey-white.png') : require('../../logo/easey-dark.png')}
+                        style={expanded ? styles.logo : styles.logoCollapsed}
+                        resizeMode="contain"
                     />
-                )}
-            </View>
+                    {expanded && isDesktop && (
+                        <IconButton
+                            icon={isSidebarPinned ? 'pin' : 'pin-outline'}
+                            size={18}
+                            onPress={handleTogglePinned}
+                            style={styles.pinButton}
+                        />
+                    )}
+                </View>
 
-            {/* Navigation Items */}
-            <ScrollView style={[styles.content, !expanded && styles.contentCollapsed]} showsVerticalScrollIndicator={false}>
-                <Drawer.Section showDivider={false}>
-                    {visibleMenuItems.map((item, index) => {
-                        const isActive = activeRoute === item.route;
-                        if (!expanded) {
-                            const activeColor = theme.colors.primary;
-                            const inactiveColor = theme.colors.onSurfaceVariant;
-                            const activeBg = theme.colors.secondaryContainer || theme.colors.primaryContainer;
+                {/* Navigation Items */}
+                <ScrollView style={[styles.content, !expanded && styles.contentCollapsed]} showsVerticalScrollIndicator={false}>
+                    <Drawer.Section showDivider={false}>
+                        {visibleMenuItems.map((item, index) => {
+                            const isActive = activeRoute === item.route;
+                            if (!expanded) {
+                                const activeColor = theme.colors.primary;
+                                const inactiveColor = theme.colors.onSurfaceVariant;
+                                const activeBg = theme.colors.secondaryContainer || theme.colors.primaryContainer;
+                                return (
+                                    <Pressable
+                                        key={index}
+                                        onPress={() => handleNavigation(item)}
+                                        onHoverIn={(e) => {
+                                            if (!isDesktop) return;
+                                            const y = e?.nativeEvent?.pageY ?? 0;
+                                            setTooltip({ visible: true, label: item.label, y });
+                                        }}
+                                        onHoverOut={() => setTooltip({ visible: false, label: '', y: 0 })}
+                                        accessibilityLabel={item.label}
+                                        style={[
+                                            styles.iconOnlyItem,
+                                            isActive && { backgroundColor: activeBg }
+                                        ]}
+                                    >
+                                        <IconButton
+                                            icon={item.icon}
+                                            size={22}
+                                            iconColor={isActive ? activeColor : inactiveColor}
+                                            style={styles.iconOnlyButton}
+                                        />
+                                    </Pressable>
+                                );
+                            }
                             return (
-                                <Pressable
+                                <Drawer.Item
                                     key={index}
+                                    icon={item.icon}
+                                    label={expanded ? item.label : ''}
+                                    active={isActive}
                                     onPress={() => handleNavigation(item)}
-                                    onHoverIn={(e) => {
-                                        if (!isDesktop) return;
-                                        const y = e?.nativeEvent?.pageY ?? 0;
-                                        setTooltip({ visible: true, label: item.label, y });
-                                    }}
-                                    onHoverOut={() => setTooltip({ visible: false, label: '', y: 0 })}
                                     accessibilityLabel={item.label}
                                     style={[
-                                        styles.iconOnlyItem,
-                                        isActive && { backgroundColor: activeBg }
+                                        styles.drawerItem,
+                                        !expanded && styles.drawerItemCollapsed,
                                     ]}
-                                >
-                                    <IconButton
-                                        icon={item.icon}
-                                        size={22}
-                                        iconColor={isActive ? activeColor : inactiveColor}
-                                        style={styles.iconOnlyButton}
-                                    />
-                                </Pressable>
+                                    theme={theme}
+                                />
                             );
-                        }
-                        return (
-                            <Drawer.Item
-                                key={index}
-                                icon={item.icon}
-                                label={expanded ? item.label : ''}
-                                active={isActive}
-                                onPress={() => handleNavigation(item)}
-                                accessibilityLabel={item.label}
-                                style={[
-                                    styles.drawerItem,
-                                    !expanded && styles.drawerItemCollapsed,
-                                ]}
-                                theme={theme}
-                            />
-                        );
-                    })}
-                </Drawer.Section>
-            </ScrollView>
+                        })}
+                    </Drawer.Section>
+                </ScrollView>
 
-            {/* User / Footer */}
-            <View style={[styles.footer, { borderTopColor: theme.colors.outlineVariant }]}>
-                <Pressable onPress={logout} style={[styles.userCard, !expanded && styles.userCardCollapsed]}>
-                    <View style={[styles.userRow, !expanded && styles.userRowCollapsed]}>
-                        <Avatar.Text
-                            size={32}
-                            label={displayName.substring(0, 2).toUpperCase()}
-                            style={{ backgroundColor: theme.colors.primaryContainer }}
-                            color={theme.colors.onPrimaryContainer}
-                        />
-                        {expanded && (
-                            <View style={{ marginLeft: 12 }}>
-                                <Text variant="labelLarge" style={{ color: theme.colors.onSurface }}>{displayRole}</Text>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Logout</Text>
-                            </View>
-                        )}
-                    </View>
-                </Pressable>
-            </View>
-            {isDesktop && !expanded && tooltip.visible && (
-                <View
-                    pointerEvents="none"
-                    style={[
-                        styles.tooltip,
-                        {
-                            top: tooltip.y - 14,
-                            left: COLLAPSED_WIDTH + 10,
-                            backgroundColor: theme.colors.elevation?.level2 || theme.colors.surfaceVariant,
-                            borderColor: theme.colors.outlineVariant,
-                        }
-                    ]}
-                >
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurface }}>
-                        {tooltip.label}
-                    </Text>
+                {/* User / Footer */}
+                <View style={[styles.footer, { borderTopColor: theme.colors.outlineVariant }]}>
+                    <Pressable onPress={logout} style={[styles.userCard, !expanded && styles.userCardCollapsed]}>
+                        <View style={[styles.userRow, !expanded && styles.userRowCollapsed]}>
+                            <Avatar.Text
+                                size={32}
+                                label={displayName.substring(0, 2).toUpperCase()}
+                                style={{ backgroundColor: theme.colors.primaryContainer }}
+                                color={theme.colors.onPrimaryContainer}
+                            />
+                            {expanded && (
+                                <View style={{ marginLeft: 12 }}>
+                                    <Text variant="labelLarge" style={{ color: theme.colors.onSurface }}>{displayRole}</Text>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Logout</Text>
+                                </View>
+                            )}
+                        </View>
+                    </Pressable>
                 </View>
-            )}
+                {isDesktop && !expanded && tooltip.visible && (
+                    <View
+                        pointerEvents="none"
+                        style={[
+                            styles.tooltip,
+                            {
+                                top: tooltip.y - 14,
+                                left: COLLAPSED_WIDTH + 10,
+                                backgroundColor: theme.colors.elevation?.level2 || theme.colors.surfaceVariant,
+                                borderColor: theme.colors.outlineVariant,
+                            }
+                        ]}
+                    >
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurface }}>
+                            {tooltip.label}
+                        </Text>
+                    </View>
+                )}
             </Animated.View>
         </View>
     );
