@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
-import { Text, useTheme, Surface, Appbar, Icon, Button, DataTable, TextInput, Snackbar, Modal, Portal, Divider, Chip, Avatar } from 'react-native-paper';
+import { Text, useTheme, Surface, Appbar, Icon, Button, DataTable, TextInput, Snackbar, Modal, Portal, Divider, Chip, Avatar, IconButton } from 'react-native-paper';
 import { DatePickerInput, DatePickerModal } from 'react-native-paper-dates';
 import { LineChart, BarChart } from 'react-native-gifted-charts';
 import { CRMLayout } from '../components/CRMLayout';
@@ -398,6 +398,7 @@ const PayUScreen = ({ navigation }) => {
                         <Icon source="history" size={20} color={theme.colors.primary} />
                         <Text variant="titleMedium" style={{ marginLeft: 8, fontWeight: 'bold' }}>Recent Transactions</Text>
                     </View>
+                    <IconButton icon="refresh" size={20} onPress={fetchStats} loading={loading} />
                 </View>
 
                 {recentTransactions.length > 0 ? (
@@ -432,18 +433,7 @@ const PayUScreen = ({ navigation }) => {
                 )}
             </Surface>
 
-            {/* Quick Actions */}
-            <Surface style={[styles.card, { backgroundColor: theme.colors.elevation.level1 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                    <Icon source="lightning-bolt" size={20} color={theme.colors.tertiary} />
-                    <Text variant="titleMedium" style={{ marginLeft: 8, fontWeight: 'bold' }}>Quick Actions</Text>
-                </View>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    <Chip icon="link" onPress={() => setActiveTab('collect')} style={{ backgroundColor: theme.colors.secondaryContainer }}>Create Link</Chip>
-                    <Chip icon="bank" onPress={() => setActiveTab('settlements')} style={{ backgroundColor: theme.colors.secondaryContainer }}>Check Settlement</Chip>
-                    <Chip icon="refresh" onPress={() => setActiveTab('utilities')} style={{ backgroundColor: theme.colors.secondaryContainer }}>Refund</Chip>
-                </View>
-            </Surface>
+
         </View>
     );
 
