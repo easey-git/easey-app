@@ -73,32 +73,60 @@ const PayUScreen = ({ navigation }) => {
     const fetchStats = async () => {
         setLoading(true);
         try {
+            // Helper for local YYYY-MM-DD string
+            const getLocalDateStr = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
             // Enterprise: Fetch last 7 days volume
             const today = new Date();
-            const lastWeek = new Date(today);
-            lastWeek.setDate(today.getDate() - 7);
+            const start = new Date(today);
+            start.setDate(today.getDate() - 7); // Fetch 7 days back
+            const end = new Date(today);
 
-            const toStr = today.toISOString().split('T')[0];
-            const fromStr = lastWeek.toISOString().split('T')[0];
+            const chunks = [];
+            // PayU Limit is 7 days at a time. Stitch requests to ensure full coverage including Today.
+            let current = new Date(start);
+            while (current <= end) {
+                const chunkStart = new Date(current);
+                const chunkEnd = new Date(current);
+                chunkEnd.setDate(chunkEnd.getDate() + 6);
 
-            console.log(`Fetching PayU stats from ${fromStr} to ${toStr}`);
-            const result = await getTransactionDetails(fromStr, toStr);
-            console.log('Stats Result:', result);
+                if (chunkEnd > end) {
+                    chunkEnd.setTime(end.getTime());
+                }
+
+                chunks.push({
+                    from: getLocalDateStr(chunkStart),
+                    to: getLocalDateStr(chunkEnd)
+                });
+
+                // Move to next chunk
+                current.setDate(current.getDate() + 7);
+            }
+
+            console.log(`Fetching PayU stats in ${chunks.length} chunks`, chunks);
+            const promises = chunks.map(chunk => getTransactionDetails(chunk.from, chunk.to));
+            const results = await Promise.all(promises);
 
             let transactions = [];
-            // Parse different PayU response structures
-            if (result.status === 1 || result.status === 'success') {
-                const details = result.Transaction_Details || result.Transaction_details; // Handle case sensitivity
+            results.forEach(result => {
+                if (result.status === 1 || result.status === 'success') {
+                    const details = result.Transaction_Details || result.Transaction_details; // Handle case sensitivity
 
-                if (Array.isArray(details)) {
-                    transactions = details;
-                } else if (details && typeof details === 'object') {
-                    // Sometimes it's a map: { txnId1: {...}, txnId2: {...} }
-                    transactions = Object.values(details);
-                } else if (Array.isArray(result.data)) {
-                    transactions = result.data; // Alternate format
+                    if (Array.isArray(details)) {
+                        transactions = [...transactions, ...details];
+                    } else if (details && typeof details === 'object') {
+                        // Sometimes it's a map: { txnId1: {...}, txnId2: {...} }
+                        transactions = [...transactions, ...Object.values(details)];
+                    } else if (Array.isArray(result.data)) {
+                        transactions = [...transactions, ...result.data]; // Alternate format
+                    }
                 }
-            }
+            });
 
             // Process Data for Chart
             const dailyMap = {};
@@ -110,12 +138,20 @@ const PayUScreen = ({ navigation }) => {
             for (let i = 6; i >= 0; i--) {
                 const d = new Date();
                 d.setDate(new Date().getDate() - i);
-                const dateKey = d.toISOString().split('T')[0];
+                const dateKey = getLocalDateStr(d);
                 const dayLabel = days[d.getDay()];
                 dailyMap[dateKey] = { label: dayLabel, value: 0, date: d, dataPointText: '' };
             }
 
+            // Deduplicate for processing
+            const uniqueTxnsMap = new Map();
             transactions.forEach(txn => {
+                const id = txn.txnid || txn.id;
+                if (id) uniqueTxnsMap.set(id, txn);
+            });
+            const uniqueTxns = Array.from(uniqueTxnsMap.values());
+
+            uniqueTxns.forEach(txn => {
                 // Ensure successful transactions only
                 if (txn.status === 'success' || txn.status === 'captured') {
                     const amt = parseFloat(txn.amt || txn.amount || 0);
@@ -123,6 +159,8 @@ const PayUScreen = ({ navigation }) => {
                     const dateStr = txn.addedon || txn.date || txn.created_at;
                     if (dateStr) {
                         const datePart = dateStr.split(' ')[0]; // Extract YYYY-MM-DD
+
+                        // If exact match found
                         if (dailyMap[datePart]) {
                             dailyMap[datePart].value += amt;
                             successCnt++;
@@ -146,7 +184,7 @@ const PayUScreen = ({ navigation }) => {
             setSuccessCount(successCnt);
 
             // Set Recent Transactions (Sort by date descending)
-            const sortedTxns = transactions
+            const sortedTxns = uniqueTxns
                 .filter(t => t.status === 'success' || t.status === 'captured')
                 .sort((a, b) => new Date(b.addedon || b.date) - new Date(a.addedon || a.date))
                 .slice(0, 5); // Take top 5
@@ -274,6 +312,13 @@ const PayUScreen = ({ navigation }) => {
         setLoading(true);
         setTransactionsList([]);
         try {
+            const getLocalDateStr = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
             const start = new Date(dateRange.startDate);
             const end = new Date(dateRange.endDate);
             const chunks = [];
@@ -290,8 +335,8 @@ const PayUScreen = ({ navigation }) => {
                 }
 
                 chunks.push({
-                    from: chunkStart.toISOString().split('T')[0],
-                    to: chunkEnd.toISOString().split('T')[0]
+                    from: getLocalDateStr(chunkStart),
+                    to: getLocalDateStr(chunkEnd)
                 });
 
                 // Move to next chunk
