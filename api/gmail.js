@@ -108,7 +108,7 @@ module.exports = async (req, res) => {
         if (method === 'GET' && action === 'list') {
             const response = await gmail.users.threads.list({
                 userId: 'me',
-                maxResults: 20,
+                maxResults: 50,
                 q: req.query.q || '' // Search query
             });
 

@@ -3,6 +3,7 @@ import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Dimension
 import { Text, useTheme, Surface, ActivityIndicator, FAB, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
+import { useResponsive } from '../hooks/useResponsive';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri, ResponseType } from 'expo-auth-session';
@@ -23,6 +24,7 @@ const SCOPES = [
 const GmailScreen = ({ navigation }) => {
     const theme = useTheme();
     const { user } = useAuth();
+    const { isDesktop } = useResponsive();
     const [loading, setLoading] = useState(true);
     const [connecting, setConnecting] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -269,32 +271,77 @@ const GmailScreen = ({ navigation }) => {
                         <FlatList
                             data={threadDetail.messages}
                             keyExtractor={item => item.id}
-                            contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-                            renderItem={({ item }) => {
+                            contentContainerStyle={{ paddingBottom: 100 }}
+                            renderItem={({ item, index }) => {
                                 const headers = item.payload.headers;
                                 const from = headers.find(h => h.name === 'From')?.value;
-                                const date = new Date(parseInt(item.internalDate)).toLocaleString();
+                                const to = headers.find(h => h.name === 'To')?.value;
+                                const date = new Date(parseInt(item.internalDate)).toLocaleString(undefined, {
+                                    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                });
                                 const htmlContent = getMessageBody(item.payload);
+                                const isLast = index === threadDetail.messages.length - 1;
 
                                 return (
-                                    <Surface style={[styles.messageCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
-                                        <View style={styles.messageHeader}>
-                                            <Avatar.Text size={40} label={from?.charAt(0) || '?'} />
-                                            <View style={{ marginLeft: 12, flex: 1 }}>
-                                                <Text variant="titleSmall" numberOfLines={1}>{from}</Text>
-                                                <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{date}</Text>
+                                    <View style={{
+                                        backgroundColor: theme.colors.background,
+                                        borderBottomWidth: isLast ? 0 : 1,
+                                        borderBottomColor: theme.colors.outlineVariant,
+                                        paddingVertical: 16
+                                    }}>
+                                        {/* Message Header */}
+                                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, marginBottom: 16 }}>
+                                            <Avatar.Text size={40} label={from?.charAt(0) || '?'} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />
+                                            <View style={{ marginLeft: 16, flex: 1 }}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{from?.split('<')[0].trim()}</Text>
+                                                    <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{date}</Text>
+                                                </View>
+                                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>to {to}</Text>
+                                                {from?.includes('<') && <Text variant="labelSmall" style={{ color: theme.colors.outline }}>{from?.match(/<([^>]+)>/)?.[1]}</Text>}
                                             </View>
                                         </View>
-                                        <View style={{ height: 1, backgroundColor: theme.colors.outlineVariant, marginVertical: 12 }} />
-                                        <View style={{ height: 300 }}>
+
+                                        {/* Email Content */}
+                                        <View style={{
+                                            height: 600, // Taller default height
+                                            backgroundColor: '#fff', // Email standard background
+                                            marginHorizontal: isDesktop ? 16 : 0,
+                                            borderRadius: isDesktop ? 8 : 0,
+                                            overflow: 'hidden',
+                                            borderWidth: isDesktop ? 1 : 0,
+                                            borderColor: theme.colors.outlineVariant
+                                        }}>
                                             {Platform.OS === 'web' ? (
                                                 <iframe
                                                     srcDoc={`
-                                                        <style>body { font-family: system-ui; color: ${theme.colors.onSurface}; background: transparent; margin: 0; padding: 0; overflow-x: hidden; }</style>
-                                                        ${htmlContent}
+                                                        <!DOCTYPE html>
+                                                        <html>
+                                                        <head>
+                                                            <meta charset="utf-8">
+                                                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                                            <style>
+                                                                body { 
+                                                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+                                                                    color: #000000; 
+                                                                    background: #ffffff; 
+                                                                    margin: 0; 
+                                                                    padding: 16px; 
+                                                                    overflow-wrap: break-word;
+                                                                    word-wrap: break-word;
+                                                                }
+                                                                img { max-width: 100%; height: auto; }
+                                                                a { color: ${theme.colors.primary}; }
+                                                            </style>
+                                                        </head>
+                                                        <body>
+                                                            ${htmlContent}
+                                                        </body>
+                                                        </html>
                                                     `}
-                                                    style={{ width: '100%', height: '100%', border: 'none', backgroundColor: 'transparent' }}
+                                                    style={{ width: '100%', height: '100%', border: 'none' }}
                                                     title="Email Content"
+                                                    sandbox="allow-same-origin allow-scripts allow-popups"
                                                 />
                                             ) : (
                                                 <WebView
@@ -302,14 +349,17 @@ const GmailScreen = ({ navigation }) => {
                                                     source={{
                                                         html: `
                                                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                                                        <style>body { font-family: system-ui; color: ${theme.colors.onSurface}; background: transparent; }</style>
+                                                        <style>
+                                                            body { font-family: system-ui; color: #000; background: #fff; padding: 16px; }
+                                                            img { max-width: 100%; height: auto; }
+                                                        </style>
                                                         ${htmlContent}
                                                     `}}
-                                                    style={{ backgroundColor: 'transparent' }}
+                                                    style={{ backgroundColor: '#fff' }}
                                                 />
                                             )}
                                         </View>
-                                    </Surface>
+                                    </View>
                                 );
                             }}
                         />
