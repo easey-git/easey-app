@@ -98,7 +98,8 @@ const GmailScreen = ({ navigation }) => {
                 body: JSON.stringify({
                     code,
                     redirectUri,
-                    userId: user.uid
+                    userId: user.uid,
+                    codeVerifier: request?.codeVerifier // Critical for PKCE
                 })
             });
 

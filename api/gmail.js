@@ -55,7 +55,7 @@ module.exports = async (req, res) => {
     try {
         // 1. AUTHENTICATION (Exchange Code)
         if (method === 'POST' && action === 'auth') {
-            const { code, redirectUri, userId } = req.body;
+            const { code, redirectUri, userId, codeVerifier } = req.body;
 
             if (!code || !redirectUri || !userId) {
                 return res.status(400).json({ error: 'Missing required fields' });
@@ -64,7 +64,10 @@ module.exports = async (req, res) => {
             // Create a new client instance for this request with the correct redirect URI
             const authClient = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
 
-            const { tokens } = await authClient.getToken(code);
+            const { tokens } = await authClient.getToken({
+                code,
+                codeVerifier
+            });
 
             // Store tokens (access_token, refresh_token, scope, expiry_date)
             await storeTokens(userId, tokens);
