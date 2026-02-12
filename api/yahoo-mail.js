@@ -1,5 +1,5 @@
-import imaps from 'imap-simple';
-import nodemailer from 'nodemailer';
+const { ImapFlow } = require('imapflow');
+const nodemailer = require('nodemailer');
 
 export const config = {
     maxDuration: 60,
@@ -25,8 +25,6 @@ export default async function handler(req, res) {
 
     // Determine basic params
     let action = req.query.action || req.body.action;
-    let limit = req.query.limit || req.body.limit || 20;
-    let folder = req.query.folder || req.body.folder || 'INBOX';
 
     // Send params
     let to = req.body.to;
@@ -61,62 +59,72 @@ export default async function handler(req, res) {
             return res.json({ success: true, messageId: info.messageId });
 
         } else {
-            // Handle List
-            const config = {
-                imap: {
+            // Handle List using ImapFlow
+            const client = new ImapFlow({
+                host: 'imap.mail.yahoo.com',
+                port: 993,
+                secure: true,
+                auth: {
                     user: YAHOO_EMAIL,
-                    password: YAHOO_APP_PASSWORD,
-                    host: 'imap.mail.yahoo.com',
-                    port: 993,
-                    tls: true,
-                    authTimeout: 10000,
-                    tlsOptions: { rejectUnauthorized: false }
-                }
-            };
-
-            const connection = await imaps.connect(config);
-            await connection.openBox(folder);
-
-            // Fetch last 7 days
-            const delay = 7 * 24 * 3600 * 1000;
-            const sinceDate = new Date();
-            sinceDate.setTime(Date.now() - delay);
-            const searchCriteria = [['SINCE', sinceDate]];
-
-            const fetchOptions = {
-                bodies: ['HEADER.FIELDS (FROM TO SUBJECT DATE)'],
-                struct: true
-            };
-
-            // Fetch
-            const messages = await connection.search(searchCriteria, fetchOptions);
-
-            // Map and Sort (Newest first)
-            const mapped = messages.map((msg) => {
-                const headerPart = msg.parts.find(p => p.which.includes('HEADER'));
-                const headers = headerPart && headerPart.body ? headerPart.body : {};
-
-                return {
-                    id: msg.attributes.uid,
-                    seq: msg.seqno,
-                    from: headers.from ? headers.from[0] : 'Unknown',
-                    subject: headers.subject ? headers.subject[0] : '(No Subject)',
-                    date: headers.date ? headers.date[0] : '',
-                };
+                    pass: YAHOO_APP_PASSWORD
+                },
+                logger: false // Keep logs clean
             });
 
-            // Sort by seq (descending - new to old)
-            mapped.sort((a, b) => b.seq - a.seq);
+            await client.connect();
 
-            // Limit
-            const result = mapped.slice(0, parseInt(limit));
+            // Lock Inbox
+            let lock = await client.getMailboxLock('INBOX');
+            let messages = [];
 
-            connection.end();
-            return res.json({ success: true, messages: result });
+            try {
+                // Fetch latest 20 messages
+                // seq: '1:*' means all, but we want latest. 
+                // We can use search or fetch with range.
+                // Fetching last 20: 
+                // First get status to know total count
+                // const status = await client.status('INBOX', { messages: true });
+                // const total = status.messages;
+                // const range = `${Math.max(1, total - 19)}:*`;
+
+                // Simpler: Fetch all UIDs for last 7 days using search, then fetch details
+                // Or just fetch the last 20 messages by sequence number which is faster
+
+                // Let's fetch the last 20 messages by sequence
+                // We don't know the sequence numbers without selecting box, but getMailboxLock selects it.
+                // client.mailbox includes info about currently selected mailbox
+
+                const total = client.mailbox.exists;
+                if (total > 0) {
+                    const start = Math.max(1, total - 19);
+                    const range = `${start}:*`;
+
+                    for await (let message of client.fetch(range, { envelope: true, source: false, uid: true })) {
+                        messages.push({
+                            id: message.uid,
+                            seq: message.seq,
+                            from: message.envelope.from && message.envelope.from[0] ? (message.envelope.from[0].name || message.envelope.from[0].address) : 'Unknown',
+                            subject: message.envelope.subject || '(No Subject)',
+                            date: message.envelope.date ? message.envelope.date.toISOString() : new Date().toISOString(),
+                            snippet: 'Loading...' // Body preview requires fetch bodyStructure or source, can be heavy.
+                        });
+                    }
+                }
+
+                // Reverse to show newest first
+                messages.reverse();
+
+            } finally {
+                lock.release();
+            }
+
+            await client.logout();
+
+            return res.json({ success: true, messages });
         }
 
     } catch (error) {
         console.error("Yahoo Mail Error:", error);
-        return res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: error.message, stack: error.stack });
     }
 }
