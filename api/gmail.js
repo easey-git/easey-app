@@ -108,8 +108,9 @@ module.exports = async (req, res) => {
         if (method === 'GET' && action === 'list') {
             const response = await gmail.users.threads.list({
                 userId: 'me',
-                maxResults: 50,
-                q: req.query.q || '' // Search query
+                maxResults: 20, // Keep individual page size manageable
+                pageToken: req.query.pageToken || undefined, // Support pagination
+                q: req.query.q || ''
             });
 
             const threads = response.data.threads || [];
@@ -144,7 +145,10 @@ module.exports = async (req, res) => {
                 };
             }));
 
-            return res.status(200).json({ threads: detailedThreads });
+            return res.status(200).json({
+                threads: detailedThreads,
+                nextPageToken: response.data.nextPageToken
+            });
         }
 
         // 4. GET THREAD DETAILS (Read Email)

@@ -30,6 +30,8 @@ const GmailScreen = ({ navigation }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [threadList, setThreadList] = useState([]);
+    const [nextPageToken, setNextPageToken] = useState(null);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     // Detail View State
     const [selectedThread, setSelectedThread] = useState(null);
@@ -118,19 +120,53 @@ const GmailScreen = ({ navigation }) => {
         }
     };
 
-    const fetchInbox = async () => {
-        setLoading(true);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const onChangeSearch = query => setSearchQuery(query);
+
+    const onSearch = () => {
+        setNextPageToken(null);
+        setThreadList([]);
+        fetchInbox(false); // Reset and search
+    };
+
+    // Update fetchInbox to use searchQuery
+    const fetchInbox = async (loadMore = false) => {
+        if (loadingMore) return;
+        if (loadMore && !nextPageToken) return;
+
+        if (loadMore) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+        }
+
         try {
-            const res = await fetch(`${BASE_URL}/gmail?action=list&userId=${user.uid}`);
+            let url = `${BASE_URL}/gmail?action=list&userId=${user.uid}`;
+            if (searchQuery) {
+                url += `&q=${encodeURIComponent(searchQuery)}`;
+            }
+            if (loadMore && nextPageToken) {
+                url += `&pageToken=${nextPageToken}`;
+            }
+
+            const res = await fetch(url);
             const data = await res.json();
+
             if (data.threads) {
-                setThreadList(data.threads);
+                if (loadMore) {
+                    setThreadList(prev => [...prev, ...data.threads]);
+                } else {
+                    setThreadList(data.threads);
+                }
+                setNextPageToken(data.nextPageToken || null);
             }
         } catch (error) {
             console.error(error);
         } finally {
             setLoading(false);
             setRefreshing(false);
+            setLoadingMore(false);
         }
     };
 
@@ -214,8 +250,192 @@ const GmailScreen = ({ navigation }) => {
         return '<i>(No content)</i>';
     };
 
+    // Render Components
+    const renderThreadList = () => (
+        <View style={{ flex: 1, borderRightWidth: 1, borderRightColor: theme.colors.outlineVariant, maxWidth: isDesktop ? 400 : '100%' }}>
+            {/* List Header: Search + Compose */}
+            <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                    mode="outlined"
+                    placeholder="Search"
+                    value={searchQuery}
+                    onChangeText={onChangeSearch}
+                    onSubmitEditing={onSearch} // Trigger search on enter
+                    left={<TextInput.Icon icon="magnify" />}
+                    dense
+                    style={{ flex: 1, backgroundColor: theme.colors.surface }}
+                />
+                <IconButton
+                    icon="pencil"
+                    mode="contained"
+                    containerColor={theme.colors.primary}
+                    iconColor={theme.colors.onPrimary}
+                    onPress={() => {
+                        setComposeTo('');
+                        setComposeSubject('');
+                        setComposeBody('');
+                        setComposeVisible(true);
+                    }}
+                />
+            </View>
+
+            {/* Scrollable List */}
+            <FlatList
+                data={threadList}
+                renderItem={({ item }) => {
+                    const isSelected = selectedThread?.id === item.id;
+                    return (
+                        <TouchableOpacity onPress={() => loadThread(item)}>
+                            <View style={[
+                                styles.threadItem,
+                                {
+                                    backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface,
+                                    borderBottomWidth: StyleSheet.hairlineWidth,
+                                    borderBottomColor: theme.colors.outlineVariant
+                                }
+                            ]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 12 }}>
+                                    <Avatar.Text
+                                        size={40}
+                                        label={item.from?.charAt(0).toUpperCase() || '?'}
+                                        style={{ backgroundColor: isSelected ? theme.colors.primary : theme.colors.primaryContainer }}
+                                        color={isSelected ? theme.colors.onPrimary : theme.colors.onPrimaryContainer}
+                                    />
+                                    <View style={{ marginLeft: 12, flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                                            <Text variant="titleSmall" style={{ fontWeight: item.snippet ? 'bold' : 'normal' }} numberOfLines={1}>{item.from}</Text>
+                                            <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{item.date?.split(' ')[0]}</Text>
+                                        </View>
+                                        <Text variant="bodyMedium" style={{ fontWeight: '600', marginBottom: 2 }} numberOfLines={1}>{item.subject}</Text>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>{item.snippet}</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
+                    );
+                }}
+                keyExtractor={item => item.id}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); setNextPageToken(null); fetchInbox(false); }} />}
+                onEndReached={() => fetchInbox(true)}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={loadingMore ? <ActivityIndicator style={{ padding: 16 }} /> : null}
+                contentContainerStyle={{ flexGrow: 1 }} // Remove paddingBottom hack
+            />
+        </View>
+    );
+
+    const renderThreadDetail = () => {
+        if (loadingThread || !threadDetail) {
+            return <View style={styles.center}><ActivityIndicator size="large" /></View>;
+        }
+
+        return (
+            <View style={{ flex: 1, backgroundColor: theme.colors.surface }}>
+                {/* Detail Header */}
+                <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, height: 64 }}>
+                    {!isDesktop && <Appbar.BackAction onPress={() => { setSelectedThread(null); setThreadDetail(null); }} />}
+                    <Appbar.Content title={selectedThread.subject || "Thread"} titleStyle={{ fontSize: 18, fontWeight: 'bold' }} />
+                </Appbar.Header>
+
+                {/* Scrollable Messages */}
+                <FlatList
+                    data={threadDetail.messages}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={{ paddingBottom: 24 }}
+                    renderItem={({ item, index }) => {
+                        const headers = item.payload.headers;
+                        const from = headers.find(h => h.name === 'From')?.value;
+                        const to = headers.find(h => h.name === 'To')?.value;
+                        const date = new Date(parseInt(item.internalDate)).toLocaleString(undefined, {
+                            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                        });
+                        const htmlContent = getMessageBody(item.payload);
+                        const isLast = index === threadDetail.messages.length - 1;
+
+                        return (
+                            <View style={{
+                                backgroundColor: theme.colors.surface,
+                                borderBottomWidth: isLast ? 0 : 1,
+                                borderBottomColor: theme.colors.outlineVariant,
+                                paddingVertical: 24,
+                                paddingHorizontal: isDesktop ? 32 : 16
+                            }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 }}>
+                                    <Avatar.Text size={40} label={from?.charAt(0) || '?'} style={{ backgroundColor: theme.colors.secondaryContainer }} color={theme.colors.onSecondaryContainer} />
+                                    <View style={{ marginLeft: 16, flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{from?.split('<')[0].trim()}</Text>
+                                            <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{date}</Text>
+                                        </View>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>to {to}</Text>
+                                    </View>
+                                </View>
+
+                                {/* Content Box */}
+                                <View style={{
+                                    minHeight: 200,
+                                    backgroundColor: '#fff',
+                                    borderRadius: 8,
+                                    overflow: 'hidden',
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.outlineVariant
+                                }}>
+                                    {Platform.OS === 'web' ? (
+                                        <iframe
+                                            srcDoc={`
+                                                <!DOCTYPE html>
+                                                <html><head><style>
+                                                    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; color: #000; }
+                                                    a { color: ${theme.colors.primary}; }
+                                                    img { max-width: 100%; height: auto; }
+                                                    /* Hide weird gmail artifacts if any */
+                                                    .gmail_quote { margin-left: 0; padding-left: 0; border-left: none; }
+                                                </style></head>
+                                                <body>
+                                                    ${htmlContent}
+                                                    <script>
+                                                        // Auto-resize height
+                                                        window.onload = function() {
+                                                            var height = document.body.scrollHeight + 40;
+                                                            window.frameElement.style.height = height + 'px';
+                                                        }
+                                                    </script>
+                                                </body></html>
+                                            `}
+                                            style={{ width: '100%', height: '400px', border: 'none' }} // Default height, updated by script
+                                            title="Email Content"
+                                            sandbox="allow-same-origin allow-scripts"
+                                        />
+                                    ) : (
+                                        <WebView source={{ html: htmlContent }} style={{ height: 400 }} />
+                                    )}
+                                </View>
+                            </View>
+                        );
+                    }}
+                />
+
+                {/* Fixed Reply Footer */}
+                <Surface elevation={2} style={{ padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surface }}>
+                    <Button
+                        mode="outlined"
+                        icon="reply"
+                        onPress={() => {
+                            setComposeSubject(`Re: ${selectedThread.subject}`);
+                            setComposeTo(selectedThread.from);
+                            setComposeVisible(true);
+                        }}
+                        style={{ alignSelf: 'flex-start' }}
+                    >
+                        Reply
+                    </Button>
+                </Surface>
+            </View>
+        );
+    };
+
     // Render Logic
-    if (loading && !refreshing && !threadList.length) {
+    if (loading && !refreshing && !threadList.length && !isConnected) {
         return (
             <CRMLayout title="Gmail" navigation={navigation}>
                 <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
@@ -255,211 +475,33 @@ const GmailScreen = ({ navigation }) => {
         );
     }
 
-    // Detail View Rendering
-    if (selectedThread) {
-        return (
-            <CRMLayout showHeader={false} fullWidth={true} navigation={navigation}>
-                <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-                    <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-                        <Appbar.BackAction onPress={() => { setSelectedThread(null); setThreadDetail(null); }} />
-                        <Appbar.Content title={selectedThread.subject || "Thread"} titleStyle={{ fontSize: 18, fontWeight: 'bold' }} />
-                    </Appbar.Header>
-
-                    {loadingThread || !threadDetail ? (
-                        <View style={styles.center}><ActivityIndicator /></View>
-                    ) : (
-                        <FlatList
-                            data={threadDetail.messages}
-                            keyExtractor={item => item.id}
-                            contentContainerStyle={{ paddingBottom: 100 }}
-                            renderItem={({ item, index }) => {
-                                const headers = item.payload.headers;
-                                const from = headers.find(h => h.name === 'From')?.value;
-                                const to = headers.find(h => h.name === 'To')?.value;
-                                const date = new Date(parseInt(item.internalDate)).toLocaleString(undefined, {
-                                    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                                });
-                                const htmlContent = getMessageBody(item.payload);
-                                const isLast = index === threadDetail.messages.length - 1;
-
-                                return (
-                                    <View style={{
-                                        backgroundColor: theme.colors.background,
-                                        borderBottomWidth: isLast ? 0 : 1,
-                                        borderBottomColor: theme.colors.outlineVariant,
-                                        paddingVertical: 16
-                                    }}>
-                                        {/* Message Header */}
-                                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, marginBottom: 16 }}>
-                                            <Avatar.Text size={40} label={from?.charAt(0) || '?'} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />
-                                            <View style={{ marginLeft: 16, flex: 1 }}>
-                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{from?.split('<')[0].trim()}</Text>
-                                                    <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{date}</Text>
-                                                </View>
-                                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>to {to}</Text>
-                                                {from?.includes('<') && <Text variant="labelSmall" style={{ color: theme.colors.outline }}>{from?.match(/<([^>]+)>/)?.[1]}</Text>}
-                                            </View>
-                                        </View>
-
-                                        {/* Email Content */}
-                                        <View style={{
-                                            height: 600, // Taller default height
-                                            backgroundColor: '#fff', // Email standard background
-                                            marginHorizontal: isDesktop ? 16 : 0,
-                                            borderRadius: isDesktop ? 8 : 0,
-                                            overflow: 'hidden',
-                                            borderWidth: isDesktop ? 1 : 0,
-                                            borderColor: theme.colors.outlineVariant
-                                        }}>
-                                            {Platform.OS === 'web' ? (
-                                                <iframe
-                                                    srcDoc={`
-                                                        <!DOCTYPE html>
-                                                        <html>
-                                                        <head>
-                                                            <meta charset="utf-8">
-                                                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                                                            <style>
-                                                                body { 
-                                                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-                                                                    color: #000000; 
-                                                                    background: #ffffff; 
-                                                                    margin: 0; 
-                                                                    padding: 16px; 
-                                                                    overflow-wrap: break-word;
-                                                                    word-wrap: break-word;
-                                                                }
-                                                                img { max-width: 100%; height: auto; }
-                                                                a { color: ${theme.colors.primary}; }
-                                                            </style>
-                                                        </head>
-                                                        <body>
-                                                            ${htmlContent}
-                                                        </body>
-                                                        </html>
-                                                    `}
-                                                    style={{ width: '100%', height: '100%', border: 'none' }}
-                                                    title="Email Content"
-                                                    sandbox="allow-same-origin allow-scripts allow-popups"
-                                                />
-                                            ) : (
-                                                <WebView
-                                                    originWhitelist={['*']}
-                                                    source={{
-                                                        html: `
-                                                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                                                        <style>
-                                                            body { font-family: system-ui; color: #000; background: #fff; padding: 16px; }
-                                                            img { max-width: 100%; height: auto; }
-                                                        </style>
-                                                        ${htmlContent}
-                                                    `}}
-                                                    style={{ backgroundColor: '#fff' }}
-                                                />
-                                            )}
-                                        </View>
-                                    </View>
-                                );
-                            }}
-                        />
-                    )}
-
-                    <FAB
-                        icon="reply"
-                        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-                        onPress={() => {
-                            setComposeSubject(`Re: ${selectedThread.subject}`);
-                            setComposeTo(selectedThread.from); // Simplified
-                            setComposeVisible(true);
-                        }}
-                        label="Reply"
-                    />
-                </View>
-            </CRMLayout>
-        );
-    }
-
-    // Inbox List Rendering
-    const renderThread = ({ item }) => (
-        <TouchableOpacity onPress={() => loadThread(item)}>
-            <Surface style={[styles.threadItem, { backgroundColor: theme.colors.surface, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.outlineVariant }]} elevation={0}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 12 }}>
-                    <Avatar.Text size={40} label={item.from?.charAt(0).toUpperCase() || '?'} style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.onPrimaryContainer} />
-                    <View style={{ marginLeft: 12, flex: 1 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold' }} numberOfLines={1}>{item.from}</Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{item.date?.split(' ')[0]}</Text>
-                        </View>
-                        <Text variant="bodyMedium" style={{ fontWeight: '600', marginBottom: 2 }} numberOfLines={1}>{item.subject}</Text>
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>{item.snippet}</Text>
-                    </View>
-                </View>
-            </Surface>
-        </TouchableOpacity>
-    );
-
     return (
-        <CRMLayout
-            title="Inbox"
-            navigation={navigation}
-            actions={<Appbar.Action icon="reload" onPress={() => { setRefreshing(true); fetchInbox(); }} />}
-            scrollable={false}
-            fullWidth={true}
-        >
-            <FlatList
-                data={threadList}
-                renderItem={renderThread}
-                keyExtractor={item => item.id}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchInbox(); }} />}
-                contentContainerStyle={{ paddingBottom: 80 }}
-                ListEmptyComponent={
-                    <View style={{ padding: 32, alignItems: 'center' }}>
-                        <Text>No emails found.</Text>
+        <CRMLayout showHeader={!selectedThread || isDesktop} title="Inbox" navigation={navigation} fullWidth={true} scrollable={false}>
+            {isDesktop ? (
+                <View style={{ flexDirection: 'row', flex: 1, height: '100%' }}>
+                    {renderThreadList()}
+                    <View style={{ flex: 1, height: '100%' }}>
+                        {selectedThread ? renderThreadDetail() : (
+                            <View style={[styles.center, { opacity: 0.5 }]}>
+                                <Avatar.Icon size={80} icon="email-outline" style={{ backgroundColor: 'transparent' }} />
+                                <Text variant="headlineSmall" style={{ marginTop: 16 }}>Select an email to read</Text>
+                            </View>
+                        )}
                     </View>
-                }
-            />
+                </View>
+            ) : (
+                <View style={{ flex: 1 }}>
+                    {selectedThread ? renderThreadDetail() : renderThreadList()}
+                </View>
+            )}
 
-            <FAB
-                icon="pencil"
-                style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-                onPress={() => {
-                    setComposeTo('');
-                    setComposeSubject('');
-                    setComposeBody('');
-                    setComposeVisible(true);
-                }}
-            />
-
-            {/* Compose Dialog */}
             <Portal>
                 <Dialog visible={composeVisible} onDismiss={() => setComposeVisible(false)} style={{ backgroundColor: theme.colors.surface }}>
                     <Dialog.Title>Compose Email</Dialog.Title>
                     <Dialog.Content>
-                        <TextInput
-                            label="To"
-                            mode="outlined"
-                            value={composeTo}
-                            onChangeText={setComposeTo}
-                            style={{ marginBottom: 12 }}
-                            dense
-                        />
-                        <TextInput
-                            label="Subject"
-                            mode="outlined"
-                            value={composeSubject}
-                            onChangeText={setComposeSubject}
-                            style={{ marginBottom: 12 }}
-                            dense
-                        />
-                        <TextInput
-                            label="Message"
-                            mode="outlined"
-                            value={composeBody}
-                            onChangeText={setComposeBody}
-                            multiline
-                            numberOfLines={6}
-                        />
+                        <TextInput label="To" mode="outlined" value={composeTo} onChangeText={setComposeTo} style={{ marginBottom: 12 }} dense />
+                        <TextInput label="Subject" mode="outlined" value={composeSubject} onChangeText={setComposeSubject} style={{ marginBottom: 12 }} dense />
+                        <TextInput label="Message" mode="outlined" value={composeBody} onChangeText={setComposeBody} multiline numberOfLines={10} style={{ maxHeight: 300 }} />
                     </Dialog.Content>
                     <Dialog.Actions>
                         <Button onPress={() => setComposeVisible(false)}>Cancel</Button>
