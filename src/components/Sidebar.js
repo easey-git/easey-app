@@ -17,7 +17,7 @@ const MENU_ITEMS = [
     { label: 'WhatsApp', icon: 'whatsapp', route: 'WhatsAppManager', permission: 'access_whatsapp' },
     { label: 'Meta', icon: 'infinity', route: 'Meta', permission: 'access_campaigns' },
     { label: 'PayU', icon: 'credit-card-outline', route: 'PayU', permission: 'access_wallet' },
-    { label: 'Mail', icon: 'email', route: 'Mail' },
+
     { label: 'Notes', icon: 'notebook', route: 'Notes' }, // Always visible
     { label: 'Settings', icon: 'cog', route: 'Settings' }, // Always visible
 ];

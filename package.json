@@ -39,7 +39,6 @@
     "expo-updates": "~29.0.15",
     "firebase": "^12.7.0",
     "firebase-admin": "^13.6.0",
-    "nodemailer": "^8.0.1",
     "puppeteer-core": "^24.35.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",

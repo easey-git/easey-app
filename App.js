@@ -19,7 +19,7 @@ import WalletScreen from './src/screens/WalletScreen';
 import LogisticsScreen from './src/screens/LogisticsScreen';
 import ActivityLogScreen from './src/screens/ActivityLogScreen';
 import { PayUScreen } from './src/screens/PayUScreen';
-import MailScreen from './src/screens/MailScreen';
+
 
 import AdminPanelScreen from './src/screens/AdminPanelScreen';
 
@@ -256,11 +256,7 @@ function AppStack() {
               component={PayUScreen}
               options={{ title: 'PayU Dash' }}
             />
-            <Stack.Screen
-              name="Mail"
-              component={MailScreen}
-              options={{ title: 'Yahoo Mail' }}
-            />
+
 
 
           </>
