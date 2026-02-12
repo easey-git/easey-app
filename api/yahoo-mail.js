@@ -1,17 +1,15 @@
-import { ImapFlow } from 'imapflow';
-import nodemailer from 'nodemailer';
+const { ImapFlow } = require('imapflow');
+const nodemailer = require('nodemailer');
 
-export const config = {
-    maxDuration: 60,
-};
-
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
+    // Enable CORS
     const origin = req.headers.origin || '*';
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
+    // Handle Preflight
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
@@ -60,6 +58,7 @@ export default async function handler(req, res) {
 
         } else {
             // Handle List using ImapFlow
+            // Use a defined timeout to prevent Vercel execution limits from killing it silently
             const client = new ImapFlow({
                 host: 'imap.mail.yahoo.com',
                 port: 993,
@@ -68,63 +67,52 @@ export default async function handler(req, res) {
                     user: YAHOO_EMAIL,
                     pass: YAHOO_APP_PASSWORD
                 },
-                logger: false // Keep logs clean
+                logger: false, // Disable verbose logging
+                emitLogs: false
             });
 
+            // Connect
             await client.connect();
 
-            // Lock Inbox
-            let lock = await client.getMailboxLock('INBOX');
             let messages = [];
 
+            // Perform operations with a lock
+            let lock = await client.getMailboxLock('INBOX');
             try {
-                // Fetch latest 20 messages
-                // seq: '1:*' means all, but we want latest. 
-                // We can use search or fetch with range.
-                // Fetching last 20: 
-                // First get status to know total count
-                // const status = await client.status('INBOX', { messages: true });
-                // const total = status.messages;
-                // const range = `${Math.max(1, total - 19)}:*`;
-
-                // Simpler: Fetch all UIDs for last 7 days using search, then fetch details
-                // Or just fetch the last 20 messages by sequence number which is faster
-
-                // Let's fetch the last 20 messages by sequence
-                // We don't know the sequence numbers without selecting box, but getMailboxLock selects it.
-                // client.mailbox includes info about currently selected mailbox
-
-                const total = client.mailbox.exists;
-                if (total > 0) {
+                // Check if mailbox has messages
+                if (client.mailbox.exists > 0) {
+                    // Fetch last 20 messages
+                    // Use sequence numbers (e.g. "100:*" is last messages if total is > 100)
+                    const total = client.mailbox.exists;
                     const start = Math.max(1, total - 19);
                     const range = `${start}:*`;
 
-                    for await (let message of client.fetch(range, { envelope: true, source: false, uid: true })) {
+                    // Fetch envelope and uid
+                    for await (let message of client.fetch(range, { envelope: true, uid: true })) {
                         messages.push({
-                            id: message.uid,
+                            id: message.uid.toString(),
                             seq: message.seq,
                             from: message.envelope.from && message.envelope.from[0] ? (message.envelope.from[0].name || message.envelope.from[0].address) : 'Unknown',
                             subject: message.envelope.subject || '(No Subject)',
                             date: message.envelope.date ? message.envelope.date.toISOString() : new Date().toISOString(),
-                            snippet: 'Loading...' // Body preview requires fetch bodyStructure or source, can be heavy.
+                            snippet: 'Message...'
                         });
                     }
                 }
-
-                // Reverse to show newest first
-                messages.reverse();
-
             } finally {
+                // Ensure lock is released
                 lock.release();
             }
 
+            // Cleanup
             await client.logout();
 
-            return res.json({ success: true, messages });
+            // Return in reverse order (newest first)
+            return res.json({ success: true, messages: messages.reverse() });
         }
 
     } catch (error) {
         console.error("Yahoo Mail Error:", error);
         return res.status(500).json({ error: error.message, stack: error.stack });
     }
-}
+};
