@@ -54,9 +54,9 @@ const GmailScreen = ({ navigation }) => {
         webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
         androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
         iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '', // Ensure this is set in .env as EXPO_PUBLIC_GOOGLE_CLIENT_ID
-        // Note: Code flow usually requires exchange on backend. 
         // We will pass the code to our backend to exchange.
         usePKCE: true,
+        shouldAutoExchangeCode: false, // Critical: Backend handles the exchange
     });
 
     // Check Connection Status
