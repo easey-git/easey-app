@@ -1,5 +1,5 @@
-const { ImapFlow } = require('imapflow');
-const nodemailer = require('nodemailer');
+import { ImapFlow } from 'imapflow';
+import nodemailer from 'nodemailer';
 
 export const config = {
     maxDuration: 60,
