@@ -114,30 +114,6 @@ export default async function handler(req, res) {
                 });
             }
 
-            case 'verify_payment': {
-                // Verify Status by TxnID
-                command = 'verify_payment';
-                var1 = params.txnid;
-
-                hashString = `${key}|${command}|${var1}|${salt}`;
-                formData.append('var1', var1);
-                break;
-            }
-
-            case 'refund_transaction': {
-                // Refund
-                command = 'cancel_refund_transaction';
-                var1 = params.payuId; // MIHpayid
-                const var2 = params.uniqueId || `ref_${Date.now()}`; // Token ID
-                const var3 = String(params.amount); // Amount
-
-                hashString = `${key}|${command}|${var1}|${salt}`;
-                formData.append('var1', var1);
-                formData.append('var2', var2);
-                formData.append('var3', var3);
-                break;
-            }
-
             case 'get_settlement_details': {
                 // Get Settlement Details for a date range or specific transaction
                 command = 'get_settlement_details';
@@ -167,32 +143,6 @@ export default async function handler(req, res) {
                 hashString = `${key}|${command}|${var1}|${salt}`;
                 formData.append('var1', var1);
                 formData.append('var2', var2);
-                break;
-            }
-
-            case 'check_isDomestic': {
-                // Bin Check
-                command = 'check_isDomestic';
-                var1 = params.bin;
-
-                hashString = `${key}|${command}|${var1}|${salt}`;
-                formData.append('var1', var1);
-                break;
-            }
-
-            case 'get_bin_details': {
-                command = 'get_bin_details';
-                var1 = params.bin;
-                hashString = `${key}|${command}|${var1}|${salt}`;
-                formData.append('var1', var1);
-                break;
-            }
-
-            case 'check_balance': {
-                command = 'check_balance'; // Usually not exposed but useful for enterprise debugging
-                var1 = params.var1 || '';
-                hashString = `${key}|${command}|${var1}|${salt}`;
-                formData.append('var1', var1);
                 break;
             }
 

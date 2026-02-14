@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
-import { Text, useTheme, Surface, Appbar, Icon, Button, DataTable, TextInput, Snackbar, Modal, Portal, Divider, Chip, Avatar, IconButton } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl, useWindowDimensions, TouchableOpacity, Alert, Linking, Platform, Clipboard } from 'react-native';
+import { Text, useTheme, Surface, Appbar, Icon, Button, DataTable, TextInput, Snackbar, Modal, Portal, Divider, Chip, Avatar, IconButton, Dialog } from 'react-native-paper';
 import { DatePickerInput, DatePickerModal } from 'react-native-paper-dates';
 import { LineChart, BarChart } from 'react-native-gifted-charts';
 import { CRMLayout } from '../components/CRMLayout';
@@ -13,7 +13,6 @@ const TABS = [
     { id: 'transactions', label: 'Transactions', icon: 'format-list-bulleted' },
     { id: 'collect', label: 'Collect', icon: 'credit-card-plus' },
     { id: 'settlements', label: 'Settlements', icon: 'bank' },
-    { id: 'utilities', label: 'Utilities', icon: 'tools' },
 ];
 
 const PayUScreen = ({ navigation }) => {
@@ -48,19 +47,15 @@ const PayUScreen = ({ navigation }) => {
     const [customerName, setCustomerName] = useState('');
     const [prodInfo, setProdInfo] = useState('');
 
-    // Utilities State
-    const [txnId, setTxnId] = useState('');
-    const [bin, setBin] = useState('');
-    const [binResult, setBinResult] = useState(null);
-    const [verifyResult, setVerifyResult] = useState(null);
+    // Payment Link Dialog State
+    const [linkDialogVisible, setLinkDialogVisible] = useState(false);
+    const [generatedLink, setGeneratedLink] = useState('');
+    const [generatedLinkTxnId, setGeneratedLinkTxnId] = useState('');
+    const [copied, setCopied] = useState(false);
 
     // Settlements State
     const [settlementDate, setSettlementDate] = useState(new Date());
     const [settlementData, setSettlementData] = useState(null);
-
-    // Refund State
-    const [refundId, setRefundId] = useState('');
-    const [refundAmt, setRefundAmt] = useState('');
 
     useEffect(() => {
         if (activeTab === 'overview') {
@@ -108,7 +103,6 @@ const PayUScreen = ({ navigation }) => {
                 current.setDate(current.getDate() + 7);
             }
 
-            console.log(`Fetching PayU stats in ${chunks.length} chunks`, chunks);
             const promises = chunks.map(chunk => getTransactionDetails(chunk.from, chunk.to));
             const results = await Promise.all(promises);
 
@@ -221,11 +215,30 @@ const PayUScreen = ({ navigation }) => {
                 phone: phone,
                 orderNumber: prodInfo || `ADHOC_${Date.now()}`
             });
-            if (result.status === 'success' || result.msg?.includes('success')) {
-                showSnackbar(`Link Sent! Txn ID: ${result.txnid}`);
+
+            // PayU can return status as 1 (number), 'success' (string), or 'Success' (capitalized)
+            // Response format observed: { Status: 'Success', 'Transaction Id': '...', URL: '...' }
+            const status = result.status || result.Status;
+            const isSuccess = status == 1 || String(status).toLowerCase() === 'success' || (result.msg && result.msg.toLowerCase().includes('success'));
+
+            if (isSuccess) {
+                // Txn ID might be in result.txnid, result.data?.txnid, result.transaction_details?.txnid, or result['Transaction Id']
+                const txnid = result.txnid || result['Transaction Id'] || result.data?.txnid || result.transaction_details?.txnid || 'Unknown ID';
+                const url = result.URL || result.url;
+
+                if (url) {
+                    setGeneratedLink(url);
+                    setGeneratedLinkTxnId(txnid);
+                    setCopied(false);
+                    setLinkDialogVisible(true);
+                } else {
+                    showSnackbar(`Link Sent! Txn ID: ${txnid} (No URL returned)`);
+                }
                 setAmount(''); setPhone('');
             } else {
-                showSnackbar(result.msg || 'Failed');
+                console.log('Generate Link Failed:', result);
+                const errorMsg = result.msg || result.error || result.message || JSON.stringify(result);
+                showSnackbar(`Failed: ${errorMsg}`);
             }
         } catch (e) {
             showSnackbar(e.message);
@@ -234,79 +247,11 @@ const PayUScreen = ({ navigation }) => {
         }
     };
 
-    const handleGetHash = async () => {
-        if (!amount || !phone) return showSnackbar('Amount and Phone required for Hash');
-        setLoading(true);
-        try {
-            const result = await getPaymentHash({
-                txnid: `txn_${Date.now()}`,
-                amount: amount,
-                productinfo: prodInfo || 'Enterprise Order',
-                firstname: customerName || 'User',
-                email: email || 'user@example.com',
-                phone: phone
-            });
-            Alert.alert('Enterprise Hash Generated', `Hash: ${result.hash}\n\nUse this hash to POST to PayU from your custom checkout page.`);
-        } catch (e) {
-            showSnackbar(e.message);
-        } finally {
-            setLoading(false);
-        }
-    };
 
-    const handleVerify = async () => {
-        if (!txnId) return;
-        setLoading(true);
-        try {
-            const result = await verifyPayment(txnId);
-            setVerifyResult(result.transaction_details?.[txnId]);
-            showSnackbar('Verification Complete');
-        } catch (e) {
-            showSnackbar(e.message);
-        } finally {
-            setLoading(false);
-        }
-    };
 
-    const handleCheckBin = async () => {
-        if (bin.length < 6) return showSnackbar('Enter first 6 digits');
-        setLoading(true);
-        try {
-            const result = await checkBinDetails(bin);
-            setBinResult(result);
-        } catch (e) {
-            showSnackbar(e.message);
-        } finally {
-            setLoading(false);
-        }
-    };
 
-    const handleSettlement = async () => {
-        setLoading(true);
-        try {
-            const dateStr = settlementDate.toISOString().split('T')[0];
-            const result = await getSettlementDetails(dateStr);
-            setSettlementData(result);
-            showSnackbar('Settlements Fetched');
-        } catch (e) {
-            showSnackbar(e.message);
-        } finally {
-            setLoading(false);
-        }
-    };
 
-    const handleRefund = async () => {
-        if (!refundId || !refundAmt) return;
-        setLoading(true);
-        try {
-            const result = await refundTransaction(refundId, refundAmt);
-            Alert.alert('Refund Status', JSON.stringify(result));
-        } catch (e) {
-            showSnackbar(e.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+
 
     const handleFetchTransactions = async () => {
         setLoading(true);
@@ -342,8 +287,6 @@ const PayUScreen = ({ navigation }) => {
                 // Move to next chunk
                 current.setDate(current.getDate() + 7);
             }
-
-            console.log(`Fetching Transactions in ${chunks.length} chunks`, chunks);
 
             // Execute Requests in Parallel
             const promises = chunks.map(chunk => getTransactionDetails(chunk.from, chunk.to));
@@ -396,7 +339,7 @@ const PayUScreen = ({ navigation }) => {
     const renderOverview = () => (
         <View style={{ gap: 16 }}>
             {/* Stats Header */}
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flexDirection: width < 600 ? 'column' : 'row', gap: 12 }}>
                 <Surface style={[styles.statCard, { backgroundColor: theme.colors.primaryContainer }]} elevation={2}>
                     <Icon source="chart-line" size={32} color={theme.colors.onPrimaryContainer} />
                     <Text variant="displaySmall" style={{ marginTop: 8, color: theme.colors.onPrimaryContainer, fontWeight: 'bold' }}>₹{totalVolume}</Text>
@@ -426,7 +369,7 @@ const PayUScreen = ({ navigation }) => {
                         xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
                         hideRules
                         hideYAxisText
-                        width={width - 80}
+                        width={width - 48} // Adjusted for padding
                         height={180}
                         initialSpacing={20}
                         endSpacing={20}
@@ -447,30 +390,32 @@ const PayUScreen = ({ navigation }) => {
                 </View>
 
                 {recentTransactions.length > 0 ? (
-                    <DataTable>
-                        <DataTable.Header>
-                            <DataTable.Title style={{ flex: 2 }}>ID / Name</DataTable.Title>
-                            <DataTable.Title numeric style={{ flex: 1 }}>Amount</DataTable.Title>
-                            <DataTable.Title numeric style={{ flex: 1.5 }}>Date</DataTable.Title>
-                        </DataTable.Header>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <DataTable style={{ minWidth: 600 }}>
+                            <DataTable.Header>
+                                <DataTable.Title style={{ flex: 2 }}>ID / Name</DataTable.Title>
+                                <DataTable.Title numeric style={{ flex: 1 }}>Amount</DataTable.Title>
+                                <DataTable.Title numeric style={{ flex: 1.5 }}>Date</DataTable.Title>
+                            </DataTable.Header>
 
-                        {recentTransactions.map((txn, index) => (
-                            <DataTable.Row key={txn.txnid || index}>
-                                <DataTable.Cell style={{ flex: 2 }}>
-                                    <View>
-                                        <Text variant="bodySmall" numberOfLines={1} style={{ fontWeight: 'bold' }}>{txn.firstname || 'Guest'}</Text>
-                                        <Text variant="labelSmall" numberOfLines={1} style={{ color: theme.colors.outline }}>{txn.txnid}</Text>
-                                    </View>
-                                </DataTable.Cell>
-                                <DataTable.Cell numeric style={{ flex: 1 }}>
-                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{parseFloat(txn.amt || txn.amount).toFixed(0)}</Text>
-                                </DataTable.Cell>
-                                <DataTable.Cell numeric style={{ flex: 1.5 }}>
-                                    <Text variant="bodySmall" numberOfLines={1}>{txn.addedon ? txn.addedon.split(' ')[0] : 'N/A'}</Text>
-                                </DataTable.Cell>
-                            </DataTable.Row>
-                        ))}
-                    </DataTable>
+                            {recentTransactions.map((txn, index) => (
+                                <DataTable.Row key={txn.txnid || index}>
+                                    <DataTable.Cell style={{ flex: 2 }}>
+                                        <View>
+                                            <Text variant="bodySmall" numberOfLines={1} style={{ fontWeight: 'bold' }}>{txn.firstname || 'Guest'}</Text>
+                                            <Text variant="labelSmall" numberOfLines={1} style={{ color: theme.colors.outline }}>{txn.txnid}</Text>
+                                        </View>
+                                    </DataTable.Cell>
+                                    <DataTable.Cell numeric style={{ flex: 1 }}>
+                                        <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>₹{parseFloat(txn.amt || txn.amount).toFixed(0)}</Text>
+                                    </DataTable.Cell>
+                                    <DataTable.Cell numeric style={{ flex: 1.5 }}>
+                                        <Text variant="bodySmall" numberOfLines={1}>{txn.addedon ? txn.addedon.split(' ')[0] : 'N/A'}</Text>
+                                    </DataTable.Cell>
+                                </DataTable.Row>
+                            ))}
+                        </DataTable>
+                    </ScrollView>
                 ) : (
                     <View style={{ padding: 24, alignItems: 'center' }}>
                         <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>No recent successful transactions found.</Text>
@@ -487,7 +432,7 @@ const PayUScreen = ({ navigation }) => {
             <Surface style={[styles.card, { backgroundColor: theme.colors.elevation.level1 }]}>
                 <Text variant="titleMedium" style={{ marginBottom: 16 }}>Transaction History</Text>
 
-                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <View style={{ flexDirection: width < 600 ? 'column' : 'row', gap: 12, alignItems: width < 600 ? 'stretch' : 'center' }}>
                     <View style={{ flex: 1 }}>
                         <Button
                             mode="outlined"
@@ -554,50 +499,52 @@ const PayUScreen = ({ navigation }) => {
                         </ScrollView>
 
                         <Surface style={[styles.card, { backgroundColor: theme.colors.elevation.level1, padding: 0, overflow: 'hidden' }]}>
-                            <DataTable>
-                                <DataTable.Header>
-                                    <DataTable.Title style={{ flex: 2.5 }}>ID</DataTable.Title>
-                                    <DataTable.Title style={{ flex: 1.5 }}>Date</DataTable.Title>
-                                    <DataTable.Title numeric style={{ flex: 1 }}>Amount</DataTable.Title>
-                                    <DataTable.Title style={{ flex: 1.5, justifyContent: 'center' }}>Status</DataTable.Title>
-                                    <DataTable.Title numeric style={{ flex: 1.5 }}>Customer</DataTable.Title>
-                                </DataTable.Header>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
+                                <DataTable style={{ minWidth: width > 900 ? '100%' : 800 }}>
+                                    <DataTable.Header>
+                                        <DataTable.Title style={{ flex: 2.5 }}>ID</DataTable.Title>
+                                        <DataTable.Title style={{ flex: 1.5 }}>Date</DataTable.Title>
+                                        <DataTable.Title numeric style={{ flex: 1 }}>Amount</DataTable.Title>
+                                        <DataTable.Title style={{ flex: 1.5, justifyContent: 'center' }}>Status</DataTable.Title>
+                                        <DataTable.Title numeric style={{ flex: 1.5 }}>Customer</DataTable.Title>
+                                    </DataTable.Header>
 
-                                {transactionsList
-                                    .filter(txn => selectedStatus === null || txn.status === selectedStatus)
-                                    .map((txn, index) => (
-                                        <DataTable.Row key={txn.txnid || index}>
-                                            <DataTable.Cell style={{ flex: 2.5 }}>
-                                                <Text variant="labelSmall" selectable numberOfLines={1} ellipsizeMode="middle">{txn.txnid}</Text>
-                                            </DataTable.Cell>
-                                            <DataTable.Cell style={{ flex: 1.5 }}>
-                                                <Text variant="bodySmall">{txn.addedon ? txn.addedon.split(' ')[0] : 'N/A'}</Text>
-                                            </DataTable.Cell>
-                                            <DataTable.Cell numeric style={{ flex: 1 }}>
-                                                <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>₹{parseFloat(txn.amt || txn.amount).toFixed(0)}</Text>
-                                            </DataTable.Cell>
-                                            <DataTable.Cell style={{ flex: 1.5, justifyContent: 'center' }}>
-                                                <Chip
-                                                    mode="flat"
-                                                    compact
-                                                    textStyle={{ fontSize: 11, marginVertical: 0, marginHorizontal: 2, lineHeight: 14 }}
-                                                    style={{
-                                                        backgroundColor: (txn.status === 'success' || txn.status === 'captured') ? theme.colors.primaryContainer : theme.colors.errorContainer,
-                                                        height: 24,
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        borderRadius: 12
-                                                    }}
-                                                >
-                                                    {(txn.status === 'success' || txn.status === 'captured') ? 'Success' : txn.status}
-                                                </Chip>
-                                            </DataTable.Cell>
-                                            <DataTable.Cell numeric style={{ flex: 1.5 }}>
-                                                <Text variant="bodySmall" numberOfLines={1}>{txn.firstname || 'Guest'}</Text>
-                                            </DataTable.Cell>
-                                        </DataTable.Row>
-                                    ))}
-                            </DataTable>
+                                    {transactionsList
+                                        .filter(txn => selectedStatus === null || txn.status === selectedStatus)
+                                        .map((txn, index) => (
+                                            <DataTable.Row key={txn.txnid || index}>
+                                                <DataTable.Cell style={{ flex: 2.5 }}>
+                                                    <Text variant="labelSmall" selectable numberOfLines={1} ellipsizeMode="middle">{txn.txnid}</Text>
+                                                </DataTable.Cell>
+                                                <DataTable.Cell style={{ flex: 1.5 }}>
+                                                    <Text variant="bodySmall">{txn.addedon ? txn.addedon.split(' ')[0] : 'N/A'}</Text>
+                                                </DataTable.Cell>
+                                                <DataTable.Cell numeric style={{ flex: 1 }}>
+                                                    <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>₹{parseFloat(txn.amt || txn.amount).toFixed(0)}</Text>
+                                                </DataTable.Cell>
+                                                <DataTable.Cell style={{ flex: 1.5, justifyContent: 'center' }}>
+                                                    <Chip
+                                                        mode="flat"
+                                                        compact
+                                                        textStyle={{ fontSize: 11, marginVertical: 0, marginHorizontal: 2, lineHeight: 14 }}
+                                                        style={{
+                                                            backgroundColor: (txn.status === 'success' || txn.status === 'captured') ? theme.colors.primaryContainer : theme.colors.errorContainer,
+                                                            height: 24,
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderRadius: 12
+                                                        }}
+                                                    >
+                                                        {(txn.status === 'success' || txn.status === 'captured') ? 'Success' : txn.status}
+                                                    </Chip>
+                                                </DataTable.Cell>
+                                                <DataTable.Cell numeric style={{ flex: 1.5 }}>
+                                                    <Text variant="bodySmall" numberOfLines={1}>{txn.firstname || 'Guest'}</Text>
+                                                </DataTable.Cell>
+                                            </DataTable.Row>
+                                        ))}
+                                </DataTable>
+                            </ScrollView>
                         </Surface>
                     </View>
                 )
@@ -621,113 +568,215 @@ const PayUScreen = ({ navigation }) => {
                 <Button mode="contained" onPress={handleGenerateLink} loading={loading} icon="email">
                     Send Payment Link (invoice)
                 </Button>
-                <Button mode="contained-tonal" onPress={handleGetHash} loading={loading} icon="code-braces">
-                    Get Enterprise Hash (For App Checkout)
-                </Button>
             </View>
         </Surface>
     );
 
-    const renderSettlements = () => (
-        <View style={{ gap: 16 }}>
-            <Surface style={[styles.card, { backgroundColor: theme.colors.elevation.level1 }]}>
-                <Text variant="titleMedium" style={{ marginBottom: 12 }}>Check Settlements</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <DatePickerInput
-                        locale="en"
-                        label="Date"
-                        value={settlementDate}
-                        onChange={(d) => setSettlementDate(d)}
-                        inputMode="start"
-                        style={{ flex: 1, backgroundColor: theme.colors.surface }}
-                        mode="outlined"
-                        withModal={false}
-                    />
-                    <Button mode="contained" onPress={handleSettlement} loading={loading} style={{ marginTop: 6 }}>
-                        Fetch
-                    </Button>
-                </View>
-            </Surface>
+    // --- SETTLEMENTS LOGIC ---
+    const [settlementList, setSettlementList] = useState([]);
+    const [settlementStartDate, setSettlementStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 10))); // Last 10 days
+    const [settlementEndDate, setSettlementEndDate] = useState(new Date());
+    const [openSettlementPicker, setOpenSettlementPicker] = useState(false);
 
-            {settlementData && (
+    useEffect(() => {
+        if (activeTab === 'settlements') {
+            handleFetchSettlements();
+        }
+    }, [activeTab]);
+
+    const handleFetchSettlements = async () => {
+        setLoading(true);
+        setSettlementList([]);
+        try {
+            // Generate array of dates between start and end
+            const dates = [];
+            let current = new Date(settlementStartDate);
+            const end = new Date(settlementEndDate);
+
+            while (current <= end) {
+                dates.push(new Date(current).toISOString().split('T')[0]);
+                current.setDate(current.getDate() + 1);
+            }
+
+            // Limit concurrent requests to avoid rate limiting if range is huge
+            // For now, just Promise.all as range is typically small (10-30 days)
+            // Reverse to show newest first
+            dates.reverse();
+
+            const promises = dates.map(date => getSettlementDetails(date).then(res => ({ date, ...res })).catch(err => ({ date, error: err })));
+            const results = await Promise.all(promises);
+
+            let allSettlements = [];
+
+            results.forEach(res => {
+                // Extract using helper
+                const dailySettlements = getSettlementList(res);
+                if (dailySettlements.length > 0) {
+                    // Inject the query date into each record if missing
+                    // Also robustly find UTR which might be in different keys
+                    const enhancedList = dailySettlements.map(item => ({
+                        ...item,
+                        settlement_date: item.settlement_date || item.date || res.date, // Use the query date if item date is missing
+                        utr_display: item.utr_no || item.bank_ref_num || item.UTR || item.utr || item.ref_num || item.Reference_Id || 'N/A'
+                    }));
+                    allSettlements = [...allSettlements, ...enhancedList];
+                }
+            });
+
+            // De-duplicate based on txnid or mer_txnId if possible, but settlements are usually unique per UTR/Action
+            setSettlementList(allSettlements);
+
+            if (allSettlements.length === 0) {
+                showSnackbar(`No settlements found from ${formatDate(settlementStartDate)} to ${formatDate(settlementEndDate)}`);
+            }
+
+        } catch (e) {
+            showSnackbar(e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const onDismissSettlementRange = useCallback(() => {
+        setOpenSettlementPicker(false);
+    }, []);
+
+    const onConfirmSettlementRange = useCallback(
+        ({ startDate, endDate }) => {
+            setOpenSettlementPicker(false);
+            setSettlementStartDate(startDate);
+            setSettlementEndDate(endDate);
+            // Auto fetch will happen via useEffect if we put [settlementStartDate, settlementEndDate] in dependency
+            // But we kept only [activeTab]. So call manually or add dependency.
+            // Let's call manually here to be explicit
+            // We need to wait for state update, so better to have a generic "fetch" that uses current state
+            // Or better: changing state triggers a refetch if we add to useEffect.
+            // For simplicity, I'll allow the user to click "Fetch" or just re-call the function, 
+            // but since setState is async, we should use a useEffect on valid dates or just rely on the user / internal logic.
+            // Actually, best UX: User selects range -> Auto fetch.
+        },
+        []
+    );
+
+    // Trigger fetch when dates change
+    useEffect(() => {
+        if (activeTab === 'settlements') {
+            handleFetchSettlements();
+        }
+    }, [settlementStartDate, settlementEndDate]);
+
+
+    const renderSettlements = () => {
+        return (
+            <View style={{ gap: 16 }}>
+                <Surface style={[styles.card, { backgroundColor: theme.colors.elevation.level1 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <Text variant="titleMedium">Settlement History</Text>
+                        <Button mode="text" compact onPress={handleFetchSettlements} loading={loading}>Refresh</Button>
+                    </View>
+
+                    <View style={{ flexDirection: width < 600 ? 'column' : 'row', gap: 12, alignItems: width < 600 ? 'stretch' : 'center' }}>
+                        <View style={{ flex: 1 }}>
+                            <Button
+                                mode="outlined"
+                                onPress={() => setOpenSettlementPicker(true)}
+                                icon="calendar-range"
+                                contentStyle={{ justifyContent: 'flex-start', paddingVertical: 6 }}
+                                style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors.outline }}
+                                labelStyle={{ color: theme.colors.onSurface }}
+                            >
+                                {`${formatDate(settlementStartDate)} - ${formatDate(settlementEndDate)}`}
+                            </Button>
+                        </View>
+                        <View>
+                            <Button mode="contained" onPress={handleFetchSettlements} loading={loading} icon="magnify">
+                                Search
+                            </Button>
+                        </View>
+                    </View>
+
+                    <Portal>
+                        <DatePickerModal
+                            locale="en"
+                            mode="range"
+                            visible={openSettlementPicker}
+                            onDismiss={onDismissSettlementRange}
+                            startDate={settlementStartDate}
+                            endDate={settlementEndDate}
+                            onConfirm={onConfirmSettlementRange}
+                            saveLabel="Apply"
+                            label="Select Settlement Period"
+                        />
+                    </Portal>
+                </Surface>
+
                 <Surface style={[styles.card, { backgroundColor: theme.colors.elevation.level1, padding: 0, overflow: 'hidden' }]}>
-                    {/* Handle "Txn_details" from API response */}
-                    {(settlementData.Txn_details && settlementData.Txn_details.length > 0) ? (
-                        <ScrollView horizontal>
-                            <DataTable style={{ minWidth: 350 }}>
+                    {settlementList.length > 0 ? (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
+                            <DataTable style={{ minWidth: width > 900 ? '100%' : 800 }}>
                                 <DataTable.Header>
-                                    <DataTable.Title>Txn ID</DataTable.Title>
-                                    <DataTable.Title numeric>Amount</DataTable.Title>
-                                    <DataTable.Title>Date</DataTable.Title>
+                                    <DataTable.Title style={{ flex: 2.5 }}>Txn ID</DataTable.Title>
+                                    <DataTable.Title style={{ flex: 2 }}>UTR / Bank Ref</DataTable.Title>
+                                    <DataTable.Title numeric style={{ flex: 1.2, paddingRight: 16 }}>Amount</DataTable.Title>
+                                    <DataTable.Title style={{ flex: 1.5, justifyContent: 'center' }}>Date</DataTable.Title>
+                                    <DataTable.Title style={{ flex: 1.5, justifyContent: 'center' }}>Status</DataTable.Title>
                                 </DataTable.Header>
-                                {/* Limit to 10 for display if list is huge */}
-                                {settlementData.Txn_details.slice(0, 20).map((txn, i) => (
+                                {settlementList.map((txn, i) => (
                                     <DataTable.Row key={i}>
-                                        <DataTable.Cell style={{ flex: 2 }}>{txn.txnid || txn.mer_txnid || 'N/A'}</DataTable.Cell>
-                                        <DataTable.Cell numeric style={{ flex: 1 }}>₹{txn.amount || txn.mer_amount || 0}</DataTable.Cell>
-                                        <DataTable.Cell style={{ flex: 1.5 }}>{txn.settlement_date || txn.date || 'N/A'}</DataTable.Cell>
+                                        <DataTable.Cell style={{ flex: 2.5 }}>
+                                            <Text variant="labelSmall" selectable numberOfLines={1} ellipsizeMode="middle">{txn.txnid || txn.mer_txnid || 'N/A'}</Text>
+                                        </DataTable.Cell>
+                                        <DataTable.Cell style={{ flex: 2 }}>
+                                            <Text variant="bodySmall" selectable numberOfLines={1}>{txn.utr_display || txn.utr_no || txn.bank_ref_num || 'N/A'}</Text>
+                                        </DataTable.Cell>
+                                        <DataTable.Cell numeric style={{ flex: 1.2, paddingRight: 16 }}>
+                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>₹{parseFloat(txn.amount || txn.mer_amount || 0).toFixed(2)}</Text>
+                                        </DataTable.Cell>
+                                        <DataTable.Cell style={{ flex: 1.5, justifyContent: 'center' }}>
+                                            <Text variant="bodySmall">{txn.settlement_date || txn.date || 'N/A'}</Text>
+                                        </DataTable.Cell>
+                                        <DataTable.Cell style={{ flex: 1.5, justifyContent: 'center' }}>
+                                            <Chip
+                                                compact
+                                                mode="flat"
+                                                style={{ backgroundColor: theme.colors.primaryContainer, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}
+                                                textStyle={{ fontSize: 11, marginVertical: 0, marginHorizontal: 2, lineHeight: 14 }}
+                                            >
+                                                Settled
+                                            </Chip>
+                                        </DataTable.Cell>
                                     </DataTable.Row>
                                 ))}
                             </DataTable>
                         </ScrollView>
                     ) : (
                         <View style={{ alignItems: 'center', padding: 32 }}>
-                            <Icon source="bank-check" size={48} color={theme.colors.outline} />
+                            <Icon source="bank-remove" size={48} color={theme.colors.outline} />
                             <Text variant="titleMedium" style={{ marginTop: 16, color: theme.colors.onSurface }}>
-                                {settlementData.msg || "No settlements found for this date."}
+                                No settlements found
                             </Text>
                             <Text variant="bodySmall" style={{ marginTop: 4, color: theme.colors.onSurfaceVariant }}>
-                                Status: {settlementData.status === "1" ? "Success" : "Pending/Failed"}
+                                Try selecting a different date range.
                             </Text>
                         </View>
                     )}
                 </Surface>
-            )}
-        </View>
-    );
+            </View>
+        );
+    };
 
-    const renderUtilities = () => (
-        <View style={{ gap: 16 }}>
-            {/* Verify */}
-            <Surface style={[styles.card, { backgroundColor: theme.colors.elevation.level1 }]}>
-                <Text variant="titleMedium" style={{ marginBottom: 12 }}>Verify Transaction</Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TextInput label="Txn ID" value={txnId} onChangeText={setTxnId} mode="outlined" style={{ flex: 1, backgroundColor: theme.colors.surface }} density="compact" />
-                    <Button mode="contained-tonal" onPress={handleVerify} loading={loading} style={{ justifyContent: 'center' }}>Check</Button>
-                </View>
-                {verifyResult && (
-                    <View style={{ marginTop: 12, padding: 8, backgroundColor: theme.colors.surfaceVariant, borderRadius: 8 }}>
-                        <Text style={{ color: theme.colors.onSurfaceVariant }}>Status: <Text style={{ fontWeight: 'bold', color: verifyResult.status === 'success' ? 'green' : 'red' }}>{verifyResult.status}</Text></Text>
-                        <Text style={{ color: theme.colors.onSurfaceVariant }}>Amount: ₹{verifyResult.amt}</Text>
-                        <Text style={{ color: theme.colors.onSurfaceVariant }}>Msg: {verifyResult.error_Message}</Text>
-                        <Text style={{ color: theme.colors.onSurfaceVariant }}>Bank Ref: {verifyResult.bank_ref_num}</Text>
-                    </View>
-                )}
-            </Surface>
+    // Helper to extract settlement list from various possible keys
+    const getSettlementList = (data) => {
+        if (!data) return [];
+        if (Array.isArray(data.Txn_details)) return data.Txn_details;
+        if (Array.isArray(data.txn_details)) return data.txn_details;
+        if (Array.isArray(data.Transaction_Details)) return data.Transaction_Details;
+        if (Array.isArray(data.Data)) return data.Data;
+        if (Array.isArray(data.data)) return data.data;
+        return [];
+    };
 
-            {/* Refund */}
-            <Surface style={[styles.card, { borderColor: theme.colors.error, borderWidth: 1, backgroundColor: theme.colors.elevation.level1 }]}>
-                <Text variant="titleMedium" style={{ marginBottom: 12, color: theme.colors.error }}>Process Refund</Text>
-                <TextInput label="PayU ID (MIHpayid)" value={refundId} onChangeText={setRefundId} mode="outlined" style={[styles.input, { backgroundColor: theme.colors.surface }]} density="compact" />
-                <TextInput label="Amount" value={refundAmt} onChangeText={setRefundAmt} keyboardType="numeric" mode="outlined" style={[styles.input, { backgroundColor: theme.colors.surface }]} density="compact" />
-                <Button mode="contained" buttonColor={theme.colors.error} onPress={handleRefund} loading={loading}>
-                    Initiate Refund
-                </Button>
-            </Surface>
 
-            {/* BIN Check */}
-            <Surface style={[styles.card, { backgroundColor: theme.colors.elevation.level1 }]}>
-                <Text variant="titleMedium" style={{ marginBottom: 12 }}>BIN Checker</Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TextInput label="First 6 Digits" value={bin} onChangeText={setBin} keyboardType="numeric" maxLength={6} mode="outlined" style={{ flex: 1, backgroundColor: theme.colors.surface }} density="compact" />
-                    <Button mode="contained-tonal" onPress={handleCheckBin} loading={loading} style={{ justifyContent: 'center' }}>Check</Button>
-                </View>
-                {binResult && (
-                    <Text style={{ marginTop: 8, color: theme.colors.onSurface }}>{JSON.stringify(binResult)}</Text>
-                )}
-            </Surface>
-        </View>
-    );
 
 
 
@@ -753,7 +802,7 @@ const PayUScreen = ({ navigation }) => {
     // --- MAIN RENDER ---
     return (
         <CRMLayout
-            title="PayU Enterprise"
+            title="PayU"
             navigation={navigation}
             scrollable={false}
             fullWidth={true}
@@ -797,7 +846,7 @@ const PayUScreen = ({ navigation }) => {
                     {activeTab === 'transactions' && renderTransactions()}
                     {activeTab === 'collect' && renderCollect()}
                     {activeTab === 'settlements' && renderSettlements()}
-                    {activeTab === 'utilities' && renderUtilities()}
+
 
                 </ScrollView>
             </View>
@@ -810,6 +859,41 @@ const PayUScreen = ({ navigation }) => {
             >
                 {snackbarMessage}
             </Snackbar>
+
+            <Portal>
+                <Dialog visible={linkDialogVisible} onDismiss={() => setLinkDialogVisible(false)} style={{ backgroundColor: theme.colors.surface }}>
+                    <Dialog.Title style={{ textAlign: 'center' }}>Payment Link Generated</Dialog.Title>
+                    <Dialog.Content>
+                        <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                            <Icon source="check-circle" size={48} color={theme.colors.primary} />
+                            <Text variant="titleMedium" style={{ marginTop: 12, fontWeight: 'bold' }}>Success!</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.outline, textAlign: 'center' }}>Transaction ID: {generatedLinkTxnId}</Text>
+                        </View>
+
+                        <Surface style={{ padding: 12, borderRadius: 8, backgroundColor: theme.colors.elevation.level2, marginBottom: 16 }}>
+                            <Text variant="bodyMedium" numberOfLines={3} style={{ color: theme.colors.primary, textAlign: 'center' }} selectable>{generatedLink}</Text>
+                        </Surface>
+
+                        <Button
+                            mode="contained"
+                            onPress={() => {
+                                Clipboard.setString(generatedLink);
+                                setCopied(true);
+                            }}
+                            icon={copied ? "check" : "content-copy"}
+                            style={{ marginBottom: 12 }}
+                            buttonColor={copied ? theme.colors.tertiary : theme.colors.primary}
+                        >
+                            {copied ? "Copied!" : "Copy Link"}
+                        </Button>
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Button mode="outlined" onPress={() => setLinkDialogVisible(false)} style={{ flex: 1, marginRight: 8 }}>Close</Button>
+                            <Button mode="outlined" onPress={() => Linking.openURL(generatedLink)} style={{ flex: 1, marginLeft: 8 }} icon="open-in-new">Open</Button>
+                        </View>
+                    </Dialog.Content>
+                </Dialog>
+            </Portal>
         </CRMLayout>
     );
 };

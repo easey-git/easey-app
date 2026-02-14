@@ -1,8 +1,9 @@
 /* eslint-disable react/prop-types */
 /* global process */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Animated, PanResponder } from 'react-native';
-import { Text, useTheme, Surface, ActivityIndicator, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox } from 'react-native-paper';
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Animated, PanResponder, ScrollView } from 'react-native';
+import { Text, useTheme, Surface, ActivityIndicator, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox, Modal as PaperModal } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
@@ -960,34 +961,80 @@ const GmailScreen = ({ navigation }) => {
                     </Dialog.Actions>
                 </Dialog>
 
-                <Dialog visible={composeVisible} onDismiss={() => setComposeVisible(false)} style={{ backgroundColor: theme.colors.surface }}>
-                    <Dialog.Title>Compose Email</Dialog.Title>
-                    <Dialog.Content>
-                        <TextInput label="To" mode="outlined" value={composeTo} onChangeText={setComposeTo} style={{ marginBottom: 12 }} dense />
-                        <TextInput label="Subject" mode="outlined" value={composeSubject} onChangeText={setComposeSubject} style={{ marginBottom: 12 }} dense />
-                        <TextInput label="Message" mode="outlined" value={composeBody} onChangeText={setComposeBody} multiline numberOfLines={10} style={{ maxHeight: 300, marginBottom: 12 }} />
+                <Portal>
+                    <PaperModal visible={composeVisible} onDismiss={() => setComposeVisible(false)} contentContainerStyle={isDesktop ? { width: 600, alignSelf: 'center', backgroundColor: theme.colors.surface, borderRadius: 12, padding: 24, maxHeight: '80%' } : { flex: 1, backgroundColor: theme.colors.surface }}>
+                        {isDesktop ? (
+                            // Desktop View (Similar to Dialog)
+                            <View>
+                                <Text variant="headlineSmall" style={{ marginBottom: 16, fontWeight: 'bold' }}>Compose Email</Text>
+                                <ScrollView style={{ maxHeight: 400 }}>
+                                    <TextInput label="To" mode="outlined" value={composeTo} onChangeText={setComposeTo} style={{ marginBottom: 12 }} dense />
+                                    <TextInput label="Subject" mode="outlined" value={composeSubject} onChangeText={setComposeSubject} style={{ marginBottom: 12 }} dense />
+                                    <TextInput label="Message" mode="outlined" value={composeBody} onChangeText={setComposeBody} multiline numberOfLines={10} style={{ minHeight: 150, marginBottom: 12 }} />
 
-                        {attachments.length > 0 && (
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                                {attachments.map((file, index) => (
-                                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surfaceVariant, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 16 }}>
-                                        <Avatar.Icon size={24} icon="file" style={{ backgroundColor: 'transparent' }} color={theme.colors.onSurfaceVariant} />
-                                        <Text variant="bodySmall" style={{ maxWidth: 150 }} numberOfLines={1}>{file.name}</Text>
-                                        <IconButton icon="close" size={16} onPress={() => removeAttachment(index)} />
-                                    </View>
-                                ))}
+                                    {attachments.length > 0 && (
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                                            {attachments.map((file, index) => (
+                                                <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surfaceVariant, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 16 }}>
+                                                    <Avatar.Icon size={24} icon="file" style={{ backgroundColor: 'transparent' }} color={theme.colors.onSurfaceVariant} />
+                                                    <Text variant="bodySmall" style={{ maxWidth: 150 }} numberOfLines={1}>{file.name}</Text>
+                                                    <IconButton icon="close" size={16} onPress={() => removeAttachment(index)} />
+                                                </View>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    <Button icon="paperclip" mode="text" onPress={pickDocument} style={{ alignSelf: 'flex-start' }}>
+                                        Attach File
+                                    </Button>
+                                </ScrollView>
+                                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16, gap: 8 }}>
+                                    <Button onPress={() => setComposeVisible(false)}>Cancel</Button>
+                                    <Button mode="contained" onPress={sendEmail} loading={sending} disabled={sending}>Send</Button>
+                                </View>
                             </View>
-                        )}
+                        ) : (
+                            // Mobile Full Screen View
+                            <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.surface }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
+                                    <IconButton icon="close" onPress={() => setComposeVisible(false)} />
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Compose</Text>
+                                    <Button onPress={sendEmail} loading={sending} disabled={sending} mode="contained" compact>Send</Button>
+                                </View>
+                                <ScrollView contentContainerStyle={{ padding: 16 }}>
+                                    <TextInput label="To" mode="outlined" value={composeTo} onChangeText={setComposeTo} style={{ marginBottom: 12 }} />
+                                    <TextInput label="Subject" mode="outlined" value={composeSubject} onChangeText={setComposeSubject} style={{ marginBottom: 12 }} />
+                                    <TextInput
+                                        label="Message"
+                                        mode="outlined"
+                                        value={composeBody}
+                                        onChangeText={setComposeBody}
+                                        multiline
+                                        numberOfLines={15}
+                                        style={{ minHeight: 200, marginBottom: 12, backgroundColor: theme.colors.surface }}
+                                        textAlignVertical="top"
+                                    />
 
-                        <Button icon="paperclip" mode="text" onPress={pickDocument} style={{ alignSelf: 'flex-start' }}>
-                            Attach File
-                        </Button>
-                    </Dialog.Content>
-                    <Dialog.Actions>
-                        <Button onPress={() => setComposeVisible(false)}>Cancel</Button>
-                        <Button mode="contained" onPress={sendEmail} loading={sending} disabled={sending}>Send</Button>
-                    </Dialog.Actions>
-                </Dialog>
+                                    {attachments.length > 0 && (
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                                            {attachments.map((file, index) => (
+                                                <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surfaceVariant, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 16 }}>
+                                                    <Avatar.Icon size={24} icon="file" style={{ backgroundColor: 'transparent' }} color={theme.colors.onSurfaceVariant} />
+                                                    <Text variant="bodySmall" style={{ maxWidth: 120 }} numberOfLines={1}>{file.name}</Text>
+                                                    <IconButton icon="close" size={16} onPress={() => removeAttachment(index)} />
+                                                </View>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    <Button icon="paperclip" mode="outlined" onPress={pickDocument} style={{ alignSelf: 'flex-start' }}>
+                                        Attach File
+                                    </Button>
+                                </ScrollView>
+                            </SafeAreaView>
+                        )}
+                    </PaperModal>
+                </Portal>
             </Portal>
         </CRMLayout>
     );
