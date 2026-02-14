@@ -96,8 +96,7 @@ module.exports = async (req, res) => {
         const storedTokens = await getTokens(userId);
         if (!storedTokens) return res.status(401).json({ error: 'Gmail not connected' });
 
-        // Debug: Check which tokens we have
-        console.log(`Loading tokens for ${userId}: Keys: ${Object.keys(storedTokens).join(', ')}`);
+
 
         oauth2Client.setCredentials(storedTokens);
 
