@@ -18,9 +18,7 @@ const BASE_URL = 'https://easey-app.vercel.app/api'; // Adjust if local dev
 
 // Scopes required for the app
 const SCOPES = [
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/gmail.modify'
+    'https://mail.google.com/'
 ];
 
 const GmailScreen = ({ navigation }) => {
@@ -134,16 +132,25 @@ const GmailScreen = ({ navigation }) => {
             }
         } else {
             // Archive / Trash
+            // Archive / Trash
             if (actionType === 'archive') {
                 body.removeLabelIds = ['INBOX'];
             } else if (actionType === 'trash') {
-                body.addLabelIds = ['TRASH'];
-                body.removeLabelIds = ['INBOX'];
+                if (currentLabel === 'TRASH') {
+                    // Permanent Delete
+                    // We need a different action endpoint
+                } else {
+                    body.addLabelIds = ['TRASH'];
+                    body.removeLabelIds = ['INBOX'];
+                }
             }
         }
 
         try {
-            const res = await fetch(`${BASE_URL}/gmail?action=modify`, {
+            const isPermanentDelete = actionType === 'trash' && currentLabel === 'TRASH';
+            const endpoint = isPermanentDelete ? 'delete' : 'modify';
+
+            const res = await fetch(`${BASE_URL}/gmail?action=${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.uid, ...body })
@@ -459,13 +466,20 @@ const GmailScreen = ({ navigation }) => {
             if (actionType === 'archive') {
                 body.removeLabelIds = ['INBOX'];
             } else if (actionType === 'trash') {
-                body.addLabelIds = ['TRASH'];
-                body.removeLabelIds = ['INBOX']; // Ensure it leaves Inbox
+                if (currentLabel === 'TRASH') {
+                    // Permanent Delete setup
+                } else {
+                    body.addLabelIds = ['TRASH'];
+                    body.removeLabelIds = ['INBOX']; // Ensure it leaves Inbox
+                }
             }
         }
 
         try {
-            const res = await fetch(`${BASE_URL}/gmail?action=modify`, {
+            const isPermanentDelete = actionType === 'trash' && currentLabel === 'TRASH';
+            const endpoint = isPermanentDelete ? 'delete' : 'modify';
+
+            const res = await fetch(`${BASE_URL}/gmail?action=${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.uid, ...body })

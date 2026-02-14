@@ -257,6 +257,26 @@ module.exports = async (req, res) => {
             ));
 
             await ensureTokensSaved();
+            await ensureTokensSaved();
+            return res.status(200).json({ success: true, count: idsToProcess.length });
+        }
+
+        // 6.5 DELETE FOREVER (From Trash)
+        if (method === 'POST' && action === 'delete') {
+            const { threadId, threadIds } = req.body;
+            const idsToProcess = threadIds || (threadId ? [threadId] : []);
+
+            if (idsToProcess.length === 0) return res.status(400).json({ error: 'Thread IDs required' });
+
+            // Execute in parallel
+            await Promise.all(idsToProcess.map(id =>
+                gmail.users.threads.delete({
+                    userId: 'me',
+                    id: id
+                })
+            ));
+
+            await ensureTokensSaved();
             return res.status(200).json({ success: true, count: idsToProcess.length });
         }
 
