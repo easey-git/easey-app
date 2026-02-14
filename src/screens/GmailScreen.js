@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Dimensions, Alert, Platform } from 'react-native';
-import { Text, useTheme, Surface, ActivityIndicator, FAB, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button } from 'react-native-paper';
+import { Text, useTheme, Surface, ActivityIndicator, FAB, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
@@ -36,6 +36,115 @@ const GmailScreen = ({ navigation }) => {
 
     // Detail View State
     const [selectedThread, setSelectedThread] = useState(null);
+    const activeThreadIdRef = useRef(null); // Track active thread request to prevent race conditions
+
+    // List State
+    const [currentLabel, setCurrentLabel] = useState('INBOX');
+    const [selectedThreads, setSelectedThreads] = useState([]);
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // Helper: Fetch Inbox (Moved up for scope)
+    const fetchInbox = async (loadMore = false) => {
+        if (loadingMore) return;
+        if (loadMore && !nextPageToken) return;
+
+        if (loadMore) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+        }
+
+        try {
+            // Include Label in URL
+            let url = `${BASE_URL}/gmail?action=list&userId=${user.uid}&label=${currentLabel}`;
+            if (searchQuery) {
+                url += `&q=${encodeURIComponent(searchQuery)}`;
+            }
+            if (loadMore && nextPageToken) {
+                url += `&pageToken=${nextPageToken}`;
+            }
+
+            const res = await fetch(url);
+
+            if (res.status === 401) {
+                setIsConnected(false);
+                return;
+            }
+
+            const data = await res.json();
+
+            if (data.threads) {
+                if (loadMore) {
+                    setThreadList(prev => {
+                        const existingIds = new Set(prev.map(t => t.id));
+                        const newThreads = data.threads.filter(t => !existingIds.has(t.id));
+                        return [...prev, ...newThreads];
+                    });
+                } else {
+                    setThreadList(data.threads);
+                }
+                setNextPageToken(data.nextPageToken || null);
+            } else {
+                if (!loadMore) setThreadList([]); // Clear if no threads
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+            setLoadingMore(false);
+        }
+    };
+
+    const toggleSelection = (id) => {
+        setSelectedThreads(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            return Array.from(newSet);
+        });
+    };
+
+    // Effect to sync selection mode state
+    useEffect(() => {
+        setIsSelectionMode(selectedThreads.length > 0);
+    }, [selectedThreads]);
+
+    const handleBulkAction = async (actionType) => {
+        if (selectedThreads.length === 0) return;
+
+        const threadsToProcess = [...selectedThreads];
+
+        // Optimistic UI: Remove from list
+        setThreadList(prev => prev.filter(t => !threadsToProcess.includes(t.id)));
+        setSelectedThreads([]);
+
+        let body = { threadIds: threadsToProcess };
+        if (actionType === 'archive') {
+            body.removeLabelIds = ['INBOX'];
+        } else if (actionType === 'trash') {
+            body.addLabelIds = ['TRASH'];
+            body.removeLabelIds = ['INBOX'];
+        } else if (actionType === 'read') {
+            body.removeLabelIds = ['UNREAD'];
+        }
+
+        try {
+            await fetch(`${BASE_URL}/gmail?action=modify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.uid, ...body })
+            });
+        } catch (error) {
+            console.error(error);
+            // Revert on error
+            fetchInbox();
+        }
+    };
     const [loadingThread, setLoadingThread] = useState(false);
     const [threadDetail, setThreadDetail] = useState(null);
 
@@ -134,6 +243,15 @@ const GmailScreen = ({ navigation }) => {
         if (user) checkStatus();
     }, [user, checkStatus]);
 
+    // Refetch when label changes
+    useEffect(() => {
+        if (isConnected) {
+            setThreadList([]);
+            setNextPageToken(null);
+            fetchInbox(false);
+        }
+    }, [currentLabel]);
+
     // Handle Auth Response
     useEffect(() => {
         if (response?.type === 'success') {
@@ -170,7 +288,7 @@ const GmailScreen = ({ navigation }) => {
         }
     };
 
-    const [searchQuery, setSearchQuery] = useState('');
+
 
     const onChangeSearch = query => setSearchQuery(query);
 
@@ -180,63 +298,33 @@ const GmailScreen = ({ navigation }) => {
         fetchInbox(false); // Reset and search
     };
 
-    // Update fetchInbox to use searchQuery
-    const fetchInbox = async (loadMore = false) => {
-        if (loadingMore) return;
-        if (loadMore && !nextPageToken) return;
 
-        if (loadMore) {
-            setLoadingMore(true);
-        } else {
-            setLoading(true);
-        }
-
-        try {
-            let url = `${BASE_URL}/gmail?action=list&userId=${user.uid}`;
-            if (searchQuery) {
-                url += `&q=${encodeURIComponent(searchQuery)}`;
-            }
-            if (loadMore && nextPageToken) {
-                url += `&pageToken=${nextPageToken}`;
-            }
-
-            const res = await fetch(url);
-
-            if (res.status === 401) {
-                setIsConnected(false);
-                return;
-            }
-
-            const data = await res.json();
-
-            if (data.threads) {
-                if (loadMore) {
-                    setThreadList(prev => [...prev, ...data.threads]);
-                } else {
-                    setThreadList(data.threads);
-                }
-                setNextPageToken(data.nextPageToken || null);
-            }
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-            setLoadingMore(false);
-        }
-    };
 
     const loadThread = async (thread) => {
+        // Track the latest requested thread ID
+        activeThreadIdRef.current = thread.id;
         setSelectedThread(thread);
+        setThreadDetail(null); // Clear previous detail immediately
         setLoadingThread(true);
+
         try {
             const res = await fetch(`${BASE_URL}/gmail?action=get&userId=${user.uid}&id=${thread.id}`);
             const data = await res.json();
-            setThreadDetail(data);
+
+            // Race Condition Check: Only update if this is still the active thread
+            if (activeThreadIdRef.current === thread.id) {
+                setThreadDetail(data);
+            }
         } catch (error) {
-            Alert.alert('Error', 'Could not load email.');
+            // Only alert if this is still the active thread
+            if (activeThreadIdRef.current === thread.id) {
+                Alert.alert('Error', 'Could not load email.');
+            }
         } finally {
-            setLoadingThread(false);
+            // Only turn off loading if this is still the active thread
+            if (activeThreadIdRef.current === thread.id) {
+                setLoadingThread(false);
+            }
         }
     };
 
@@ -305,6 +393,7 @@ const GmailScreen = ({ navigation }) => {
                 body.removeLabelIds = ['INBOX'];
             } else if (actionType === 'trash') {
                 body.addLabelIds = ['TRASH'];
+                body.removeLabelIds = ['INBOX']; // Ensure it leaves Inbox
             }
         }
 
@@ -350,32 +439,68 @@ const GmailScreen = ({ navigation }) => {
     // Render Components
     const renderThreadList = () => (
         <View style={{ flex: 1, borderRightWidth: 1, borderRightColor: theme.colors.outlineVariant, maxWidth: isDesktop ? 400 : '100%' }}>
-            {/* List Header: Search + Compose */}
-            <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, flexDirection: 'row', gap: 8 }}>
-                <TextInput
-                    mode="outlined"
-                    placeholder="Search"
-                    value={searchQuery}
-                    onChangeText={onChangeSearch}
-                    onSubmitEditing={onSearch} // Trigger search on enter
-                    left={<TextInput.Icon icon="magnify" />}
-                    dense
-                    style={{ flex: 1, backgroundColor: theme.colors.surface }}
-                />
-                <IconButton
-                    icon="pencil"
-                    mode="contained"
-                    containerColor={theme.colors.primary}
-                    iconColor={theme.colors.onPrimary}
-                    onPress={() => {
-                        setComposeTo('');
-                        setComposeSubject('');
-                        setComposeBody('');
-                        setAttachments([]);
-                        setComposeVisible(true);
-                    }}
-                />
-            </View>
+            {/* List Header: Search or Selection Toolbar */}
+            {isSelectionMode ? (
+                <View style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.colors.primaryContainer }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <IconButton icon="close" onPress={() => { setIsSelectionMode(false); setSelectedThreads([]); }} />
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{selectedThreads.length}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row' }}>
+                        <View style={{ flexDirection: 'row' }}>
+                            <IconButton icon="select-all" onPress={() => setSelectedThreads(threadList.map(t => t.id))} />
+                            <IconButton icon="email-open" onPress={() => handleBulkAction('read')} />
+                            <IconButton icon="archive" onPress={() => handleBulkAction('archive')} />
+                            <IconButton icon="delete" onPress={() => handleBulkAction('trash')} />
+                        </View>
+                    </View>
+                </View>
+            ) : (
+                <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    {/* Drawer Toggle for Mobile */}
+                    {!isDesktop && <IconButton icon="menu" onPress={() => navigation.toggleDrawer?.()} />}
+
+                    <TextInput
+                        mode="outlined"
+                        placeholder={`Search ${currentLabel.toLowerCase()}`}
+                        value={searchQuery}
+                        onChangeText={onChangeSearch}
+                        onSubmitEditing={onSearch} // Trigger search on enter
+                        left={<TextInput.Icon icon="magnify" />}
+                        dense
+                        style={{ flex: 1, backgroundColor: theme.colors.surface }}
+                    />
+
+                    {/* Folder Toggle: Inbox <-> Trash */}
+                    <IconButton
+                        icon={currentLabel === 'TRASH' ? 'inbox-arrow-down' : 'trash-can-outline'}
+                        mode={currentLabel === 'TRASH' ? 'contained' : 'outlined'}
+                        containerColor={currentLabel === 'TRASH' ? theme.colors.errorContainer : undefined}
+                        iconColor={currentLabel === 'TRASH' ? theme.colors.onErrorContainer : theme.colors.error}
+                        onPress={() => {
+                            const newLabel = currentLabel === 'TRASH' ? 'INBOX' : 'TRASH';
+                            setCurrentLabel(newLabel);
+                        }}
+                    />
+
+                    {/* Compose Button */}
+                    <IconButton
+                        icon="pencil"
+                        mode="contained"
+                        containerColor={theme.colors.primary}
+                        iconColor={theme.colors.onPrimary}
+                        onPress={() => {
+                            setComposeTo('');
+                            setComposeSubject('');
+                            setComposeBody('');
+                            setAttachments([]);
+                            setComposeVisible(true);
+                        }}
+                    />
+                </View>
+            )}
+
+
 
             {/* Scrollable List */}
             <FlatList
@@ -384,8 +509,16 @@ const GmailScreen = ({ navigation }) => {
                     <ThreadItem
                         item={item}
                         theme={theme}
+                        currentLabel={currentLabel}
                         isSelected={selectedThread?.id === item.id}
-                        onPress={() => loadThread(item)}
+                        isMultiSelect={isSelectionMode}
+                        isChecked={selectedThreads.includes(item.id)}
+                        onToggle={() => toggleSelection(item.id)}
+                        onPress={() => {
+                            if (isSelectionMode) toggleSelection(item.id);
+                            else loadThread(item);
+                        }}
+                        onLongPress={() => toggleSelection(item.id)}
                     />
                 )}
                 keyExtractor={item => item.id}
@@ -393,41 +526,64 @@ const GmailScreen = ({ navigation }) => {
                 onEndReached={() => fetchInbox(true)}
                 onEndReachedThreshold={0.5}
                 ListFooterComponent={loadingMore ? <ActivityIndicator style={{ padding: 16 }} /> : null}
-                contentContainerStyle={{ flexGrow: 1 }} // Remove paddingBottom hack
+                contentContainerStyle={{ flexGrow: 1 }}
             />
         </View>
     );
 
     // Optimized List Item
-    const ThreadItem = React.memo(({ item, theme, isSelected, onPress }) => (
-        <TouchableOpacity onPress={onPress}>
-            <View style={[
-                styles.threadItem,
-                {
-                    backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: theme.colors.outlineVariant
-                }
-            ]}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 12 }}>
-                    <Avatar.Text
-                        size={40}
-                        label={item.from?.charAt(0).toUpperCase() || '?'}
-                        style={{ backgroundColor: isSelected ? theme.colors.primary : theme.colors.primaryContainer }}
-                        color={isSelected ? theme.colors.onPrimary : theme.colors.onPrimaryContainer}
-                    />
-                    <View style={{ marginLeft: 12, flex: 1 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                            <Text variant="titleSmall" style={{ fontWeight: item.snippet ? 'bold' : 'normal' }} numberOfLines={1}>{item.from}</Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{item.date?.split(' ')[0]}</Text>
+    const ThreadItem = React.memo(({ item, theme, isSelected, isMultiSelect, isChecked, onToggle, onPress, onLongPress }) => {
+        const isUnread = item.isUnread; // Use backend flag
+        return (
+            <TouchableOpacity onPress={onPress} onLongPress={onLongPress} delayLongPress={300}>
+                <View style={[
+                    styles.threadItem,
+                    {
+                        backgroundColor: isChecked ? theme.colors.primaryContainer :
+                            (isSelected ? theme.colors.secondaryContainer :
+                                (isUnread ? theme.colors.surfaceVariant : theme.colors.surface)), // Highlight unread slightly
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: theme.colors.outlineVariant
+                    }
+                ]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+                        {/* Selection Checkbox / Avatar */}
+                        <TouchableOpacity onPress={onToggle}>
+                            {isMultiSelect || isChecked ? (
+                                <View style={{ justifyContent: 'center', height: 40, width: 40, alignItems: 'center', backgroundColor: isChecked ? theme.colors.primary : 'transparent', borderRadius: 20 }}>
+                                    <Checkbox status={isChecked ? 'checked' : 'unchecked'} onPress={onToggle} color={isChecked ? theme.colors.onPrimary : theme.colors.onSurfaceVariant} />
+                                </View>
+                            ) : (
+                                <Avatar.Text
+                                    size={40}
+                                    label={item.from?.charAt(0).toUpperCase() || '?'}
+                                    style={{ backgroundColor: isUnread ? theme.colors.primary : theme.colors.secondaryContainer }}
+                                    color={isUnread ? theme.colors.onPrimary : theme.colors.onSecondaryContainer}
+                                />
+                            )}
+                        </TouchableOpacity>
+
+                        <View style={{ marginLeft: 12, flex: 1 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                                <Text variant="titleSmall" style={{ fontWeight: isUnread ? '800' : 'normal', color: theme.colors.onSurface }} numberOfLines={1}>
+                                    {item.from}
+                                </Text>
+                                <Text variant="bodySmall" style={{ color: isUnread ? theme.colors.primary : theme.colors.outline, fontWeight: isUnread ? 'bold' : 'normal' }}>
+                                    {item.date?.split(' ')[0]}
+                                </Text>
+                            </View>
+                            <Text variant="bodyMedium" style={{ fontWeight: isUnread ? '700' : '500', marginBottom: 2, color: theme.colors.onSurface }} numberOfLines={1}>
+                                {item.subject}
+                            </Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>
+                                {item.snippet}
+                            </Text>
                         </View>
-                        <Text variant="bodyMedium" style={{ fontWeight: '600', marginBottom: 2 }} numberOfLines={1}>{item.subject}</Text>
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>{item.snippet}</Text>
                     </View>
                 </View>
-            </View>
-        </TouchableOpacity>
-    ));
+            </TouchableOpacity>
+        )
+    });
 
     const renderThreadDetail = () => {
         if (loadingThread || !threadDetail) {

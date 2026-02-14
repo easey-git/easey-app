@@ -114,13 +114,26 @@ module.exports = async (req, res) => {
 
         // 3. LIST THREADS
         if (method === 'GET' && action === 'list') {
-            const response = await gmail.users.threads.list({
+            const { label = 'INBOX' } = req.query; // Default to INBOX
+
+            let listParams = {
                 userId: 'me',
-                maxResults: 20, // Keep individual page size manageable
-                pageToken: req.query.pageToken || undefined, // Support pagination
-                q: req.query.q || '',
-                includeSpamTrash: true // Include Spam and Trash in results
-            });
+                maxResults: 20,
+                pageToken: req.query.pageToken || undefined,
+                q: req.query.q || ''
+            };
+
+            // Filter by Label if not 'ALL'
+            if (label !== 'ALL') {
+                listParams.labelIds = [label];
+            }
+
+            // Must include spam/trash if looking for them, or if 'ALL'
+            if (label === 'TRASH' || label === 'SPAM' || label === 'ALL') {
+                listParams.includeSpamTrash = true;
+            }
+
+            const response = await gmail.users.threads.list(listParams);
 
             // Sync tokens after API call (fetching might trigger refresh)
             await ensureTokensSaved();
@@ -148,12 +161,16 @@ module.exports = async (req, res) => {
                 const from = headers.find(h => h.name === 'From')?.value || 'Unknown';
                 const date = headers.find(h => h.name === 'Date')?.value;
 
+                // Check if any message in the thread is unread
+                const isUnread = messages.some(m => m.labelIds && m.labelIds.includes('UNREAD'));
+
                 return {
                     id: thread.id,
                     snippet: threadDetails.data.snippet,
                     subject,
                     from,
                     date,
+                    isUnread,
                     msgCount: messages.length
                 };
             }));
@@ -190,28 +207,28 @@ module.exports = async (req, res) => {
             return res.status(200).json(response.data); // Returns { data: "base64...", size: 123 }
         }
 
-        // 6. MODIFY MESSAGE (Archive, Trash, Read)
+        // 6. MODIFY MESSAGE (Archive, Trash, Read) - Supports Batch
         if (method === 'POST' && action === 'modify') {
-            const { threadId, addLabelIds = [], removeLabelIds = [] } = req.body;
+            const { threadId, threadIds, addLabelIds = [], removeLabelIds = [] } = req.body;
 
-            if (!threadId) return res.status(400).json({ error: 'Thread ID required' });
+            const idsToProcess = threadIds || (threadId ? [threadId] : []);
 
-            // We need to modify all messages in the thread usually, or just the thread itself. 
-            // The batchModify endpoint works on a list of IDs.
-            // First get the thread to find message IDs? Or just modify the thread directly?
-            // "users.threads.modify" is what we want.
+            if (idsToProcess.length === 0) return res.status(400).json({ error: 'Thread IDs required' });
 
-            const response = await gmail.users.threads.modify({
-                userId: 'me',
-                id: threadId,
-                requestBody: {
-                    addLabelIds,
-                    removeLabelIds
-                }
-            });
+            // Execute in parallel
+            await Promise.all(idsToProcess.map(id =>
+                gmail.users.threads.modify({
+                    userId: 'me',
+                    id: id,
+                    requestBody: {
+                        addLabelIds,
+                        removeLabelIds
+                    }
+                })
+            ));
 
             await ensureTokensSaved();
-            return res.status(200).json(response.data);
+            return res.status(200).json({ success: true, count: idsToProcess.length });
         }
 
         // 7. SEND EMAIL (With Attachments Support)
