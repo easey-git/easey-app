@@ -11,7 +11,7 @@ import { useResponsive } from '../hooks/useResponsive';
 const MENU_ITEMS = [
     { label: 'Dashboard', icon: 'view-dashboard', route: 'Home' }, // Always visible
     { label: 'Orders', icon: 'package-variant', route: 'DatabaseManager', params: { collection: 'orders' }, permission: 'access_orders' },
-    { label: 'Mail', icon: 'email', route: 'Gmail' },
+    { label: 'Mail', icon: 'email', route: 'Gmail', permission: 'gmail_view_access' },
     { label: 'Logistics', icon: 'truck-delivery', route: 'Logistics', permission: 'access_logistics' },
     { label: 'Analytics', icon: 'chart-bar', route: 'Stats', permission: 'access_analytics' },
     { label: 'Wallet', icon: 'wallet-outline', route: 'Wallet', permission: 'access_wallet' },

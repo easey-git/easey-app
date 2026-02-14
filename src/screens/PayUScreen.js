@@ -17,7 +17,17 @@ const TABS = [
 
 const PayUScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { hasPermission, role } = useAuth();
+    const { hasPermission, role, loading: authLoading } = useAuth();
+
+    if (authLoading) {
+        return (
+            <CRMLayout title="PayU" navigation={navigation}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" />
+                </View>
+            </CRMLayout>
+        );
+    }
 
     if (role !== 'admin' && !hasPermission('payu_access')) {
         return <AccessDenied title="Payments Restricted" message="Contact your administrator for payment access." />;

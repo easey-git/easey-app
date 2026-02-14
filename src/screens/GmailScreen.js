@@ -25,10 +25,21 @@ const SCOPES = [
 
 const GmailScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { user, role, hasPermission } = useAuth();
+    const { role, hasPermission, loading: authLoading, user } = useAuth();
     const { isDesktop } = useResponsive();
 
-    if (role !== 'admin' && !hasPermission('gmail_access')) {
+    if (authLoading) {
+        return (
+            <CRMLayout title="Gmail" navigation={navigation}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" />
+                    <Text style={{ marginTop: 16 }}>Verifying access...</Text>
+                </View>
+            </CRMLayout>
+        );
+    }
+
+    if (role !== 'admin' && !hasPermission('gmail_view_access')) {
         return <AccessDenied title="Gmail Access Restricted" message="You do not have permission to view this mailbox." />;
     }
 
