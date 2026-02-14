@@ -176,20 +176,80 @@ module.exports = async (req, res) => {
             return res.status(200).json(response.data);
         }
 
-        // 5. SEND EMAIL
-        if (method === 'POST' && action === 'send') {
-            const { to, subject, body, threadId } = req.body;
+        // 5. ATTACHMENT (Download)
+        if (method === 'GET' && action === 'attachment') {
+            const { messageId, attachmentId } = req.query;
+            if (!messageId || !attachmentId) return res.status(400).json({ error: 'Missing attachment params' });
 
-            // Construct MIME message
+            const response = await gmail.users.messages.attachments.get({
+                userId: 'me',
+                messageId,
+                id: attachmentId
+            });
+            await ensureTokensSaved();
+            return res.status(200).json(response.data); // Returns { data: "base64...", size: 123 }
+        }
+
+        // 6. MODIFY MESSAGE (Archive, Trash, Read)
+        if (method === 'POST' && action === 'modify') {
+            const { threadId, addLabelIds = [], removeLabelIds = [] } = req.body;
+
+            if (!threadId) return res.status(400).json({ error: 'Thread ID required' });
+
+            // We need to modify all messages in the thread usually, or just the thread itself. 
+            // The batchModify endpoint works on a list of IDs.
+            // First get the thread to find message IDs? Or just modify the thread directly?
+            // "users.threads.modify" is what we want.
+
+            const response = await gmail.users.threads.modify({
+                userId: 'me',
+                id: threadId,
+                requestBody: {
+                    addLabelIds,
+                    removeLabelIds
+                }
+            });
+
+            await ensureTokensSaved();
+            return res.status(200).json(response.data);
+        }
+
+        // 7. SEND EMAIL (With Attachments Support)
+        if (method === 'POST' && action === 'send') {
+            const { to, subject, body, threadId, attachments = [] } = req.body;
+
+            // Construct Multipart MIME message
+            const boundary = "__easey_boundary__";
             const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
-            const messageParts = [
-                `To: ${to}`,
-                'Content-Type: text/html; charset=utf-8',
-                'MIME-Version: 1.0',
-                `Subject: ${utf8Subject}`,
-                '',
-                body
-            ];
+
+            let messageParts = [];
+            messageParts.push(`To: ${to}`);
+            messageParts.push(`Subject: ${utf8Subject}`);
+            messageParts.push('MIME-Version: 1.0');
+            messageParts.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+            messageParts.push('');
+
+            // Body Part
+            messageParts.push(`--${boundary}`);
+            messageParts.push('Content-Type: text/html; charset=utf-8');
+            messageParts.push('');
+            messageParts.push(body);
+            messageParts.push('');
+
+            // Attachments Parts
+            if (attachments && attachments.length > 0) {
+                for (const file of attachments) {
+                    messageParts.push(`--${boundary}`);
+                    messageParts.push(`Content-Type: ${file.mimeType}; name="${file.name}"`);
+                    messageParts.push(`Content-Disposition: attachment; filename="${file.name}"`);
+                    messageParts.push(`Content-Transfer-Encoding: base64`);
+                    messageParts.push('');
+                    messageParts.push(file.data); // Base64 data
+                    messageParts.push('');
+                }
+            }
+
+            messageParts.push(`--${boundary}--`);
 
             // If replying, add In-Reply-To or References if needed (simplified here)
             // Proper reply requires fetching the original 'Message-ID' and adding it to 'References' and 'In-Reply-To'

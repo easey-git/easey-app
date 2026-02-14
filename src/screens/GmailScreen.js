@@ -233,6 +233,34 @@ const GmailScreen = ({ navigation }) => {
         }
     };
 
+    const handleAction = async (actionType) => {
+        if (!selectedThread) return;
+
+        // Optimistic UI Update: Remove from list immediately
+        const threadId = selectedThread.id;
+        setSelectedThread(null);
+        setThreadDetail(null);
+        setThreadList(prev => prev.filter(t => t.id !== threadId));
+
+        let body = { threadId };
+        if (actionType === 'archive') {
+            body.removeLabelIds = ['INBOX'];
+        } else if (actionType === 'trash') {
+            body.addLabelIds = ['TRASH'];
+        }
+
+        try {
+            await fetch(`${BASE_URL}/gmail?action=modify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.uid, ...body })
+            });
+        } catch (error) {
+            console.error('Action failed:', error);
+            Alert.alert('Error', 'Action failed. Please refresh.');
+        }
+    };
+
     // Helper to extract HTML body from message payload
     const getMessageBody = (payload) => {
         if (!payload) return '';
@@ -352,6 +380,8 @@ const GmailScreen = ({ navigation }) => {
                 <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, height: 64 }}>
                     {!isDesktop && <Appbar.BackAction onPress={() => { setSelectedThread(null); setThreadDetail(null); }} />}
                     <Appbar.Content title={selectedThread.subject || "Thread"} titleStyle={{ fontSize: 18, fontWeight: 'bold' }} />
+                    <Appbar.Action icon="archive-outline" onPress={() => handleAction('archive')} />
+                    <Appbar.Action icon="delete-outline" onPress={() => handleAction('trash')} />
                 </Appbar.Header>
 
                 {/* Scrollable Messages */}
@@ -427,6 +457,35 @@ const GmailScreen = ({ navigation }) => {
                                         <WebView source={{ html: htmlContent }} style={{ height: 400 }} />
                                     )}
                                 </View>
+
+                                {/* Attachments */}
+                                {item.payload.parts && item.payload.parts.map((part, pIndex) => {
+                                    if (part.filename && part.body && part.body.attachmentId) {
+                                        return (
+                                            <TouchableOpacity
+                                                key={pIndex}
+                                                style={{
+                                                    marginTop: 12,
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    backgroundColor: theme.colors.surfaceVariant,
+                                                    padding: 8,
+                                                    borderRadius: 8,
+                                                    alignSelf: 'flex-start'
+                                                }}
+                                                onPress={() => {
+                                                    // Open attachment proxy url
+                                                    const attachUrl = `${BASE_URL}/gmail?action=attachment&userId=${user.uid}&messageId=${item.id}&attachmentId=${part.body.attachmentId}`;
+                                                    WebBrowser.openBrowserAsync(attachUrl);
+                                                }}
+                                            >
+                                                <Avatar.Icon size={32} icon="paperclip" style={{ backgroundColor: 'transparent' }} color={theme.colors.onSurfaceVariant} />
+                                                <Text style={{ marginLeft: 8, fontWeight: '500', color: theme.colors.onSurfaceVariant }}>{part.filename}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    }
+                                    return null;
+                                })}
                             </View>
                         );
                     }}
