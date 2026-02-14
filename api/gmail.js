@@ -166,16 +166,12 @@ module.exports = async (req, res) => {
                 const from = headers.find(h => h.name === 'From')?.value || 'Unknown';
                 const date = headers.find(h => h.name === 'Date')?.value;
 
-                // Check if any message in the thread is unread
-                const isUnread = messages.some(m => m.labelIds && m.labelIds.includes('UNREAD'));
-
                 return {
                     id: thread.id,
                     snippet: threadDetails.data.snippet,
                     subject,
                     from,
                     date,
-                    isUnread,
                     msgCount: messages.length
                 };
             }));

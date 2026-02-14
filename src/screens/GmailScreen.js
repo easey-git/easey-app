@@ -329,23 +329,7 @@ const GmailScreen = ({ navigation }) => {
         setThreadDetail(null); // Clear previous detail immediately
         setLoadingThread(true);
 
-        // Server-Side Update: Mark as read
-        if (thread.isUnread) {
-            fetch(`${BASE_URL}/gmail?action=modify`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.uid, threadId: thread.id, removeLabelIds: ['UNREAD'] })
-            })
-                .then(res => {
-                    if (res.ok) {
-                        // Update list ONLY after server confirms success
-                        setThreadList(prev => prev.map(t =>
-                            t.id === thread.id ? { ...t, isUnread: false } : t
-                        ));
-                    }
-                })
-                .catch(e => console.error("Failed to mark read", e));
-        }
+        // Removed automatic "mark as read" logic per user request.
 
         try {
             const res = await fetch(`${BASE_URL}/gmail?action=get&userId=${user.uid}&id=${thread.id}`);
@@ -517,9 +501,6 @@ const GmailScreen = ({ navigation }) => {
                     <View style={{ flexDirection: 'row' }}>
                         <View style={{ flexDirection: 'row' }}>
                             <IconButton icon="select-all" onPress={() => setSelectedThreads(threadList.map(t => t.id))} />
-                            <IconButton icon="email-open" onPress={() => handleBulkAction('read')} />
-                            <IconButton icon="email-mark-as-unread" onPress={() => handleBulkAction('unread')} />
-                            <IconButton icon="archive" onPress={() => handleBulkAction('archive')} />
                             <IconButton icon="delete" onPress={() => handleBulkAction('trash')} />
                         </View>
                     </View>
@@ -602,15 +583,13 @@ const GmailScreen = ({ navigation }) => {
 
     // Optimized List Item
     const ThreadItem = React.memo(({ item, theme, isSelected, isMultiSelect, isChecked, onToggle, onPress, onLongPress }) => {
-        const isUnread = item.isUnread; // Use backend flag
         return (
             <TouchableOpacity onPress={onPress} onLongPress={onLongPress} delayLongPress={300}>
                 <View style={[
                     styles.threadItem,
                     {
                         backgroundColor: isChecked ? theme.colors.primaryContainer :
-                            (isSelected ? theme.colors.secondaryContainer :
-                                (isUnread ? theme.colors.surfaceVariant : theme.colors.surface)), // Highlight unread slightly
+                            (isSelected ? theme.colors.secondaryContainer : theme.colors.surface),
                         borderBottomWidth: StyleSheet.hairlineWidth,
                         borderBottomColor: theme.colors.outlineVariant
                     }
@@ -626,22 +605,22 @@ const GmailScreen = ({ navigation }) => {
                                 <Avatar.Text
                                     size={40}
                                     label={item.from?.charAt(0).toUpperCase() || '?'}
-                                    style={{ backgroundColor: isUnread ? theme.colors.primary : theme.colors.secondaryContainer }}
-                                    color={isUnread ? theme.colors.onPrimary : theme.colors.onSecondaryContainer}
+                                    style={{ backgroundColor: theme.colors.secondaryContainer }}
+                                    color={theme.colors.onSecondaryContainer}
                                 />
                             )}
                         </TouchableOpacity>
 
                         <View style={{ marginLeft: 12, flex: 1 }}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                <Text variant="titleSmall" style={{ fontWeight: isUnread ? '800' : 'normal', color: theme.colors.onSurface }} numberOfLines={1}>
+                                <Text variant="titleSmall" style={{ fontWeight: 'normal', color: theme.colors.onSurface }} numberOfLines={1}>
                                     {item.from}
                                 </Text>
-                                <Text variant="bodySmall" style={{ color: isUnread ? theme.colors.primary : theme.colors.outline, fontWeight: isUnread ? 'bold' : 'normal' }}>
+                                <Text variant="bodySmall" style={{ color: theme.colors.outline, fontWeight: 'normal' }}>
                                     {item.date?.split(' ')[0]}
                                 </Text>
                             </View>
-                            <Text variant="bodyMedium" style={{ fontWeight: isUnread ? '700' : '500', marginBottom: 2, color: theme.colors.onSurface }} numberOfLines={1}>
+                            <Text variant="bodyMedium" style={{ fontWeight: 'normal', marginBottom: 2, color: theme.colors.onSurface }} numberOfLines={1}>
                                 {item.subject}
                             </Text>
                             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>
@@ -665,8 +644,6 @@ const GmailScreen = ({ navigation }) => {
                 <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, height: 64 }}>
                     {!isDesktop && <Appbar.BackAction onPress={() => { setSelectedThread(null); setThreadDetail(null); }} />}
                     <Appbar.Content title={selectedThread.subject || "Thread"} titleStyle={{ fontSize: 18, fontWeight: 'bold' }} />
-                    <Appbar.Action icon="email-open-outline" onPress={() => handleAction('read')} />
-                    <Appbar.Action icon="archive-outline" onPress={() => handleAction('archive')} />
                     <Appbar.Action icon="delete-outline" onPress={() => handleAction('trash')} />
                 </Appbar.Header>
 
