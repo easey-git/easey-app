@@ -235,18 +235,25 @@ const GmailScreen = ({ navigation }) => {
 
     const handleAction = async (actionType) => {
         if (!selectedThread) return;
-
-        // Optimistic UI Update: Remove from list immediately
         const threadId = selectedThread.id;
-        setSelectedThread(null);
-        setThreadDetail(null);
-        setThreadList(prev => prev.filter(t => t.id !== threadId));
 
         let body = { threadId };
-        if (actionType === 'archive') {
-            body.removeLabelIds = ['INBOX'];
-        } else if (actionType === 'trash') {
-            body.addLabelIds = ['TRASH'];
+
+        if (actionType === 'read') {
+            body.removeLabelIds = ['UNREAD'];
+            // Optimistic Update for Read: Update list item to look read (optional, complex), or just do nothing visually for now 
+            // The list will likely update on next fetch.
+        } else {
+            // Optimistic UI Update for Archive/Trash: Remove from list immediately
+            setSelectedThread(null);
+            setThreadDetail(null);
+            setThreadList(prev => prev.filter(t => t.id !== threadId));
+
+            if (actionType === 'archive') {
+                body.removeLabelIds = ['INBOX'];
+            } else if (actionType === 'trash') {
+                body.addLabelIds = ['TRASH'];
+            }
         }
 
         try {
@@ -380,6 +387,7 @@ const GmailScreen = ({ navigation }) => {
                 <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, height: 64 }}>
                     {!isDesktop && <Appbar.BackAction onPress={() => { setSelectedThread(null); setThreadDetail(null); }} />}
                     <Appbar.Content title={selectedThread.subject || "Thread"} titleStyle={{ fontSize: 18, fontWeight: 'bold' }} />
+                    <Appbar.Action icon="email-open-outline" onPress={() => handleAction('read')} />
                     <Appbar.Action icon="archive-outline" onPress={() => handleAction('archive')} />
                     <Appbar.Action icon="delete-outline" onPress={() => handleAction('trash')} />
                 </Appbar.Header>
