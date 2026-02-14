@@ -126,10 +126,15 @@ module.exports = async (req, res) => {
             // Filter by Label if not 'ALL'
             if (label !== 'ALL') {
                 listParams.labelIds = [label];
+            } else {
+                // If ALL, we want everything (including Spam) EXCEPT Trash
+                // because Trash is handled by the toggle.
+                listParams.includeSpamTrash = true;
+                listParams.q = (listParams.q ? listParams.q + ' ' : '') + '-label:TRASH';
             }
 
             // Must include spam/trash if looking for them, or if 'ALL'
-            if (label === 'TRASH' || label === 'SPAM' || label === 'ALL') {
+            if (label === 'TRASH' || label === 'SPAM') {
                 listParams.includeSpamTrash = true;
             }
 

@@ -39,7 +39,7 @@ const GmailScreen = ({ navigation }) => {
     const activeThreadIdRef = useRef(null); // Track active thread request to prevent race conditions
 
     // List State
-    const [currentLabel, setCurrentLabel] = useState('INBOX');
+    const [currentLabel, setCurrentLabel] = useState('ALL'); // Default to ALL (Everything except Trash)
     const [selectedThreads, setSelectedThreads] = useState([]);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -118,19 +118,34 @@ const GmailScreen = ({ navigation }) => {
         if (selectedThreads.length === 0) return;
 
         const threadsToProcess = [...selectedThreads];
-
-        // Optimistic UI: Remove from list
-        setThreadList(prev => prev.filter(t => !threadsToProcess.includes(t.id)));
-        setSelectedThreads([]);
-
         let body = { threadIds: threadsToProcess };
-        if (actionType === 'archive') {
-            body.removeLabelIds = ['INBOX'];
-        } else if (actionType === 'trash') {
-            body.addLabelIds = ['TRASH'];
-            body.removeLabelIds = ['INBOX'];
-        } else if (actionType === 'read') {
-            body.removeLabelIds = ['UNREAD'];
+
+        if (actionType === 'read' || actionType === 'unread') {
+            const isUnread = actionType === 'unread';
+            // Optimistic UI: toggle bold, keep in list
+            setThreadList(prev => prev.map(t =>
+                threadsToProcess.includes(t.id) ? { ...t, isUnread } : t
+            ));
+
+            if (isUnread) {
+                body.addLabelIds = ['UNREAD'];
+            } else {
+                body.removeLabelIds = ['UNREAD'];
+            }
+            // Clear selection on success? Or keep it? Industry standard usually clears selection.
+            setSelectedThreads([]);
+        } else {
+            // Archive / Trash
+            // Optimistic UI: Remove from list
+            setThreadList(prev => prev.filter(t => !threadsToProcess.includes(t.id)));
+            setSelectedThreads([]);
+
+            if (actionType === 'archive') {
+                body.removeLabelIds = ['INBOX'];
+            } else if (actionType === 'trash') {
+                body.addLabelIds = ['TRASH'];
+                body.removeLabelIds = ['INBOX'];
+            }
         }
 
         try {
@@ -307,6 +322,19 @@ const GmailScreen = ({ navigation }) => {
         setThreadDetail(null); // Clear previous detail immediately
         setLoadingThread(true);
 
+        // Optimistically mark as read in the list
+        if (thread.isUnread) {
+            setThreadList(prev => prev.map(t =>
+                t.id === thread.id ? { ...t, isUnread: false } : t
+            ));
+            // Silently sync with backend
+            fetch(`${BASE_URL}/gmail?action=modify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.uid, threadId: thread.id, removeLabelIds: ['UNREAD'] })
+            }).catch(e => console.error("Failed to mark read silently", e));
+        }
+
         try {
             const res = await fetch(`${BASE_URL}/gmail?action=get&userId=${user.uid}&id=${thread.id}`);
             const data = await res.json();
@@ -379,10 +407,19 @@ const GmailScreen = ({ navigation }) => {
 
         let body = { threadId };
 
-        if (actionType === 'read') {
-            body.removeLabelIds = ['UNREAD'];
-            // Optimistic Update for Read: Update list item to look read (optional, complex), or just do nothing visually for now 
-            // The list will likely update on next fetch.
+        if (actionType === 'read' || actionType === 'unread') {
+            const isUnread = actionType === 'unread';
+
+            // Optimistic UI Update: Toggle bold status
+            setThreadList(prev => prev.map(t =>
+                t.id === threadId ? { ...t, isUnread: isUnread } : t
+            ));
+
+            if (isUnread) {
+                body.addLabelIds = ['UNREAD'];
+            } else {
+                body.removeLabelIds = ['UNREAD'];
+            }
         } else {
             // Optimistic UI Update for Archive/Trash: Remove from list immediately
             setSelectedThread(null);
@@ -406,6 +443,7 @@ const GmailScreen = ({ navigation }) => {
         } catch (error) {
             console.error('Action failed:', error);
             Alert.alert('Error', 'Action failed. Please refresh.');
+            // Revert on error? Complex to revert, typically refetch
         }
     };
 
@@ -450,6 +488,7 @@ const GmailScreen = ({ navigation }) => {
                         <View style={{ flexDirection: 'row' }}>
                             <IconButton icon="select-all" onPress={() => setSelectedThreads(threadList.map(t => t.id))} />
                             <IconButton icon="email-open" onPress={() => handleBulkAction('read')} />
+                            <IconButton icon="email-mark-as-unread" onPress={() => handleBulkAction('unread')} />
                             <IconButton icon="archive" onPress={() => handleBulkAction('archive')} />
                             <IconButton icon="delete" onPress={() => handleBulkAction('trash')} />
                         </View>
@@ -462,7 +501,7 @@ const GmailScreen = ({ navigation }) => {
 
                     <TextInput
                         mode="outlined"
-                        placeholder={`Search ${currentLabel.toLowerCase()}`}
+                        placeholder={currentLabel === 'ALL' ? 'Search all mail' : `Search ${currentLabel.toLowerCase()}`}
                         value={searchQuery}
                         onChangeText={onChangeSearch}
                         onSubmitEditing={onSearch} // Trigger search on enter
@@ -478,7 +517,7 @@ const GmailScreen = ({ navigation }) => {
                         containerColor={currentLabel === 'TRASH' ? theme.colors.errorContainer : undefined}
                         iconColor={currentLabel === 'TRASH' ? theme.colors.onErrorContainer : theme.colors.error}
                         onPress={() => {
-                            const newLabel = currentLabel === 'TRASH' ? 'INBOX' : 'TRASH';
+                            const newLabel = currentLabel === 'TRASH' ? 'ALL' : 'TRASH';
                             setCurrentLabel(newLabel);
                         }}
                     />
