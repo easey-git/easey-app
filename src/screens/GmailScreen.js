@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Dimensions, Alert, Platform } from 'react-native';
-import { Text, useTheme, Surface, ActivityIndicator, FAB, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox } from 'react-native-paper';
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { Text, useTheme, Surface, ActivityIndicator, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox, FAB } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
@@ -9,14 +9,12 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri, ResponseType } from 'expo-auth-session';
 import { WebView } from 'react-native-webview';
-import { Buffer } from 'buffer'; // Ensure this is installed
+import { Buffer } from 'buffer';
 
-// Initialize WebBrowser for Auth Session
 WebBrowser.maybeCompleteAuthSession();
 
-const BASE_URL = 'https://easey-app.vercel.app/api'; // Adjust if local dev
+const BASE_URL = 'https://easey-app.vercel.app/api';
 
-// Scopes required for the app
 const SCOPES = [
     'https://mail.google.com/'
 ];
@@ -33,17 +31,92 @@ const GmailScreen = ({ navigation }) => {
     const [nextPageToken, setNextPageToken] = useState(null);
     const [loadingMore, setLoadingMore] = useState(false);
 
-    // Detail View State
     const [selectedThread, setSelectedThread] = useState(null);
-    const activeThreadIdRef = useRef(null); // Track active thread request to prevent race conditions
+    const activeThreadIdRef = useRef(null);
 
-    // List State
-    const [currentLabel, setCurrentLabel] = useState('ALL'); // Default to ALL (Everything except Trash)
+    const [currentLabel, setCurrentLabel] = useState('ALL');
     const [selectedThreads, setSelectedThreads] = useState([]);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Helper: Fetch Inbox (Moved up for scope)
+    const [loadingThread, setLoadingThread] = useState(false);
+    const [threadDetail, setThreadDetail] = useState(null);
+    const [isReply, setIsReply] = useState(false);
+
+    const [composeVisible, setComposeVisible] = useState(false);
+    const [composeTo, setComposeTo] = useState('');
+    const [composeSubject, setComposeSubject] = useState('');
+    const [composeBody, setComposeBody] = useState('');
+    const [attachments, setAttachments] = useState([]);
+    const [sending, setSending] = useState(false);
+
+    const [deleteConfirmation, setDeleteConfirmation] = useState({
+        visible: false,
+        isPermanent: false,
+        isBulk: false,
+        count: 0
+    });
+
+    const [logoutVisible, setLogoutVisible] = useState(false);
+
+    const redirectUri = makeRedirectUri({ scheme: 'easey' });
+
+    const [request, response, promptAsync] = Google.useAuthRequest({
+        responseType: ResponseType.Code,
+        scopes: SCOPES,
+        redirectUri: redirectUri,
+        clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
+        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
+        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
+        extraParams: {
+            access_type: 'offline',
+            prompt: 'consent'
+        },
+        usePKCE: true,
+        shouldAutoExchangeCode: false,
+    });
+
+    const blobToBase64 = (blob) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64data = reader.result.split(',')[1];
+                resolve(base64data);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    };
+
+    const pickDocument = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: '*/*',
+                copyToCacheDirectory: true,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const file = result.assets[0];
+                const response = await fetch(file.uri);
+                const blob = await response.blob();
+                const base64 = await blobToBase64(blob);
+
+                setAttachments(prev => [...prev, {
+                    name: file.name,
+                    mimeType: file.mimeType,
+                    uri: file.uri,
+                    data: base64
+                }]);
+            }
+        } catch (err) {
+            console.error('Attachment error:', err);
+        }
+    };
+
+    const removeAttachment = (index) => {
+        setAttachments(prev => prev.filter((_, i) => i !== index));
+    };
+
     const fetchInbox = async (loadMore = false) => {
         if (loadingMore) return;
         if (loadMore && !nextPageToken) return;
@@ -55,7 +128,6 @@ const GmailScreen = ({ navigation }) => {
         }
 
         try {
-            // Include Label in URL
             let url = `${BASE_URL}/gmail?action=list&userId=${user.uid}&label=${currentLabel}`;
             if (searchQuery) {
                 url += `&q=${encodeURIComponent(searchQuery)}`;
@@ -85,7 +157,7 @@ const GmailScreen = ({ navigation }) => {
                 }
                 setNextPageToken(data.nextPageToken || null);
             } else {
-                if (!loadMore) setThreadList([]); // Clear if no threads
+                if (!loadMore) setThreadList([]);
             }
         } catch (error) {
             console.error(error);
@@ -108,7 +180,6 @@ const GmailScreen = ({ navigation }) => {
         });
     };
 
-    // Effect to sync selection mode state
     useEffect(() => {
         setIsSelectionMode(selectedThreads.length > 0);
     }, [selectedThreads]);
@@ -131,16 +202,12 @@ const GmailScreen = ({ navigation }) => {
                 body.removeLabelIds = ['UNREAD'];
             }
 
-            // Optimistic UI for Read/Unread
             setThreadList(prev => prev.map(t =>
                 threadsToProcess.includes(t.id) ? { ...t, isUnread } : t
             ));
         } else {
-            // Archive / Trash / Delete Forever
-            // Optimistic UI: Remove from list
             setThreadList(prev => prev.filter(t => !threadsToProcess.includes(t.id)));
 
-            // Optimistic UI: If currently viewing one of these, clear the view
             if (selectedThread && threadsToProcess.includes(selectedThread.id)) {
                 setSelectedThread(null);
                 setThreadDetail(null);
@@ -150,8 +217,7 @@ const GmailScreen = ({ navigation }) => {
                 body.removeLabelIds = ['INBOX'];
             } else if (actionType === 'trash') {
                 if (currentLabel === 'TRASH') {
-                    // Permanent Delete
-                    // We need a different action endpoint, body handled below logic usually but fine here
+                    // Handled by delete endpoint
                 } else {
                     body.addLabelIds = ['TRASH'];
                     body.removeLabelIds = ['INBOX'];
@@ -159,7 +225,6 @@ const GmailScreen = ({ navigation }) => {
             }
         }
 
-        // Clear selection immediately
         setSelectedThreads([]);
 
         try {
@@ -173,94 +238,14 @@ const GmailScreen = ({ navigation }) => {
             });
 
             if (!res.ok) {
-                Alert.alert('Error', 'Bulk action failed. Refreshing...');
-                fetchInbox(); // Revert state by fetching fresh
+                fetchInbox();
             }
         } catch (error) {
             console.error(error);
-            Alert.alert('Error', 'Network error.');
             fetchInbox();
         }
     };
-    const [loadingThread, setLoadingThread] = useState(false);
-    const [threadDetail, setThreadDetail] = useState(null);
-    const [isReply, setIsReply] = useState(false);
 
-    // Compose State
-    const [composeVisible, setComposeVisible] = useState(false);
-    const [composeTo, setComposeTo] = useState('');
-    const [composeSubject, setComposeSubject] = useState('');
-    const [composeBody, setComposeBody] = useState('');
-    const [attachments, setAttachments] = useState([]);
-    const [sending, setSending] = useState(false);
-
-    // Helper: Convert Blob to Base64
-    const blobToBase64 = (blob) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64data = reader.result.split(',')[1];
-                resolve(base64data);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
-    };
-
-    const pickDocument = async () => {
-        try {
-            const result = await DocumentPicker.getDocumentAsync({
-                type: '*/*',
-                copyToCacheDirectory: true,
-            });
-
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                const file = result.assets[0];
-                // Read content
-                const response = await fetch(file.uri);
-                const blob = await response.blob();
-                const base64 = await blobToBase64(blob);
-
-                setAttachments(prev => [...prev, {
-                    name: file.name,
-                    mimeType: file.mimeType,
-                    uri: file.uri,
-                    data: base64
-                }]);
-            }
-        } catch (err) {
-            console.error('Attachment error:', err);
-            Alert.alert('Error', 'Failed to attach file.');
-        }
-    };
-
-    const removeAttachment = (index) => {
-        setAttachments(prev => prev.filter((_, i) => i !== index));
-    };
-
-    // Auth Request Setup
-    const redirectUri = makeRedirectUri({ scheme: 'easey' });
-
-
-    const [request, response, promptAsync] = Google.useAuthRequest({
-        responseType: ResponseType.Code,
-        scopes: SCOPES,
-        // For Expo Go, this works automatically. For standalone, ensure scheme is set.
-        redirectUri: redirectUri,
-        clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
-        webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
-        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
-        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '', // Ensure this is set in .env as EXPO_PUBLIC_GOOGLE_CLIENT_ID
-        // We will pass the code to our backend to exchange.
-        extraParams: {
-            access_type: 'offline',
-            prompt: 'consent'
-        },
-        usePKCE: true,
-        shouldAutoExchangeCode: false, // Critical: Backend handles the exchange
-    });
-
-    // Check Connection Status
     const checkStatus = useCallback(async () => {
         try {
             const res = await fetch(`${BASE_URL}/gmail?action=status&userId=${user.uid}`);
@@ -281,17 +266,15 @@ const GmailScreen = ({ navigation }) => {
         if (user) checkStatus();
     }, [user, checkStatus]);
 
-    // Refetch when label changes
     useEffect(() => {
         if (isConnected) {
             setThreadList([]);
             setNextPageToken(null);
-            setSearchQuery(''); // Clear search on label change
+            setSearchQuery('');
             fetchInbox(false);
         }
     }, [currentLabel]);
 
-    // Handle Auth Response
     useEffect(() => {
         if (response?.type === 'success') {
             const { code } = response.params;
@@ -310,30 +293,20 @@ const GmailScreen = ({ navigation }) => {
                     code,
                     redirectUri,
                     userId: user.uid,
-                    codeVerifier: request?.codeVerifier // Critical for PKCE
+                    codeVerifier: request?.codeVerifier
                 })
             });
 
             if (res.ok) {
                 setIsConnected(true);
                 fetchInbox();
-            } else {
-                Alert.alert('Auth Failed', 'Could not connect to Gmail.');
             }
         } catch (error) {
-            Alert.alert('Error', error.message);
+            console.error(error);
         } finally {
             setConnecting(false);
         }
     };
-
-    // Deletion Confirmation State
-    const [deleteConfirmation, setDeleteConfirmation] = useState({
-        visible: false,
-        isPermanent: false,
-        isBulk: false,
-        count: 0
-    });
 
     const requestDelete = (isBulk) => {
         const isPermanent = currentLabel === 'TRASH';
@@ -355,8 +328,6 @@ const GmailScreen = ({ navigation }) => {
         }
     };
 
-    const [logoutVisible, setLogoutVisible] = useState(false);
-
     const handleLogout = () => {
         setLogoutVisible(true);
     };
@@ -376,8 +347,6 @@ const GmailScreen = ({ navigation }) => {
                 setThreadList([]);
                 setThreadDetail(null);
                 setSelectedThread(null);
-            } else {
-                console.error('Failed to disconnect');
             }
         } catch (error) {
             console.error(error);
@@ -386,42 +355,32 @@ const GmailScreen = ({ navigation }) => {
         }
     };
 
-
-
     const onChangeSearch = query => setSearchQuery(query);
 
     const onSearch = () => {
         setNextPageToken(null);
         setThreadList([]);
-        fetchInbox(false); // Reset and search
+        fetchInbox(false);
     };
 
-
-
     const loadThread = async (thread) => {
-        // Track the latest requested thread ID
         activeThreadIdRef.current = thread.id;
         setSelectedThread(thread);
-        setThreadDetail(null); // Clear previous detail immediately
+        setThreadDetail(null);
         setLoadingThread(true);
-
-        // Removed automatic "mark as read" logic per user request.
 
         try {
             const res = await fetch(`${BASE_URL}/gmail?action=get&userId=${user.uid}&id=${thread.id}`);
             const data = await res.json();
 
-            // Race Condition Check: Only update if this is still the active thread
             if (activeThreadIdRef.current === thread.id) {
                 setThreadDetail(data);
             }
         } catch (error) {
-            // Only alert if this is still the active thread
             if (activeThreadIdRef.current === thread.id) {
-                Alert.alert('Error', 'Could not load email.');
+                console.error('Could not load email');
             }
         } finally {
-            // Only turn off loading if this is still the active thread
             if (activeThreadIdRef.current === thread.id) {
                 setLoadingThread(false);
             }
@@ -430,7 +389,6 @@ const GmailScreen = ({ navigation }) => {
 
     const sendEmail = async () => {
         if (!composeTo || !composeSubject || !composeBody) {
-            Alert.alert('Validation', 'Please fill all fields.');
             return;
         }
 
@@ -444,7 +402,6 @@ const GmailScreen = ({ navigation }) => {
                     to: composeTo,
                     subject: composeSubject,
                     body: composeBody,
-                    // If replying, add threadId here
                     threadId: isReply ? selectedThread?.id : undefined,
                     attachments: attachments.map(a => ({
                         name: a.name,
@@ -460,14 +417,13 @@ const GmailScreen = ({ navigation }) => {
                 setComposeSubject('');
                 setComposeBody('');
                 setAttachments([]);
-                Alert.alert('Sent', 'Email sent successfully.');
                 fetchInbox();
             } else {
                 const err = await res.json();
-                Alert.alert('Error', err.error || 'Failed to send.');
+                console.error(err.error || 'Failed to send.');
             }
         } catch (error) {
-            Alert.alert('Error', error.message);
+            console.error(error.message);
         } finally {
             setSending(false);
         }
@@ -491,7 +447,6 @@ const GmailScreen = ({ navigation }) => {
                 body.removeLabelIds = ['UNREAD'];
             }
         } else {
-            // Optimistic UI Update for Archive/Trash: Remove from list immediately
             setSelectedThread(null);
             setThreadDetail(null);
             setThreadList(prev => prev.filter(t => t.id !== threadId));
@@ -500,10 +455,10 @@ const GmailScreen = ({ navigation }) => {
                 body.removeLabelIds = ['INBOX'];
             } else if (actionType === 'trash') {
                 if (currentLabel === 'TRASH') {
-                    // Permanent Delete setup
+                    // Handled by delete endpoint
                 } else {
                     body.addLabelIds = ['TRASH'];
-                    body.removeLabelIds = ['INBOX']; // Ensure it leaves Inbox
+                    body.removeLabelIds = ['INBOX'];
                 }
             }
         }
@@ -519,25 +474,20 @@ const GmailScreen = ({ navigation }) => {
             });
 
             if (res.ok) {
-                // Update UI ONLY after server confirmation
                 if (isReadAction) {
                     setThreadList(prev => prev.map(t =>
                         t.id === threadId ? { ...t, isUnread: isUnread } : t
                     ));
                 }
-                // Archive/Trash already handled optimistically
             } else {
-                Alert.alert('Error', 'Action failed on server.');
-                // Revert optimistic update? (Complex, usually we just alert and refresh)
                 fetchInbox();
             }
         } catch (error) {
             console.error('Action failed:', error);
-            Alert.alert('Error', 'Action failed. Please refresh.');
+            fetchInbox();
         }
     };
 
-    // Helper to extract HTML body from message payload
     const getMessageBody = (payload) => {
         if (!payload) return '';
 
@@ -545,12 +495,10 @@ const GmailScreen = ({ navigation }) => {
         if (payload.body?.data) {
             body = payload.body.data;
         } else if (payload.parts) {
-            // Find text/html part
             const htmlPart = payload.parts.find(p => p.mimeType === 'text/html');
             if (htmlPart && htmlPart.body?.data) {
                 body = htmlPart.body.data;
             } else {
-                // Fallback to text/plain
                 const textPart = payload.parts.find(p => p.mimeType === 'text/plain');
                 if (textPart && textPart.body?.data) {
                     body = textPart.body.data;
@@ -564,10 +512,8 @@ const GmailScreen = ({ navigation }) => {
         return '<i>(No content)</i>';
     };
 
-    // Render Components
     const renderThreadList = () => (
         <View style={{ flex: 1, borderRightWidth: 1, borderRightColor: theme.colors.outlineVariant, maxWidth: isDesktop ? 400 : '100%' }}>
-            {/* List Header: Search or Selection Toolbar */}
             {isSelectionMode ? (
                 <View style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.colors.primaryContainer }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -583,7 +529,6 @@ const GmailScreen = ({ navigation }) => {
                 </View>
             ) : (
                 <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                    {/* Drawer Toggle for Mobile */}
                     {!isDesktop && <IconButton icon="menu" onPress={() => navigation.toggleDrawer?.()} />}
 
                     <TextInput
@@ -591,13 +536,12 @@ const GmailScreen = ({ navigation }) => {
                         placeholder={currentLabel === 'ALL' ? 'Search all mail' : `Search ${currentLabel.toLowerCase()}`}
                         value={searchQuery}
                         onChangeText={onChangeSearch}
-                        onSubmitEditing={onSearch} // Trigger search on enter
+                        onSubmitEditing={onSearch}
                         left={<TextInput.Icon icon="magnify" />}
                         dense
                         style={{ flex: 1, backgroundColor: theme.colors.surface }}
                     />
 
-                    {/* Folder Toggle: Inbox <-> Trash */}
                     <IconButton
                         icon={currentLabel === 'TRASH' ? 'inbox-arrow-down' : 'trash-can-outline'}
                         mode={currentLabel === 'TRASH' ? 'contained' : 'outlined'}
@@ -609,7 +553,6 @@ const GmailScreen = ({ navigation }) => {
                         }}
                     />
 
-                    {/* Compose Button */}
                     <IconButton
                         icon="pencil"
                         mode="contained"
@@ -620,12 +563,11 @@ const GmailScreen = ({ navigation }) => {
                             setComposeSubject('');
                             setComposeBody('');
                             setAttachments([]);
-                            setIsReply(false); // Ensure it's a fresh email
+                            setIsReply(false);
                             setComposeVisible(true);
                         }}
                     />
 
-                    {/* Logout Button */}
                     <IconButton
                         icon="logout"
                         mode="outlined"
@@ -634,9 +576,6 @@ const GmailScreen = ({ navigation }) => {
                 </View>
             )}
 
-
-
-            {/* Scrollable List */}
             <FlatList
                 data={threadList}
                 renderItem={({ item }) => (
@@ -665,7 +604,6 @@ const GmailScreen = ({ navigation }) => {
         </View>
     );
 
-    // Optimized List Item
     const ThreadItem = React.memo(({ item, theme, isSelected, isMultiSelect, isChecked, onToggle, onPress, onLongPress }) => {
         return (
             <TouchableOpacity onPress={onPress} onLongPress={onLongPress} delayLongPress={300}>
@@ -679,7 +617,6 @@ const GmailScreen = ({ navigation }) => {
                     }
                 ]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
-                        {/* Selection Checkbox / Avatar */}
                         <TouchableOpacity onPress={onToggle}>
                             {isMultiSelect || isChecked ? (
                                 <View style={{ justifyContent: 'center', height: 40, width: 40, alignItems: 'center', backgroundColor: isChecked ? theme.colors.primary : 'transparent', borderRadius: 20 }}>
@@ -704,7 +641,6 @@ const GmailScreen = ({ navigation }) => {
                                     {(() => {
                                         if (!item.date) return '';
                                         const d = new Date(item.date);
-                                        // If invalid date, fallback to raw string, else formatted
                                         return isNaN(d.getTime()) ? item.date.split(' ').slice(0, 3).join(' ') : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                                     })()}
                                 </Text>
@@ -729,14 +665,12 @@ const GmailScreen = ({ navigation }) => {
 
         return (
             <View style={{ flex: 1, backgroundColor: theme.colors.surface }}>
-                {/* Detail Header */}
                 <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, height: 64 }}>
                     {!isDesktop && <Appbar.BackAction onPress={() => { setSelectedThread(null); setThreadDetail(null); }} />}
                     <Appbar.Content title={selectedThread.subject || "Thread"} titleStyle={{ fontSize: 18, fontWeight: 'bold' }} />
                     <Appbar.Action icon="delete-outline" onPress={() => requestDelete(false)} />
                 </Appbar.Header>
 
-                {/* Scrollable Messages */}
                 <FlatList
                     data={threadDetail.messages}
                     keyExtractor={item => item.id}
@@ -770,7 +704,6 @@ const GmailScreen = ({ navigation }) => {
                                     </View>
                                 </View>
 
-                                {/* Content Box */}
                                 <View style={{
                                     minHeight: 200,
                                     backgroundColor: '#fff',
@@ -787,13 +720,11 @@ const GmailScreen = ({ navigation }) => {
                                                     body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; color: #000; }
                                                     a { color: ${theme.colors.primary}; }
                                                     img { max-width: 100%; height: auto; }
-                                                    /* Hide weird gmail artifacts if any */
                                                     .gmail_quote { margin-left: 0; padding-left: 0; border-left: none; }
                                                 </style></head>
                                                 <body>
                                                     ${htmlContent}
                                                     <script>
-                                                        // Auto-resize height
                                                         window.onload = function() {
                                                             var height = document.body.scrollHeight + 40;
                                                             window.frameElement.style.height = height + 'px';
@@ -801,7 +732,7 @@ const GmailScreen = ({ navigation }) => {
                                                     </script>
                                                 </body></html>
                                             `}
-                                            style={{ width: '100%', height: '400px', border: 'none' }} // Default height, updated by script
+                                            style={{ width: '100%', height: '400px', border: 'none' }}
                                             title="Email Content"
                                             sandbox="allow-same-origin allow-scripts"
                                         />
@@ -810,7 +741,6 @@ const GmailScreen = ({ navigation }) => {
                                     )}
                                 </View>
 
-                                {/* Attachments */}
                                 {item.payload.parts && item.payload.parts.map((part, pIndex) => {
                                     if (part.filename && part.body && part.body.attachmentId) {
                                         return (
@@ -826,7 +756,6 @@ const GmailScreen = ({ navigation }) => {
                                                     alignSelf: 'flex-start'
                                                 }}
                                                 onPress={() => {
-                                                    // Open attachment proxy url
                                                     const attachUrl = `${BASE_URL}/gmail?action=attachment&userId=${user.uid}&messageId=${item.id}&attachmentId=${part.body.attachmentId}`;
                                                     WebBrowser.openBrowserAsync(attachUrl);
                                                 }}
@@ -843,7 +772,6 @@ const GmailScreen = ({ navigation }) => {
                     }}
                 />
 
-                {/* Fixed Reply Footer */}
                 <Surface elevation={2} style={{ padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surface }}>
                     <Button
                         mode="outlined"
@@ -869,7 +797,6 @@ const GmailScreen = ({ navigation }) => {
         );
     };
 
-    // Render Logic
     if (loading && !refreshing && !threadList.length && !isConnected) {
         return (
             <CRMLayout title="Gmail" navigation={navigation}>
@@ -899,11 +826,6 @@ const GmailScreen = ({ navigation }) => {
                         >
                             Sign in with Google
                         </Button>
-                        {!request && (
-                            <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 8 }}>
-                                Configuration Error: Client ID missing.
-                            </Text>
-                        )}
                     </Surface>
                 </View>
             </CRMLayout>
@@ -947,7 +869,7 @@ const GmailScreen = ({ navigation }) => {
                     <Dialog.Content>
                         <Text variant="bodyMedium">
                             {deleteConfirmation.isPermanent
-                                ? `Are you sure you want to permanently delete ${deleteConfirmation.count > 1 ? `these ${deleteConfirmation.count} emails` : 'this email'}? This action cannot be undone.`
+                                ? `Are you sure you want to permanently delete ${deleteConfirmation.count > 1 ? `these ${deleteConfirmation.count} emails` : 'this email'}?`
                                 : `Are you sure you want to move ${deleteConfirmation.count > 1 ? `these ${deleteConfirmation.count} emails` : 'this email'} to the Trash?`
                             }
                         </Text>
@@ -967,7 +889,6 @@ const GmailScreen = ({ navigation }) => {
                         <TextInput label="Subject" mode="outlined" value={composeSubject} onChangeText={setComposeSubject} style={{ marginBottom: 12 }} dense />
                         <TextInput label="Message" mode="outlined" value={composeBody} onChangeText={setComposeBody} multiline numberOfLines={10} style={{ maxHeight: 300, marginBottom: 12 }} />
 
-                        {/* Attachments List */}
                         {attachments.length > 0 && (
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                                 {attachments.map((file, index) => (
@@ -1010,21 +931,6 @@ const styles = StyleSheet.create({
     threadItem: {
         borderRadius: 0,
     },
-    fab: {
-        position: 'absolute',
-        margin: 16,
-        right: 0,
-        bottom: 0,
-    },
-    messageCard: {
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 16,
-    },
-    messageHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    }
 });
 
 export default GmailScreen;
