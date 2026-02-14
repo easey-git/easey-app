@@ -311,6 +311,37 @@ const GmailScreen = ({ navigation }) => {
         }
     };
 
+    const [logoutVisible, setLogoutVisible] = useState(false);
+
+    const handleLogout = () => {
+        setLogoutVisible(true);
+    };
+
+    const confirmLogout = async () => {
+        setLogoutVisible(false);
+        setLoading(true);
+        try {
+            const res = await fetch(`${BASE_URL}/gmail?action=logout`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.uid })
+            });
+
+            if (res.ok) {
+                setIsConnected(false);
+                setThreadList([]);
+                setThreadDetail(null);
+                setSelectedThread(null);
+            } else {
+                console.error('Failed to disconnect');
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
 
 
     const onChangeSearch = query => setSearchQuery(query);
@@ -547,6 +578,13 @@ const GmailScreen = ({ navigation }) => {
                             setAttachments([]);
                             setComposeVisible(true);
                         }}
+                    />
+
+                    {/* Logout Button */}
+                    <IconButton
+                        icon="logout"
+                        mode="outlined"
+                        onPress={handleLogout}
                     />
                 </View>
             )}
@@ -838,6 +876,17 @@ const GmailScreen = ({ navigation }) => {
             )}
 
             <Portal>
+                <Dialog visible={logoutVisible} onDismiss={() => setLogoutVisible(false)} style={{ backgroundColor: theme.colors.surface }}>
+                    <Dialog.Title>Disconnect Gmail</Dialog.Title>
+                    <Dialog.Content>
+                        <Text variant="bodyMedium">Are you sure you want to disconnect your Gmail account?</Text>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setLogoutVisible(false)}>Cancel</Button>
+                        <Button onPress={confirmLogout} textColor={theme.colors.error}>Disconnect</Button>
+                    </Dialog.Actions>
+                </Dialog>
+
                 <Dialog visible={composeVisible} onDismiss={() => setComposeVisible(false)} style={{ backgroundColor: theme.colors.surface }}>
                     <Dialog.Title>Compose Email</Dialog.Title>
                     <Dialog.Content>

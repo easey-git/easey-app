@@ -80,6 +80,34 @@ module.exports = async (req, res) => {
             return res.status(200).json({ success: true });
         }
 
+        // 1.5 LOGOUT (Disconnect)
+        if (method === 'POST' && action === 'logout') {
+            const { userId } = req.body;
+            if (!userId) return res.status(400).json({ error: 'User ID required' });
+
+            const tokens = await getTokens(userId);
+            if (tokens) {
+                try {
+                    // Revoke token if possible (Industry Standard)
+                    const tokenToRevoke = tokens.access_token || tokens.refresh_token;
+                    if (tokenToRevoke) {
+                        try {
+                            await oauth2Client.revokeToken(tokenToRevoke);
+                        } catch (revokeErr) {
+                            console.warn('Token revocation failed (might be already expired):', revokeErr.message);
+                        }
+                    }
+                } catch (e) {
+                    console.log('Revoke logic error', e);
+                }
+
+                // Delete from DB
+                await db.collection('users').doc(userId).collection('integrations').doc('gmail').delete();
+            }
+
+            return res.status(200).json({ success: true });
+        }
+
         // 2. CHECK STATUS
         if (method === 'GET' && action === 'status') {
             const { userId } = req.query;
