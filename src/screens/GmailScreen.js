@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Animated, PanResponder } from 'react-native';
 import { Text, useTheme, Surface, ActivityIndicator, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox, FAB } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
@@ -512,8 +512,33 @@ const GmailScreen = ({ navigation }) => {
         return '<i>(No content)</i>';
     };
 
+    // Resizable Sidebar State using Animated API for performance
+    const sidebarWidth = useRef(new Animated.Value(400)).current;
+    const lastWidth = useRef(400);
+
+    // Better PanResponder with clamping
+    const panResponder = useRef(
+        React.useMemo(() => {
+            return PanResponder.create({
+                onStartShouldSetPanResponder: () => true,
+                onMoveShouldSetPanResponder: () => true,
+                onPanResponderGrant: () => {
+                    // Start from current width
+                },
+                onPanResponderMove: (e, gestureState) => {
+                    let newWidth = lastWidth.current + gestureState.dx;
+                    newWidth = Math.max(250, Math.min(800, newWidth)); // Clamp
+                    sidebarWidth.setValue(newWidth);
+                },
+                onPanResponderRelease: (e, gestureState) => {
+                    lastWidth.current = Math.max(250, Math.min(800, lastWidth.current + gestureState.dx));
+                }
+            });
+        }, [sidebarWidth])
+    ).current;
+
     const renderThreadList = () => (
-        <View style={{ flex: 1, borderRightWidth: 1, borderRightColor: theme.colors.outlineVariant, maxWidth: isDesktop ? 400 : '100%' }}>
+        <View style={{ flex: 1, borderRightWidth: 1, borderRightColor: theme.colors.outlineVariant, width: '100%' }}>
             {isSelectionMode ? (
                 <View style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.colors.primaryContainer }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -812,6 +837,8 @@ const GmailScreen = ({ navigation }) => {
         );
     };
 
+
+
     if (loading && !refreshing && threadList.length === 0) {
         return (
             <CRMLayout title="Gmail" navigation={navigation}>
@@ -854,7 +881,26 @@ const GmailScreen = ({ navigation }) => {
         <CRMLayout showHeader={!selectedThread || isDesktop} title="Inbox" navigation={navigation} fullWidth={true} scrollable={false}>
             {isDesktop ? (
                 <View style={{ flexDirection: 'row', flex: 1, height: '100%' }}>
-                    {renderThreadList()}
+                    <Animated.View style={{ width: sidebarWidth, borderRightWidth: 1, borderRightColor: theme.colors.outlineVariant }}>
+                        {renderThreadList()}
+                    </Animated.View>
+
+                    {/* Resizer Handle */}
+                    <View
+                        {...panResponder.panHandlers}
+                        style={{
+                            width: 24,
+                            zIndex: 100,
+                            marginLeft: -12,
+                            marginRight: -12,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            cursor: 'col-resize', // Web cursor
+                        }}
+                    >
+                        <View style={{ width: 4, height: 48, backgroundColor: theme.colors.outline, borderRadius: 2, opacity: 0.5 }} />
+                    </View>
+
                     <View style={{ flex: 1, height: '100%' }}>
                         {selectedThread ? renderThreadDetail() : (
                             <View style={[styles.center, { opacity: 0.5 }]}>
