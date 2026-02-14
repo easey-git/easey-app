@@ -477,10 +477,6 @@ const GmailScreen = ({ navigation }) => {
         if (actionType === 'read' || actionType === 'unread') {
             isReadAction = true;
             isUnread = actionType === 'unread';
-            // Optimistic UI Update: Toggle bold status
-            // setThreadList(prev => prev.map(t =>
-            //     t.id === threadId ? { ...t, isUnread: isUnread } : t
-            // ));
 
             if (isUnread) {
                 body.addLabelIds = ['UNREAD'];
@@ -489,9 +485,9 @@ const GmailScreen = ({ navigation }) => {
             }
         } else {
             // Optimistic UI Update for Archive/Trash: Remove from list immediately
-            // setSelectedThread(null);
-            // setThreadDetail(null);
-            // setThreadList(prev => prev.filter(t => t.id !== threadId));
+            setSelectedThread(null);
+            setThreadDetail(null);
+            setThreadList(prev => prev.filter(t => t.id !== threadId));
 
             if (actionType === 'archive') {
                 body.removeLabelIds = ['INBOX'];
@@ -521,19 +517,16 @@ const GmailScreen = ({ navigation }) => {
                     setThreadList(prev => prev.map(t =>
                         t.id === threadId ? { ...t, isUnread: isUnread } : t
                     ));
-                } else {
-                    // Archive/Trash
-                    setSelectedThread(null);
-                    setThreadDetail(null);
-                    setThreadList(prev => prev.filter(t => t.id !== threadId));
                 }
+                // Archive/Trash already handled optimistically
             } else {
                 Alert.alert('Error', 'Action failed on server.');
+                // Revert optimistic update? (Complex, usually we just alert and refresh)
+                fetchInbox();
             }
         } catch (error) {
             console.error('Action failed:', error);
             Alert.alert('Error', 'Action failed. Please refresh.');
-            // Revert on error? Complex to revert, typically refetch
         }
     };
 
