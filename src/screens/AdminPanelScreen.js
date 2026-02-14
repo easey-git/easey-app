@@ -41,8 +41,8 @@ const AdminPanelScreen = ({ navigation }) => {
     const [tempPermissions, setTempPermissions] = useState([]);
 
     const ROLE_PRESETS = {
-        'Manager': ['view_financial_stats', 'view_order_stats', 'access_orders', 'access_wallet', 'access_campaigns', 'access_whatsapp', 'access_analytics', 'manage_orders', 'manage_wallet', 'manage_campaigns', 'manage_users'],
-        'Support': ['view_order_stats', 'access_orders', 'access_whatsapp', 'manage_orders'],
+        'Manager': ['view_financial_stats', 'view_order_stats', 'access_orders', 'access_wallet', 'access_campaigns', 'access_whatsapp', 'access_analytics', 'gmail_view_access', 'payu_access', 'manage_orders', 'manage_wallet', 'manage_campaigns', 'manage_users'],
+        'Support': ['view_order_stats', 'access_orders', 'access_whatsapp', 'gmail_view_access', 'manage_orders'],
         'Analyst': ['view_financial_stats', 'view_order_stats', 'access_orders', 'access_analytics', 'access_campaigns'],
         'Viewer': ['view_order_stats', 'access_orders']
     };
@@ -64,6 +64,8 @@ const AdminPanelScreen = ({ navigation }) => {
         { id: 'access_whatsapp', label: 'Access WhatsApp' },
         { id: 'access_logistics', label: 'Access Logistics' },
         { id: 'access_analytics', label: 'Access Analytics' },
+        { id: 'gmail_view_access', label: 'Access Gmail' },
+        { id: 'payu_access', label: 'Access PayU' },
 
         // Management
         { id: 'manage_orders', label: 'Manage Orders' },
