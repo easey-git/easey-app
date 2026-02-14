@@ -119,7 +119,8 @@ module.exports = async (req, res) => {
                 userId: 'me',
                 maxResults: 20, // Keep individual page size manageable
                 pageToken: req.query.pageToken || undefined, // Support pagination
-                q: req.query.q || ''
+                q: req.query.q || '',
+                includeSpamTrash: true // Include Spam and Trash in results
             });
 
             // Sync tokens after API call (fetching might trigger refresh)
