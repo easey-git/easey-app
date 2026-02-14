@@ -193,30 +193,39 @@ module.exports = async (req, res) => {
             // Actually, the list response includes snippets.
             // But let's fetch 'messages' for the first message to get headers (Subject, From)
 
-            const detailedThreads = await Promise.all(threads.map(async (thread) => {
-                const threadDetails = await gmail.users.threads.get({
-                    userId: 'me',
-                    id: thread.id,
-                    format: 'metadata',
-                    metadataHeaders: ['Subject', 'From', 'Date']
-                });
+            const results = await Promise.allSettled(threads.map(async (thread) => {
+                try {
+                    const threadDetails = await gmail.users.threads.get({
+                        userId: 'me',
+                        id: thread.id,
+                        format: 'metadata',
+                        metadataHeaders: ['Subject', 'From', 'Date']
+                    });
 
-                const messages = threadDetails.data.messages || [];
-                const lastMessage = messages[messages.length - 1]; // Get latest
-                const headers = lastMessage.payload.headers;
-                const subject = headers.find(h => h.name === 'Subject')?.value || '(No Subject)';
-                const from = headers.find(h => h.name === 'From')?.value || 'Unknown';
-                const date = headers.find(h => h.name === 'Date')?.value;
+                    const messages = threadDetails.data.messages || [];
+                    const lastMessage = messages[messages.length - 1]; // Get latest
+                    const headers = lastMessage.payload.headers;
+                    const subject = headers.find(h => h.name === 'Subject')?.value || '(No Subject)';
+                    const from = headers.find(h => h.name === 'From')?.value || 'Unknown';
+                    const date = headers.find(h => h.name === 'Date')?.value;
 
-                return {
-                    id: thread.id,
-                    snippet: threadDetails.data.snippet,
-                    subject,
-                    from,
-                    date,
-                    msgCount: messages.length
-                };
+                    return {
+                        id: thread.id,
+                        snippet: threadDetails.data.snippet,
+                        subject,
+                        from,
+                        date,
+                        msgCount: messages.length
+                    };
+                } catch (e) {
+                    console.error(`Failed to fetch thread ${thread.id}:`, e.message);
+                    return null;
+                }
             }));
+
+            const detailedThreads = results
+                .filter(r => r.status === 'fulfilled' && r.value !== null)
+                .map(r => r.value);
 
             return res.status(200).json({
                 threads: detailedThreads,

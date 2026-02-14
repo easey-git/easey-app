@@ -177,6 +177,7 @@ const GmailScreen = ({ navigation }) => {
     };
     const [loadingThread, setLoadingThread] = useState(false);
     const [threadDetail, setThreadDetail] = useState(null);
+    const [isReply, setIsReply] = useState(false);
 
     // Compose State
     const [composeVisible, setComposeVisible] = useState(false);
@@ -278,6 +279,7 @@ const GmailScreen = ({ navigation }) => {
         if (isConnected) {
             setThreadList([]);
             setNextPageToken(null);
+            setSearchQuery(''); // Clear search on label change
             fetchInbox(false);
         }
     }, [currentLabel]);
@@ -436,7 +438,7 @@ const GmailScreen = ({ navigation }) => {
                     subject: composeSubject,
                     body: composeBody,
                     // If replying, add threadId here
-                    threadId: selectedThread?.id,
+                    threadId: isReply ? selectedThread?.id : undefined,
                     attachments: attachments.map(a => ({
                         name: a.name,
                         mimeType: a.mimeType,
@@ -618,6 +620,7 @@ const GmailScreen = ({ navigation }) => {
                             setComposeSubject('');
                             setComposeBody('');
                             setAttachments([]);
+                            setIsReply(false); // Ensure it's a fresh email
                             setComposeVisible(true);
                         }}
                     />
@@ -698,7 +701,12 @@ const GmailScreen = ({ navigation }) => {
                                     {item.from}
                                 </Text>
                                 <Text variant="bodySmall" style={{ color: theme.colors.outline, fontWeight: 'normal' }}>
-                                    {item.date?.split(' ')[0]}
+                                    {(() => {
+                                        if (!item.date) return '';
+                                        const d = new Date(item.date);
+                                        // If invalid date, fallback to raw string, else formatted
+                                        return isNaN(d.getTime()) ? item.date.split(' ').slice(0, 3).join(' ') : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                                    })()}
                                 </Text>
                             </View>
                             <Text variant="bodyMedium" style={{ fontWeight: 'normal', marginBottom: 2, color: theme.colors.onSurface }} numberOfLines={1}>
@@ -841,10 +849,15 @@ const GmailScreen = ({ navigation }) => {
                         mode="outlined"
                         icon="reply"
                         onPress={() => {
-                            setComposeSubject(`Re: ${selectedThread.subject}`);
+                            const originalSubject = selectedThread.subject || '';
+                            const replySubject = originalSubject.toLowerCase().startsWith('re:')
+                                ? originalSubject
+                                : `Re: ${originalSubject}`;
+                            setComposeSubject(replySubject);
                             setComposeTo(selectedThread.from);
                             setComposeBody('');
                             setAttachments([]);
+                            setIsReply(true);
                             setComposeVisible(true);
                         }}
                         style={{ alignSelf: 'flex-start' }}
