@@ -101,19 +101,15 @@ module.exports = async (req, res) => {
 
         oauth2Client.setCredentials(storedTokens);
 
-        // Handle Token Refresh Automatically
-        // Note: In a serverless environment, this callback might not complete DB write if the response is sent too fast.
-        // ideally we rely on googleapis updating credentials object and we save it manually if changed, 
-        // but the event is the standard way. We'll try to sync it.
-        oauth2Client.on('tokens', async (tokens) => {
-            console.log('Tokens refreshed');
-            if (tokens.refresh_token) {
-                await storeTokens(userId, tokens);
-            } else {
-                // If no new refresh token, merge with existing
-                await storeTokens(userId, Object.assign({}, storedTokens, tokens));
+        // Helper to sync tokens manually
+        const ensureTokensSaved = async () => {
+            const currentTokens = oauth2Client.credentials;
+            // If the current tokens are different (e.g. refreshed), save them
+            if (currentTokens && currentTokens.access_token !== storedTokens.access_token) {
+                console.log('Tokens refreshed during execution, saving...');
+                await storeTokens(userId, { ...storedTokens, ...currentTokens });
             }
-        });
+        };
 
         const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
@@ -126,7 +122,11 @@ module.exports = async (req, res) => {
                 q: req.query.q || ''
             });
 
+            // Sync tokens after API call (fetching might trigger refresh)
+            await ensureTokensSaved();
+
             const threads = response.data.threads || [];
+
 
             // Fetch validation snippet/details for each thread (batching usually better but keeping simple)
             // To be efficient, we only return IDs and snippets unless full details needed
@@ -172,6 +172,7 @@ module.exports = async (req, res) => {
                 id: id,
                 format: 'full' // Get full content
             });
+            await ensureTokensSaved();
             return res.status(200).json(response.data);
         }
 
@@ -208,6 +209,7 @@ module.exports = async (req, res) => {
                 }
             });
 
+            await ensureTokensSaved();
             return res.status(200).json(resGmail.data);
         }
 
