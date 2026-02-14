@@ -59,6 +59,10 @@ const GmailScreen = ({ navigation }) => {
         androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
         iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '', // Ensure this is set in .env as EXPO_PUBLIC_GOOGLE_CLIENT_ID
         // We will pass the code to our backend to exchange.
+        extraParams: {
+            access_type: 'offline',
+            prompt: 'consent'
+        },
         usePKCE: true,
         shouldAutoExchangeCode: false, // Critical: Backend handles the exchange
     });
@@ -151,6 +155,12 @@ const GmailScreen = ({ navigation }) => {
             }
 
             const res = await fetch(url);
+
+            if (res.status === 401) {
+                setIsConnected(false);
+                return;
+            }
+
             const data = await res.json();
 
             if (data.threads) {

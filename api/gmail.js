@@ -20,11 +20,8 @@ const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 // Redirect URI is dynamic based on the request (Expo handle)
 
-const oauth2Client = new google.auth.OAuth2(
-    CLIENT_ID,
-    CLIENT_SECRET,
-    // Redirect URI will be set per request
-);
+// Oauth2 client initialized per request
+
 
 // Helpers
 const getTokens = async (userId) => {
@@ -52,6 +49,14 @@ module.exports = async (req, res) => {
     const { method } = req;
     const { action } = req.query; // ?action=auth|list|get|send
 
+    // Create OAuth2 client per request to avoid global state issues
+    const oauth2Client = new google.auth.OAuth2(
+        CLIENT_ID,
+        CLIENT_SECRET,
+        // Redirect URI will be set dynamically if needed, or default
+        "https://easey-app.vercel.app/api/gmail" // Fallback or dynamic
+    );
+
     try {
         // 1. AUTHENTICATION (Exchange Code)
         if (method === 'POST' && action === 'auth') {
@@ -61,7 +66,7 @@ module.exports = async (req, res) => {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
 
-            // Create a new client instance for this request with the correct redirect URI
+            // Create a dedicated client for validation with the specific redirectUri used in frontend
             const authClient = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
 
             const { tokens } = await authClient.getToken({
@@ -79,7 +84,8 @@ module.exports = async (req, res) => {
         if (method === 'GET' && action === 'status') {
             const { userId } = req.query;
             const tokens = await getTokens(userId);
-            return res.status(200).json({ connected: !!tokens });
+            // Check if we have a refresh token
+            return res.status(200).json({ connected: !!tokens && !!tokens.refresh_token });
         }
 
         // --- MIDDLEWARE FOR API CALLS ---
@@ -90,15 +96,22 @@ module.exports = async (req, res) => {
         const storedTokens = await getTokens(userId);
         if (!storedTokens) return res.status(401).json({ error: 'Gmail not connected' });
 
+        // Debug: Check which tokens we have
+        console.log(`Loading tokens for ${userId}: Keys: ${Object.keys(storedTokens).join(', ')}`);
+
         oauth2Client.setCredentials(storedTokens);
 
         // Handle Token Refresh Automatically
-        oauth2Client.on('tokens', (tokens) => {
+        // Note: In a serverless environment, this callback might not complete DB write if the response is sent too fast.
+        // ideally we rely on googleapis updating credentials object and we save it manually if changed, 
+        // but the event is the standard way. We'll try to sync it.
+        oauth2Client.on('tokens', async (tokens) => {
+            console.log('Tokens refreshed');
             if (tokens.refresh_token) {
-                storeTokens(userId, tokens);
+                await storeTokens(userId, tokens);
             } else {
                 // If no new refresh token, merge with existing
-                storeTokens(userId, Object.assign({}, storedTokens, tokens));
+                await storeTokens(userId, Object.assign({}, storedTokens, tokens));
             }
         });
 
@@ -202,6 +215,10 @@ module.exports = async (req, res) => {
 
     } catch (error) {
         console.error('Gmail API Error:', error);
+        // Handle specific error for missing refresh token
+        if (error.message && (error.message.includes('No refresh token is set') || error.message.includes('invalid_grant'))) {
+            return res.status(401).json({ error: 'Authentication expired. Please reconnect Gmail.' });
+        }
         return res.status(500).json({ error: error.message });
     }
 };
