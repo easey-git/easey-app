@@ -19,7 +19,8 @@ const BASE_URL = 'https://easey-app.vercel.app/api'; // Adjust if local dev
 // Scopes required for the app
 const SCOPES = [
     'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.send'
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.modify'
 ];
 
 const GmailScreen = ({ navigation }) => {
