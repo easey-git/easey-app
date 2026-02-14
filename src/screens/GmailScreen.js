@@ -47,7 +47,7 @@ const GmailScreen = ({ navigation }) => {
 
     // Auth Request Setup
     const redirectUri = makeRedirectUri({ scheme: 'easey' });
-    console.log("📢 YOUR REDIRECT URI: ", redirectUri);
+
 
     const [request, response, promptAsync] = Google.useAuthRequest({
         responseType: ResponseType.Code,
@@ -292,38 +292,14 @@ const GmailScreen = ({ navigation }) => {
             {/* Scrollable List */}
             <FlatList
                 data={threadList}
-                renderItem={({ item }) => {
-                    const isSelected = selectedThread?.id === item.id;
-                    return (
-                        <TouchableOpacity onPress={() => loadThread(item)}>
-                            <View style={[
-                                styles.threadItem,
-                                {
-                                    backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface,
-                                    borderBottomWidth: StyleSheet.hairlineWidth,
-                                    borderBottomColor: theme.colors.outlineVariant
-                                }
-                            ]}>
-                                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 12 }}>
-                                    <Avatar.Text
-                                        size={40}
-                                        label={item.from?.charAt(0).toUpperCase() || '?'}
-                                        style={{ backgroundColor: isSelected ? theme.colors.primary : theme.colors.primaryContainer }}
-                                        color={isSelected ? theme.colors.onPrimary : theme.colors.onPrimaryContainer}
-                                    />
-                                    <View style={{ marginLeft: 12, flex: 1 }}>
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                            <Text variant="titleSmall" style={{ fontWeight: item.snippet ? 'bold' : 'normal' }} numberOfLines={1}>{item.from}</Text>
-                                            <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{item.date?.split(' ')[0]}</Text>
-                                        </View>
-                                        <Text variant="bodyMedium" style={{ fontWeight: '600', marginBottom: 2 }} numberOfLines={1}>{item.subject}</Text>
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>{item.snippet}</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
-                    );
-                }}
+                renderItem={({ item }) => (
+                    <ThreadItem
+                        item={item}
+                        theme={theme}
+                        isSelected={selectedThread?.id === item.id}
+                        onPress={() => loadThread(item)}
+                    />
+                )}
                 keyExtractor={item => item.id}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); setNextPageToken(null); fetchInbox(false); }} />}
                 onEndReached={() => fetchInbox(true)}
@@ -333,6 +309,37 @@ const GmailScreen = ({ navigation }) => {
             />
         </View>
     );
+
+    // Optimized List Item
+    const ThreadItem = React.memo(({ item, theme, isSelected, onPress }) => (
+        <TouchableOpacity onPress={onPress}>
+            <View style={[
+                styles.threadItem,
+                {
+                    backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: theme.colors.outlineVariant
+                }
+            ]}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 12 }}>
+                    <Avatar.Text
+                        size={40}
+                        label={item.from?.charAt(0).toUpperCase() || '?'}
+                        style={{ backgroundColor: isSelected ? theme.colors.primary : theme.colors.primaryContainer }}
+                        color={isSelected ? theme.colors.onPrimary : theme.colors.onPrimaryContainer}
+                    />
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                            <Text variant="titleSmall" style={{ fontWeight: item.snippet ? 'bold' : 'normal' }} numberOfLines={1}>{item.from}</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{item.date?.split(' ')[0]}</Text>
+                        </View>
+                        <Text variant="bodyMedium" style={{ fontWeight: '600', marginBottom: 2 }} numberOfLines={1}>{item.subject}</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>{item.snippet}</Text>
+                    </View>
+                </View>
+            </View>
+        </TouchableOpacity>
+    ));
 
     const renderThreadDetail = () => {
         if (loadingThread || !threadDetail) {
