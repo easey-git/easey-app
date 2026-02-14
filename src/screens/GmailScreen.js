@@ -5,6 +5,7 @@ import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform,
 import { Text, useTheme, Surface, ActivityIndicator, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox, Modal as PaperModal, FAB } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CRMLayout } from '../components/CRMLayout';
+import { AccessDenied } from '../components/AccessDenied';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
 import * as DocumentPicker from 'expo-document-picker';
@@ -24,8 +25,13 @@ const SCOPES = [
 
 const GmailScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { user } = useAuth();
+    const { user, role, hasPermission } = useAuth();
     const { isDesktop } = useResponsive();
+
+    if (role !== 'admin' && !hasPermission('gmail_access')) {
+        return <AccessDenied title="Gmail Access Restricted" message="You do not have permission to view this mailbox." />;
+    }
+
     const [loading, setLoading] = useState(true);
     const [connecting, setConnecting] = useState(false);
     const [refreshing, setRefreshing] = useState(false);

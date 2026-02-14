@@ -17,7 +17,12 @@ const TABS = [
 
 const PayUScreen = ({ navigation }) => {
     const theme = useTheme();
-    const { hasPermission } = useAuth();
+    const { hasPermission, role } = useAuth();
+
+    if (role !== 'admin' && !hasPermission('payu_access')) {
+        return <AccessDenied title="Payments Restricted" message="Contact your administrator for payment access." />;
+    }
+
     const { width } = useWindowDimensions();
     const [activeTab, setActiveTab] = useState('overview');
     const [refreshing, setRefreshing] = useState(false);
