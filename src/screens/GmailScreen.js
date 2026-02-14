@@ -599,6 +599,14 @@ const GmailScreen = ({ navigation }) => {
                 onEndReached={() => fetchInbox(true)}
                 onEndReachedThreshold={0.5}
                 ListFooterComponent={loadingMore ? <ActivityIndicator style={{ padding: 16 }} /> : null}
+                ListEmptyComponent={
+                    !loading && (
+                        <View style={[styles.center, { padding: 32 }]}>
+                            <Avatar.Icon size={64} icon="email-off-outline" style={{ backgroundColor: theme.colors.surfaceVariant }} color={theme.colors.outline} />
+                            <Text variant="titleMedium" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>No emails found</Text>
+                        </View>
+                    )
+                }
                 contentContainerStyle={{ flexGrow: 1 }}
             />
         </View>
@@ -660,7 +668,14 @@ const GmailScreen = ({ navigation }) => {
 
     const renderThreadDetail = () => {
         if (loadingThread || !threadDetail) {
-            return <View style={styles.center}><ActivityIndicator size="large" /></View>;
+            return (
+                <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                    <Text variant="bodyMedium" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>
+                        Loading conversation...
+                    </Text>
+                </View>
+            );
         }
 
         return (
@@ -797,11 +812,14 @@ const GmailScreen = ({ navigation }) => {
         );
     };
 
-    if (loading && !refreshing && !threadList.length && !isConnected) {
+    if (loading && !refreshing && threadList.length === 0) {
         return (
             <CRMLayout title="Gmail" navigation={navigation}>
                 <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
                     <ActivityIndicator size="large" color={theme.colors.primary} />
+                    <Text variant="bodyMedium" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>
+                        Loading emails...
+                    </Text>
                 </View>
             </CRMLayout>
         );
