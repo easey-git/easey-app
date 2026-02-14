@@ -43,7 +43,21 @@ const runMiddleware = (req, res, fn) => {
     });
 };
 
+// Attempt to increase body size limit (Vercel platform limit is typically 4.5MB for Serverless Functions)
+module.exports.config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '10mb',
+        },
+    },
+};
+
 module.exports = async (req, res) => {
+    // Increase limit for this specific execution if parser is customizable, 
+    // but on Vercel standard Node, `req` might already be parsed.
+    // If this is running in a Next.js environment (implied by file structure/Vercel),
+    // the config export below handles it.
+
     await runMiddleware(req, res, cors);
 
     const { method } = req;

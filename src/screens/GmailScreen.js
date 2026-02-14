@@ -318,6 +318,34 @@ const GmailScreen = ({ navigation }) => {
         }
     };
 
+    // Deletion Confirmation State
+    const [deleteConfirmation, setDeleteConfirmation] = useState({
+        visible: false,
+        isPermanent: false,
+        isBulk: false,
+        count: 0
+    });
+
+    const requestDelete = (isBulk) => {
+        const isPermanent = currentLabel === 'TRASH';
+        const count = isBulk ? selectedThreads.length : 1;
+        setDeleteConfirmation({
+            visible: true,
+            isPermanent,
+            isBulk,
+            count
+        });
+    };
+
+    const confirmDelete = () => {
+        setDeleteConfirmation(prev => ({ ...prev, visible: false }));
+        if (deleteConfirmation.isBulk) {
+            handleBulkAction('trash');
+        } else {
+            handleAction('trash');
+        }
+    };
+
     const [logoutVisible, setLogoutVisible] = useState(false);
 
     const handleLogout = () => {
@@ -547,7 +575,7 @@ const GmailScreen = ({ navigation }) => {
                     <View style={{ flexDirection: 'row' }}>
                         <View style={{ flexDirection: 'row' }}>
                             <IconButton icon="select-all" onPress={() => setSelectedThreads(threadList.map(t => t.id))} />
-                            <IconButton icon="delete" onPress={() => handleBulkAction('trash')} />
+                            <IconButton icon="delete" onPress={() => requestDelete(true)} />
                         </View>
                     </View>
                 </View>
@@ -697,7 +725,7 @@ const GmailScreen = ({ navigation }) => {
                 <Appbar.Header style={{ backgroundColor: theme.colors.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, height: 64 }}>
                     {!isDesktop && <Appbar.BackAction onPress={() => { setSelectedThread(null); setThreadDetail(null); }} />}
                     <Appbar.Content title={selectedThread.subject || "Thread"} titleStyle={{ fontSize: 18, fontWeight: 'bold' }} />
-                    <Appbar.Action icon="delete-outline" onPress={() => handleAction('trash')} />
+                    <Appbar.Action icon="delete-outline" onPress={() => requestDelete(false)} />
                 </Appbar.Header>
 
                 {/* Scrollable Messages */}
@@ -898,6 +926,24 @@ const GmailScreen = ({ navigation }) => {
                     <Dialog.Actions>
                         <Button onPress={() => setLogoutVisible(false)}>Cancel</Button>
                         <Button onPress={confirmLogout} textColor={theme.colors.error}>Disconnect</Button>
+                    </Dialog.Actions>
+                </Dialog>
+
+                <Dialog visible={deleteConfirmation.visible} onDismiss={() => setDeleteConfirmation(prev => ({ ...prev, visible: false }))} style={{ backgroundColor: theme.colors.surface }}>
+                    <Dialog.Title>{deleteConfirmation.isPermanent ? 'Delete Forever?' : 'Move to Trash?'}</Dialog.Title>
+                    <Dialog.Content>
+                        <Text variant="bodyMedium">
+                            {deleteConfirmation.isPermanent
+                                ? `Are you sure you want to permanently delete ${deleteConfirmation.count > 1 ? `these ${deleteConfirmation.count} emails` : 'this email'}? This action cannot be undone.`
+                                : `Are you sure you want to move ${deleteConfirmation.count > 1 ? `these ${deleteConfirmation.count} emails` : 'this email'} to the Trash?`
+                            }
+                        </Text>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setDeleteConfirmation(prev => ({ ...prev, visible: false }))}>Cancel</Button>
+                        <Button onPress={confirmDelete} textColor={theme.colors.error}>
+                            {deleteConfirmation.isPermanent ? 'Delete Forever' : 'Trash'}
+                        </Button>
                     </Dialog.Actions>
                 </Dialog>
 
