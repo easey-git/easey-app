@@ -4,6 +4,7 @@ import { Text, useTheme, Surface, ActivityIndicator, FAB, Appbar, Avatar, IconBu
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
+import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri, ResponseType } from 'expo-auth-session';
@@ -43,7 +44,52 @@ const GmailScreen = ({ navigation }) => {
     const [composeTo, setComposeTo] = useState('');
     const [composeSubject, setComposeSubject] = useState('');
     const [composeBody, setComposeBody] = useState('');
+    const [attachments, setAttachments] = useState([]);
     const [sending, setSending] = useState(false);
+
+    // Helper: Convert Blob to Base64
+    const blobToBase64 = (blob) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64data = reader.result.split(',')[1];
+                resolve(base64data);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    };
+
+    const pickDocument = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: '*/*',
+                copyToCacheDirectory: true,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const file = result.assets[0];
+                // Read content
+                const response = await fetch(file.uri);
+                const blob = await response.blob();
+                const base64 = await blobToBase64(blob);
+
+                setAttachments(prev => [...prev, {
+                    name: file.name,
+                    mimeType: file.mimeType,
+                    uri: file.uri,
+                    data: base64
+                }]);
+            }
+        } catch (err) {
+            console.error('Attachment error:', err);
+            Alert.alert('Error', 'Failed to attach file.');
+        }
+    };
+
+    const removeAttachment = (index) => {
+        setAttachments(prev => prev.filter((_, i) => i !== index));
+    };
 
     // Auth Request Setup
     const redirectUri = makeRedirectUri({ scheme: 'easey' });
@@ -211,7 +257,12 @@ const GmailScreen = ({ navigation }) => {
                     subject: composeSubject,
                     body: composeBody,
                     // If replying, add threadId here
-                    threadId: selectedThread?.id
+                    threadId: selectedThread?.id,
+                    attachments: attachments.map(a => ({
+                        name: a.name,
+                        mimeType: a.mimeType,
+                        data: a.data
+                    }))
                 })
             });
 
@@ -220,6 +271,7 @@ const GmailScreen = ({ navigation }) => {
                 setComposeTo('');
                 setComposeSubject('');
                 setComposeBody('');
+                setAttachments([]);
                 Alert.alert('Sent', 'Email sent successfully.');
                 fetchInbox();
             } else {
@@ -319,6 +371,7 @@ const GmailScreen = ({ navigation }) => {
                         setComposeTo('');
                         setComposeSubject('');
                         setComposeBody('');
+                        setAttachments([]);
                         setComposeVisible(true);
                     }}
                 />
@@ -507,6 +560,8 @@ const GmailScreen = ({ navigation }) => {
                         onPress={() => {
                             setComposeSubject(`Re: ${selectedThread.subject}`);
                             setComposeTo(selectedThread.from);
+                            setComposeBody('');
+                            setAttachments([]);
                             setComposeVisible(true);
                         }}
                         style={{ alignSelf: 'flex-start' }}
@@ -585,7 +640,24 @@ const GmailScreen = ({ navigation }) => {
                     <Dialog.Content>
                         <TextInput label="To" mode="outlined" value={composeTo} onChangeText={setComposeTo} style={{ marginBottom: 12 }} dense />
                         <TextInput label="Subject" mode="outlined" value={composeSubject} onChangeText={setComposeSubject} style={{ marginBottom: 12 }} dense />
-                        <TextInput label="Message" mode="outlined" value={composeBody} onChangeText={setComposeBody} multiline numberOfLines={10} style={{ maxHeight: 300 }} />
+                        <TextInput label="Message" mode="outlined" value={composeBody} onChangeText={setComposeBody} multiline numberOfLines={10} style={{ maxHeight: 300, marginBottom: 12 }} />
+
+                        {/* Attachments List */}
+                        {attachments.length > 0 && (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                                {attachments.map((file, index) => (
+                                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surfaceVariant, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 16 }}>
+                                        <Avatar.Icon size={24} icon="file" style={{ backgroundColor: 'transparent' }} color={theme.colors.onSurfaceVariant} />
+                                        <Text variant="bodySmall" style={{ maxWidth: 150 }} numberOfLines={1}>{file.name}</Text>
+                                        <IconButton icon="close" size={16} onPress={() => removeAttachment(index)} />
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <Button icon="paperclip" mode="text" onPress={pickDocument} style={{ alignSelf: 'flex-start' }}>
+                            Attach File
+                        </Button>
                     </Dialog.Content>
                     <Dialog.Actions>
                         <Button onPress={() => setComposeVisible(false)}>Cancel</Button>
