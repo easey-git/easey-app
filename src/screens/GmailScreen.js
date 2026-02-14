@@ -119,27 +119,20 @@ const GmailScreen = ({ navigation }) => {
 
         const threadsToProcess = [...selectedThreads];
         let body = { threadIds: threadsToProcess };
+        let isReadAction = false;
+        let isUnread = false;
 
         if (actionType === 'read' || actionType === 'unread') {
-            const isUnread = actionType === 'unread';
-            // Optimistic UI: toggle bold, keep in list
-            setThreadList(prev => prev.map(t =>
-                threadsToProcess.includes(t.id) ? { ...t, isUnread } : t
-            ));
+            isReadAction = true;
+            isUnread = actionType === 'unread';
 
             if (isUnread) {
                 body.addLabelIds = ['UNREAD'];
             } else {
                 body.removeLabelIds = ['UNREAD'];
             }
-            // Clear selection on success? Or keep it? Industry standard usually clears selection.
-            setSelectedThreads([]);
         } else {
             // Archive / Trash
-            // Optimistic UI: Remove from list
-            setThreadList(prev => prev.filter(t => !threadsToProcess.includes(t.id)));
-            setSelectedThreads([]);
-
             if (actionType === 'archive') {
                 body.removeLabelIds = ['INBOX'];
             } else if (actionType === 'trash') {
@@ -149,15 +142,29 @@ const GmailScreen = ({ navigation }) => {
         }
 
         try {
-            await fetch(`${BASE_URL}/gmail?action=modify`, {
+            const res = await fetch(`${BASE_URL}/gmail?action=modify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.uid, ...body })
             });
+
+            if (res.ok) {
+                // Update UI ONLY after server confirmation
+                if (isReadAction) {
+                    setThreadList(prev => prev.map(t =>
+                        threadsToProcess.includes(t.id) ? { ...t, isUnread } : t
+                    ));
+                } else {
+                    // Archive / Trash
+                    setThreadList(prev => prev.filter(t => !threadsToProcess.includes(t.id)));
+                }
+                setSelectedThreads([]); // Clear selection on success
+            } else {
+                Alert.alert('Error', 'Bulk action failed.');
+            }
         } catch (error) {
             console.error(error);
-            // Revert on error
-            fetchInbox();
+            Alert.alert('Error', 'Network error.');
         }
     };
     const [loadingThread, setLoadingThread] = useState(false);
@@ -322,17 +329,22 @@ const GmailScreen = ({ navigation }) => {
         setThreadDetail(null); // Clear previous detail immediately
         setLoadingThread(true);
 
-        // Optimistically mark as read in the list
+        // Server-Side Update: Mark as read
         if (thread.isUnread) {
-            setThreadList(prev => prev.map(t =>
-                t.id === thread.id ? { ...t, isUnread: false } : t
-            ));
-            // Silently sync with backend
             fetch(`${BASE_URL}/gmail?action=modify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.uid, threadId: thread.id, removeLabelIds: ['UNREAD'] })
-            }).catch(e => console.error("Failed to mark read silently", e));
+            })
+                .then(res => {
+                    if (res.ok) {
+                        // Update list ONLY after server confirms success
+                        setThreadList(prev => prev.map(t =>
+                            t.id === thread.id ? { ...t, isUnread: false } : t
+                        ));
+                    }
+                })
+                .catch(e => console.error("Failed to mark read", e));
         }
 
         try {
@@ -406,14 +418,16 @@ const GmailScreen = ({ navigation }) => {
         const threadId = selectedThread.id;
 
         let body = { threadId };
+        let isReadAction = false;
+        let isUnread = false;
 
         if (actionType === 'read' || actionType === 'unread') {
-            const isUnread = actionType === 'unread';
-
+            isReadAction = true;
+            isUnread = actionType === 'unread';
             // Optimistic UI Update: Toggle bold status
-            setThreadList(prev => prev.map(t =>
-                t.id === threadId ? { ...t, isUnread: isUnread } : t
-            ));
+            // setThreadList(prev => prev.map(t =>
+            //     t.id === threadId ? { ...t, isUnread: isUnread } : t
+            // ));
 
             if (isUnread) {
                 body.addLabelIds = ['UNREAD'];
@@ -422,9 +436,9 @@ const GmailScreen = ({ navigation }) => {
             }
         } else {
             // Optimistic UI Update for Archive/Trash: Remove from list immediately
-            setSelectedThread(null);
-            setThreadDetail(null);
-            setThreadList(prev => prev.filter(t => t.id !== threadId));
+            // setSelectedThread(null);
+            // setThreadDetail(null);
+            // setThreadList(prev => prev.filter(t => t.id !== threadId));
 
             if (actionType === 'archive') {
                 body.removeLabelIds = ['INBOX'];
@@ -435,11 +449,27 @@ const GmailScreen = ({ navigation }) => {
         }
 
         try {
-            await fetch(`${BASE_URL}/gmail?action=modify`, {
+            const res = await fetch(`${BASE_URL}/gmail?action=modify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.uid, ...body })
             });
+
+            if (res.ok) {
+                // Update UI ONLY after server confirmation
+                if (isReadAction) {
+                    setThreadList(prev => prev.map(t =>
+                        t.id === threadId ? { ...t, isUnread: isUnread } : t
+                    ));
+                } else {
+                    // Archive/Trash
+                    setSelectedThread(null);
+                    setThreadDetail(null);
+                    setThreadList(prev => prev.filter(t => t.id !== threadId));
+                }
+            } else {
+                Alert.alert('Error', 'Action failed on server.');
+            }
         } catch (error) {
             console.error('Action failed:', error);
             Alert.alert('Error', 'Action failed. Please refresh.');
