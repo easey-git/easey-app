@@ -2,7 +2,7 @@
 /* global process */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Animated, PanResponder, ScrollView } from 'react-native';
-import { Text, useTheme, Surface, ActivityIndicator, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox, Modal as PaperModal } from 'react-native-paper';
+import { Text, useTheme, Surface, ActivityIndicator, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox, Modal as PaperModal, FAB } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
@@ -576,11 +576,9 @@ const GmailScreen = ({ navigation }) => {
                 </View>
             ) : (
                 <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                    {!isDesktop && <IconButton icon="menu" onPress={() => navigation.toggleDrawer?.()} />}
-
                     <TextInput
                         mode="outlined"
-                        placeholder={currentLabel === 'ALL' ? 'Search all mail' : `Search ${currentLabel.toLowerCase()}`}
+                        placeholder={currentLabel === 'ALL' ? 'Search mail' : `Search ${currentLabel.toLowerCase()}`}
                         value={searchQuery}
                         onChangeText={onChangeSearch}
                         onSubmitEditing={onSearch}
@@ -601,10 +599,50 @@ const GmailScreen = ({ navigation }) => {
                     />
 
                     <IconButton
+                        icon="logout"
+                        mode="outlined"
+                        onPress={handleLogout}
+                    />
+                </View>
+            )}
+
+            <View style={{ flex: 1 }}>
+                <FlatList
+                    data={threadList}
+                    renderItem={({ item }) => (
+                        <ThreadItem
+                            item={item}
+                            theme={theme}
+                            currentLabel={currentLabel}
+                            isSelected={selectedThread?.id === item.id}
+                            isMultiSelect={isSelectionMode}
+                            isChecked={selectedThreads.includes(item.id)}
+                            onToggle={() => toggleSelection(item.id)}
+                            onPress={() => {
+                                if (isSelectionMode) toggleSelection(item.id);
+                                else loadThread(item);
+                            }}
+                            onLongPress={() => toggleSelection(item.id)}
+                        />
+                    )}
+                    keyExtractor={item => item.id}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); setNextPageToken(null); fetchInbox(false); }} />}
+                    onEndReached={() => fetchInbox(true)}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={loadingMore && <ActivityIndicator style={{ margin: 16 }} />}
+                />
+
+                {!isSelectionMode && (
+                    <FAB
                         icon="pencil"
-                        mode="contained"
-                        containerColor={theme.colors.primary}
-                        iconColor={theme.colors.onPrimary}
+                        label={isDesktop ? "Compose" : null}
+                        style={{
+                            position: 'absolute',
+                            margin: 16,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: theme.colors.primaryContainer
+                        }}
                         onPress={() => {
                             setComposeTo('');
                             setComposeSubject('');
@@ -614,48 +652,9 @@ const GmailScreen = ({ navigation }) => {
                             setComposeVisible(true);
                         }}
                     />
-
-                    <IconButton
-                        icon="logout"
-                        mode="outlined"
-                        onPress={handleLogout}
-                    />
-                </View>
-            )}
-
-            <FlatList
-                data={threadList}
-                renderItem={({ item }) => (
-                    <ThreadItem
-                        item={item}
-                        theme={theme}
-                        currentLabel={currentLabel}
-                        isSelected={selectedThread?.id === item.id}
-                        isMultiSelect={isSelectionMode}
-                        isChecked={selectedThreads.includes(item.id)}
-                        onToggle={() => toggleSelection(item.id)}
-                        onPress={() => {
-                            if (isSelectionMode) toggleSelection(item.id);
-                            else loadThread(item);
-                        }}
-                        onLongPress={() => toggleSelection(item.id)}
-                    />
                 )}
-                keyExtractor={item => item.id}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); setNextPageToken(null); fetchInbox(false); }} />}
-                onEndReached={() => fetchInbox(true)}
-                onEndReachedThreshold={0.5}
-                ListFooterComponent={loadingMore ? <ActivityIndicator style={{ padding: 16 }} /> : null}
-                ListEmptyComponent={
-                    !loading && (
-                        <View style={[styles.center, { padding: 32 }]}>
-                            <Avatar.Icon size={64} icon="email-off-outline" style={{ backgroundColor: theme.colors.surfaceVariant }} color={theme.colors.outline} />
-                            <Text variant="titleMedium" style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>No emails found</Text>
-                        </View>
-                    )
-                }
-                contentContainerStyle={{ flexGrow: 1 }}
-            />
+            </View>
+
         </View>
     );
 
