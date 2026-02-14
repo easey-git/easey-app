@@ -1,6 +1,8 @@
+/* eslint-disable react/prop-types */
+/* global process */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Animated, PanResponder } from 'react-native';
-import { Text, useTheme, Surface, ActivityIndicator, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox, FAB } from 'react-native-paper';
+import { Text, useTheme, Surface, ActivityIndicator, Appbar, Avatar, IconButton, Dialog, Portal, TextInput, Button, Checkbox } from 'react-native-paper';
 import { CRMLayout } from '../components/CRMLayout';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
@@ -189,11 +191,9 @@ const GmailScreen = ({ navigation }) => {
 
         const threadsToProcess = [...selectedThreads];
         let body = { threadIds: threadsToProcess };
-        let isReadAction = false;
         let isUnread = false;
 
         if (actionType === 'read' || actionType === 'unread') {
-            isReadAction = true;
             isUnread = actionType === 'unread';
 
             if (isUnread) {
@@ -376,7 +376,7 @@ const GmailScreen = ({ navigation }) => {
             if (activeThreadIdRef.current === thread.id) {
                 setThreadDetail(data);
             }
-        } catch (error) {
+        } catch {
             if (activeThreadIdRef.current === thread.id) {
                 console.error('Could not load email');
             }
@@ -690,6 +690,7 @@ const GmailScreen = ({ navigation }) => {
             </TouchableOpacity>
         )
     });
+    ThreadItem.displayName = 'ThreadItem';
 
     const renderThreadDetail = () => {
         if (loadingThread || !threadDetail) {
@@ -755,26 +756,39 @@ const GmailScreen = ({ navigation }) => {
                                     {Platform.OS === 'web' ? (
                                         <iframe
                                             srcDoc={`
-                                                <!DOCTYPE html>
-                                                <html><head><style>
-                                                    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; color: #000; }
-                                                    a { color: ${theme.colors.primary}; }
-                                                    img { max-width: 100%; height: auto; }
-                                                    .gmail_quote { margin-left: 0; padding-left: 0; border-left: none; }
-                                                </style></head>
-                                                <body>
-                                                    ${htmlContent}
-                                                    <script>
-                                                        window.onload = function() {
-                                                            var height = document.body.scrollHeight + 40;
-                                                            window.frameElement.style.height = height + 'px';
-                                                        }
-                                                    </script>
-                                                </body></html>
-                                            `}
+                                                    <!DOCTYPE html>
+                                                    <html><head>
+                                                    <base target="_blank">
+                                                    <style>
+                                                        body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; color: #000; }
+                                                        a { color: ${theme.colors.primary}; }
+                                                        img { max-width: 100%; height: auto; }
+                                                        .gmail_quote { margin-left: 0; padding-left: 0; border-left: none; }
+                                                    </style></head>
+                                                    <body>
+                                                        ${htmlContent}
+                                                        <script>
+                                                            window.onload = function() {
+                                                                var height = document.body.scrollHeight + 40;
+                                                                window.frameElement.style.height = height + 'px';
+                                                            }
+                                                            
+                                                            document.addEventListener('click', function(e) {
+                                                                var target = e.target.closest('a');
+                                                                if (target) {
+                                                                    e.preventDefault();
+                                                                    var href = target.href;
+                                                                    if (confirm('You are about to leave Easey to open an external link:\\n\\n' + href + '\\n\\nDo you want to continue?')) {
+                                                                        window.open(href, '_blank');
+                                                                    }
+                                                                }
+                                                            });
+                                                        </script>
+                                                    </body></html>
+                                                `}
                                             style={{ width: '100%', height: '400px', border: 'none' }}
                                             title="Email Content"
-                                            sandbox="allow-same-origin allow-scripts"
+                                            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals"
                                         />
                                     ) : (
                                         <WebView source={{ html: htmlContent }} style={{ height: 400 }} />
