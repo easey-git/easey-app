@@ -130,21 +130,37 @@ const GmailScreen = ({ navigation }) => {
             } else {
                 body.removeLabelIds = ['UNREAD'];
             }
+
+            // Optimistic UI for Read/Unread
+            setThreadList(prev => prev.map(t =>
+                threadsToProcess.includes(t.id) ? { ...t, isUnread } : t
+            ));
         } else {
-            // Archive / Trash
-            // Archive / Trash
+            // Archive / Trash / Delete Forever
+            // Optimistic UI: Remove from list
+            setThreadList(prev => prev.filter(t => !threadsToProcess.includes(t.id)));
+
+            // Optimistic UI: If currently viewing one of these, clear the view
+            if (selectedThread && threadsToProcess.includes(selectedThread.id)) {
+                setSelectedThread(null);
+                setThreadDetail(null);
+            }
+
             if (actionType === 'archive') {
                 body.removeLabelIds = ['INBOX'];
             } else if (actionType === 'trash') {
                 if (currentLabel === 'TRASH') {
                     // Permanent Delete
-                    // We need a different action endpoint
+                    // We need a different action endpoint, body handled below logic usually but fine here
                 } else {
                     body.addLabelIds = ['TRASH'];
                     body.removeLabelIds = ['INBOX'];
                 }
             }
         }
+
+        // Clear selection immediately
+        setSelectedThreads([]);
 
         try {
             const isPermanentDelete = actionType === 'trash' && currentLabel === 'TRASH';
@@ -156,23 +172,14 @@ const GmailScreen = ({ navigation }) => {
                 body: JSON.stringify({ userId: user.uid, ...body })
             });
 
-            if (res.ok) {
-                // Update UI ONLY after server confirmation
-                if (isReadAction) {
-                    setThreadList(prev => prev.map(t =>
-                        threadsToProcess.includes(t.id) ? { ...t, isUnread } : t
-                    ));
-                } else {
-                    // Archive / Trash
-                    setThreadList(prev => prev.filter(t => !threadsToProcess.includes(t.id)));
-                }
-                setSelectedThreads([]); // Clear selection on success
-            } else {
-                Alert.alert('Error', 'Bulk action failed.');
+            if (!res.ok) {
+                Alert.alert('Error', 'Bulk action failed. Refreshing...');
+                fetchInbox(); // Revert state by fetching fresh
             }
         } catch (error) {
             console.error(error);
             Alert.alert('Error', 'Network error.');
+            fetchInbox();
         }
     };
     const [loadingThread, setLoadingThread] = useState(false);
