@@ -619,9 +619,32 @@ const PayUScreen = ({ navigation }) => {
             dates.reverse();
 
             const promises = dates.map(date => getSettlementDetails(date).then(res => ({ date, ...res })).catch(err => ({ date, error: err })));
-            const results = await Promise.all(promises);
+
+            // Also fetch transaction details for the same overall range to find unsettled (In Progress)
+            const getLocalDateStr = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            const txnStart = new Date(settlementStartDate);
+            const txnEnd = new Date(settlementEndDate);
+            const txnChunks = [];
+            let curr = new Date(txnStart);
+            while (curr <= txnEnd) {
+                const chunkStart = new Date(curr);
+                const chunkEnd = new Date(curr);
+                chunkEnd.setDate(chunkEnd.getDate() + 6);
+                if (chunkEnd > txnEnd) chunkEnd.setTime(txnEnd.getTime());
+                txnChunks.push({ from: getLocalDateStr(chunkStart), to: getLocalDateStr(chunkEnd) });
+                curr.setDate(curr.getDate() + 7);
+            }
+            const txnPromises = txnChunks.map(chunk => getTransactionDetails(chunk.from, chunk.to).catch(e => ({ error: e })));
+
+            const [results, txnResults] = await Promise.all([Promise.all(promises), Promise.all(txnPromises)]);
 
             let allSettlements = [];
+            const settledTxnIds = new Set();
 
             results.forEach(res => {
                 // Extract using helper
@@ -629,19 +652,122 @@ const PayUScreen = ({ navigation }) => {
                 if (dailySettlements.length > 0) {
                     // Inject the query date into each record if missing
                     // Also robustly find UTR which might be in different keys
-                    const enhancedList = dailySettlements.map(item => ({
-                        ...item,
-                        settlement_date: item.settlement_date || item.date || res.date, // Use the query date if item date is missing
-                        utr_display: item.utr_no || item.bank_ref_num || item.UTR || item.utr || item.ref_num || item.Reference_Id || 'N/A'
-                    }));
+                    const enhancedList = dailySettlements.map(item => {
+                        const txnid = item.txnid || item.mer_txnid || item.merchant_txn_id;
+                        if (txnid) settledTxnIds.add(txnid);
+                        return {
+                            ...item,
+                            settlement_date: item.settlement_date || item.date || res.date, // Use the query date if item date is missing
+                            utr_display: item.utr_no || item.bank_ref_num || item.UTR || item.utr || item.ref_num || item.Reference_Id || item.mer_utr || 'N/A'
+                        };
+                    });
                     allSettlements = [...allSettlements, ...enhancedList];
                 }
             });
 
-            // De-duplicate based on txnid or mer_txnId if possible, but settlements are usually unique per UTR/Action
-            setSettlementList(allSettlements);
+            // Group transactions by Date and UTR to match PayU Dashboard
+            const groupedSettlementsMap = {};
 
-            if (allSettlements.length === 0) {
+            allSettlements.forEach(item => {
+                const dateRaw = item.settlement_date;
+                const utr = item.utr_display;
+                const status = (utr === 'N/A' || !utr) ? 'In Progress' : 'Settled';
+                const key = `${dateRaw}_${utr}`;
+
+                if (!groupedSettlementsMap[key]) {
+                    groupedSettlementsMap[key] = {
+                        dateRaw: dateRaw,
+                        utr: utr,
+                        salesAmount: 0,
+                        fees: 0,
+                        taxes: 0,
+                        settledAmount: 0,
+                        status: status,
+                        txn_count: 0
+                    };
+                }
+
+                groupedSettlementsMap[key].salesAmount += parseFloat(item.amount || item.mer_amount || item.requestamount || 0);
+                groupedSettlementsMap[key].fees += parseFloat(item.mer_service_fee || item.fee || item.charge || 0);
+                groupedSettlementsMap[key].taxes += parseFloat(item.mer_service_tax || item.tax || 0);
+                // mer_net_amount is usually the exact settled value
+                groupedSettlementsMap[key].settledAmount += parseFloat(item.mer_net_amount || item.net_amount || item.amount || 0);
+                groupedSettlementsMap[key].txn_count += 1;
+            });
+
+            // Find In Progress (unsettled) transactions
+            let combinedTxns = [];
+            txnResults.forEach(result => {
+                if (result.status === 1 || result.status === 'success') {
+                    const details = result.Transaction_Details || result.Transaction_details;
+                    if (Array.isArray(details)) combinedTxns = [...combinedTxns, ...details];
+                    else if (details && typeof details === 'object') combinedTxns = [...combinedTxns, ...Object.values(details)];
+                    else if (Array.isArray(result.data)) combinedTxns = [...combinedTxns, ...result.data];
+                }
+            });
+
+            const inProgressTxns = combinedTxns.filter(t =>
+                (t.status === 'success' || t.status === 'captured') &&
+                !settledTxnIds.has(t.txnid)
+            );
+
+            if (inProgressTxns.length > 0) {
+                let inProgSales = 0;
+                let inProgFees = 0;
+                let inProgTaxes = 0;
+                let inProgLatestDate = new Date(0);
+
+                inProgressTxns.forEach(t => {
+                    inProgSales += parseFloat(t.amount || 0);
+                    inProgFees += parseFloat(t.mer_service_fee || 0);
+                    inProgTaxes += parseFloat(t.mer_service_tax || 0);
+                    if (t.addedon || t.date) {
+                        const tDate = new Date((t.addedon || t.date).split(' ')[0]);
+                        if (tDate > inProgLatestDate) {
+                            inProgLatestDate = tDate;
+                        }
+                    }
+                });
+
+                let dateFormatted = inProgLatestDate > new Date(0) ? getLocalDateStr(inProgLatestDate) : getLocalDateStr(new Date());
+
+                groupedSettlementsMap['IN_PROGRESS'] = {
+                    dateRaw: dateFormatted,
+                    utr: '--',
+                    salesAmount: inProgSales,
+                    fees: inProgFees,
+                    taxes: inProgTaxes,
+                    settledAmount: inProgSales - inProgFees - inProgTaxes,
+                    status: 'In Progress',
+                    txn_count: inProgressTxns.length
+                };
+            }
+
+            const formatPayUDate = (dateStr) => {
+                if (!dateStr) return 'N/A';
+                const d = new Date(dateStr);
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                return `${d.getDate()} ${months[d.getMonth()]}'${String(d.getFullYear()).slice(-2)}`;
+            };
+
+            const groupedSettlements = Object.values(groupedSettlementsMap)
+                .map(item => ({ ...item, displayDate: formatPayUDate(item.dateRaw) }))
+                .sort((a, b) => {
+                    const dateA = new Date(a.dateRaw).getTime();
+                    const dateB = new Date(b.dateRaw).getTime();
+                    if (dateA !== dateB) return dateB - dateA; // Date DESC
+
+                    if (a.utr === '--') return -1;
+                    if (b.utr === '--') return 1;
+
+                    if (a.utr > b.utr) return -1;
+                    if (a.utr < b.utr) return 1;
+                    return 0;
+                });
+
+            setSettlementList(groupedSettlements);
+
+            if (groupedSettlements.length === 0) {
                 showSnackbar(`No settlements found from ${formatDate(settlementStartDate)} to ${formatDate(settlementEndDate)}`);
             }
 
@@ -730,34 +856,44 @@ const PayUScreen = ({ navigation }) => {
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
                             <DataTable style={{ minWidth: width > 900 ? '100%' : 800 }}>
                                 <DataTable.Header>
-                                    <DataTable.Title style={{ flex: 2.5 }}>Txn ID</DataTable.Title>
-                                    <DataTable.Title style={{ flex: 2 }}>UTR / Bank Ref</DataTable.Title>
-                                    <DataTable.Title numeric style={{ flex: 1.2, paddingRight: 16 }}>Amount</DataTable.Title>
-                                    <DataTable.Title style={{ flex: 1.5, justifyContent: 'center' }}>Date</DataTable.Title>
+                                    <DataTable.Title style={{ flex: 1.5 }}>Date</DataTable.Title>
+                                    <DataTable.Title style={{ flex: 2 }}>UTR Number</DataTable.Title>
+                                    <DataTable.Title numeric style={{ flex: 1.5 }}>Sales Amount</DataTable.Title>
+                                    <DataTable.Title numeric style={{ flex: 1 }}>Fees</DataTable.Title>
+                                    <DataTable.Title numeric style={{ flex: 1.5, paddingRight: 16 }}>Settled Amount</DataTable.Title>
                                     <DataTable.Title style={{ flex: 1.5, justifyContent: 'center' }}>Status</DataTable.Title>
                                 </DataTable.Header>
                                 {settlementList.map((txn, i) => (
                                     <DataTable.Row key={i}>
-                                        <DataTable.Cell style={{ flex: 2.5 }}>
-                                            <Text variant="labelSmall" selectable numberOfLines={1} ellipsizeMode="middle">{txn.txnid || txn.mer_txnid || 'N/A'}</Text>
+                                        <DataTable.Cell style={{ flex: 1.5 }}>
+                                            <View>
+                                                <Text variant="bodySmall">{txn.displayDate || 'N/A'}</Text>
+                                                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>{txn.txn_count} {txn.txn_count === 1 ? 'txn' : 'txns'}</Text>
+                                            </View>
                                         </DataTable.Cell>
                                         <DataTable.Cell style={{ flex: 2 }}>
-                                            <Text variant="bodySmall" selectable numberOfLines={1}>{txn.utr_display || txn.utr_no || txn.bank_ref_num || 'N/A'}</Text>
+                                            <Text variant="labelSmall" selectable numberOfLines={1}>{txn.utr}</Text>
                                         </DataTable.Cell>
-                                        <DataTable.Cell numeric style={{ flex: 1.2, paddingRight: 16 }}>
-                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>₹{parseFloat(txn.amount || txn.mer_amount || 0).toFixed(2)}</Text>
+                                        <DataTable.Cell numeric style={{ flex: 1.5 }}>
+                                            <Text variant="bodyMedium">₹{parseFloat(txn.salesAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
                                         </DataTable.Cell>
-                                        <DataTable.Cell style={{ flex: 1.5, justifyContent: 'center' }}>
-                                            <Text variant="bodySmall">{txn.settlement_date || txn.date || 'N/A'}</Text>
+                                        <DataTable.Cell numeric style={{ flex: 1 }}>
+                                            <Text variant="bodyMedium" style={{ color: theme.colors.error }}>₹{parseFloat(txn.fees + txn.taxes).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                                        </DataTable.Cell>
+                                        <DataTable.Cell numeric style={{ flex: 1.5, paddingRight: 16 }}>
+                                            <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>₹{parseFloat(txn.settledAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
                                         </DataTable.Cell>
                                         <DataTable.Cell style={{ flex: 1.5, justifyContent: 'center' }}>
                                             <Chip
                                                 compact
                                                 mode="flat"
-                                                style={{ backgroundColor: theme.colors.primaryContainer, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}
+                                                style={{
+                                                    backgroundColor: txn.status === 'Settled' ? theme.colors.primaryContainer : theme.colors.secondaryContainer,
+                                                    height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 12
+                                                }}
                                                 textStyle={{ fontSize: 11, marginVertical: 0, marginHorizontal: 2, lineHeight: 14 }}
                                             >
-                                                Settled
+                                                {txn.status}
                                             </Chip>
                                         </DataTable.Cell>
                                     </DataTable.Row>
