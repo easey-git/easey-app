@@ -91,6 +91,7 @@ const GmailScreen = ({ navigation }) => {
         clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
         androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
         iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
         extraParams: {
             access_type: 'offline',
             prompt: 'consent'
