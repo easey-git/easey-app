@@ -45,7 +45,7 @@ const StatChart = ({ title, data, theme }) => {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', gap: Platform.OS === 'web' ? 64 : 24 }}>
                 <View style={{ width: chartSize, alignItems: 'center' }}>
                     <PieChart
-                        data={data}
+                        data={data.map(d => ({ ...d, amount: Math.abs(d.amount) / 100 }))}
                         width={chartSize}
                         height={chartSize}
                         chartConfig={CHART_CONFIG}
@@ -153,12 +153,12 @@ const WalletScreen = ({ navigation }) => {
 
         // CASE 1: All Time (Server Stats Doc)
         if (timeRange === 'all') {
-            if (allTimeStats && allTimeStats.descriptionBreakdown) {
+            if (allTimeStats && allTimeStats.descriptionBreakdown && Object.keys(allTimeStats.descriptionBreakdown.income || {}).length > 0) {
                 const descs = allTimeStats.descriptionBreakdown;
                 if (descs.income) Object.keys(descs.income).forEach(key => incomeItemTotals[key] = descs.income[key]);
                 if (descs.expense) Object.keys(descs.expense).forEach(key => expenseItemTotals[key] = descs.expense[key]);
             }
-            // Fallback to Category
+            // Fallback
             else if (allTimeStats && allTimeStats.categoryBreakdown) {
                 const cats = allTimeStats.categoryBreakdown;
                 if (cats.income) Object.keys(cats.income).forEach(key => incomeItemTotals[key] = cats.income[key]);

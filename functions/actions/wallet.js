@@ -134,11 +134,13 @@ exports.deleteTransaction = onCall(async (request) => {
             const increment = admin.firestore.FieldValue.increment;
             const statsUpdate = {};
             const histUpdate = {};
+            const descKey = (txData.description || 'Unknown').replace(/\./g, '_');
 
             if (type === 'income') {
                 statsUpdate.balance = increment(-amount);
                 statsUpdate.income = increment(-amount);
                 statsUpdate[`categoryBreakdown.income.${category}`] = increment(-amount);
+                statsUpdate[`descriptionBreakdown.income.${descKey}`] = increment(-amount);
 
                 histUpdate.income = increment(-amount);
                 histUpdate.balance = increment(-amount);
@@ -146,6 +148,7 @@ exports.deleteTransaction = onCall(async (request) => {
                 statsUpdate.balance = increment(amount);
                 statsUpdate.expense = increment(-amount);
                 statsUpdate[`categoryBreakdown.expense.${category}`] = increment(-amount);
+                statsUpdate[`descriptionBreakdown.expense.${descKey}`] = increment(-amount);
 
                 histUpdate.expense = increment(-amount);
                 histUpdate.balance = increment(amount);

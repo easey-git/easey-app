@@ -70,6 +70,10 @@ export const WalletService = {
                 categoryBreakdown: {
                     income: {},
                     expense: {}
+                },
+                descriptionBreakdown: {
+                    income: {},
+                    expense: {}
                 }
             };
 
@@ -104,15 +108,18 @@ export const WalletService = {
 
                     const type = data.type;
                     const category = data.category || 'Misc';
+                    const descKey = (data.description || 'Unknown').replace(/\./g, '_'); // safe key
 
                     if (type === 'income') {
                         newStats.income += amount;
                         newStats.balance += amount;
                         newStats.categoryBreakdown.income[category] = (newStats.categoryBreakdown.income[category] || 0) + amount;
+                        newStats.descriptionBreakdown.income[descKey] = (newStats.descriptionBreakdown.income[descKey] || 0) + amount;
                     } else {
                         newStats.expense += amount;
                         newStats.balance -= amount;
                         newStats.categoryBreakdown.expense[category] = (newStats.categoryBreakdown.expense[category] || 0) + amount;
+                        newStats.descriptionBreakdown.expense[descKey] = (newStats.descriptionBreakdown.expense[descKey] || 0) + amount;
                     }
                 });
 
