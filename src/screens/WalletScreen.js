@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, SectionList, ScrollView } from 'react-native';
-import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar, Banner, ProgressBar } from 'react-native-paper';
+import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar, Banner, ProgressBar, Dialog } from 'react-native-paper';
 import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDoc, getDocs, startAfter, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { WalletService } from '../services/walletService';
@@ -92,6 +92,9 @@ const WalletScreen = ({ navigation }) => {
     const [dataLoading, setDataLoading] = useState(true);
     const [displayLimit, setDisplayLimit] = useState(50); // Pagination Limit
 
+    // Delete Dialog State
+    const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+    const [transactionToDelete, setTransactionToDelete] = useState(null);
 
 
     // Filters
@@ -474,25 +477,9 @@ const WalletScreen = ({ navigation }) => {
     }, [showSnackbar, hasPermission, user]);
 
     const confirmDelete = useCallback((id) => {
-        if (Platform.OS === 'web') {
-            if (window.confirm("Are you sure you want to delete this transaction?")) {
-                handleDelete(id);
-            }
-        } else {
-            Alert.alert(
-                "Delete Transaction",
-                "Are you sure you want to delete this transaction?",
-                [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                        text: "Delete",
-                        style: "destructive",
-                        onPress: () => handleDelete(id)
-                    }
-                ]
-            );
-        }
-    }, [handleDelete]);
+        setTransactionToDelete(id);
+        setDeleteDialogVisible(true);
+    }, []);
 
 
 
@@ -869,8 +856,29 @@ const WalletScreen = ({ navigation }) => {
                 </ResponsiveContainer>
             )}
 
-            {/* Add Transaction Modal */}
+            {/* Dialogs & Modals */}
             <Portal>
+                <Dialog visible={deleteDialogVisible} onDismiss={() => setDeleteDialogVisible(false)} style={{ backgroundColor: theme.colors.elevation.level3, maxWidth: 350, alignSelf: 'center', width: '90%' }}>
+                    <Dialog.Title>Delete Transaction</Dialog.Title>
+                    <Dialog.Content>
+                        <Text variant="bodyMedium">Are you sure you want to delete this transaction? This action cannot be undone.</Text>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setDeleteDialogVisible(false)} textColor={theme.colors.onSurfaceVariant}>Cancel</Button>
+                        <Button
+                            textColor={theme.colors.error}
+                            onPress={() => {
+                                setDeleteDialogVisible(false);
+                                if (transactionToDelete) {
+                                    handleDelete(transactionToDelete);
+                                }
+                            }}
+                        >
+                            Delete
+                        </Button>
+                    </Dialog.Actions>
+                </Dialog>
+
                 <Modal
                     visible={visible}
                     onDismiss={() => setVisible(false)}
