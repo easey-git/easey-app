@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, SectionList, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, SectionList, ScrollView, Dimensions } from 'react-native';
 import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar, Banner, ProgressBar, Dialog } from 'react-native-paper';
 import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDoc, getDocs, startAfter, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -39,10 +39,13 @@ const CHART_CONFIG = {
 const StatChart = ({ title, data, theme }) => {
     const chartSize = Platform.OS === 'web' ? 220 : 150;
 
+    const windowWidth = Dimensions.get('window').width;
+    const isMobile = windowWidth < 600;
+
     return (
         <Surface style={[styles.chartCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
             <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface, marginBottom: 16 }}>{title}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', gap: Platform.OS === 'web' ? 64 : 24 }}>
+            <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', width: '100%', gap: Platform.OS === 'web' ? 64 : 24 }}>
                 <View style={{ width: chartSize, alignItems: 'center' }}>
                     <PieChart
                         data={data.map(d => ({ ...d, amount: Math.abs(d.amount) / 100 }))}
@@ -57,20 +60,22 @@ const StatChart = ({ title, data, theme }) => {
                         hasLegend={false}
                     />
                 </View>
-                <View style={{ minWidth: 120 }}>
-                    {data.map((item, index) => (
-                        <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.color, marginRight: 12 }} />
-                            <View>
-                                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
-                                    ₹{(Math.abs(item.amount) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </Text>
-                                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                                    {item.name}
-                                </Text>
+                <View style={{ minWidth: 120, alignItems: isMobile ? 'center' : 'flex-start', paddingTop: isMobile ? 16 : 0 }}>
+                    <View style={{ width: isMobile ? '100%' : 'auto', maxWidth: 300 }}>
+                        {data.map((item, index) => (
+                            <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                                <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.color, marginRight: 12 }} />
+                                <View style={{ flex: 1 }}>
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
+                                        ₹{(Math.abs(item.amount) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </Text>
+                                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                                        {item.name}
+                                    </Text>
+                                </View>
                             </View>
-                        </View>
-                    ))}
+                        ))}
+                    </View>
                 </View>
             </View>
         </Surface>
@@ -562,8 +567,8 @@ const WalletScreen = ({ navigation }) => {
                     </Text>
                 )}
 
-                <View style={styles.statsRow}>
-                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant, borderWidth: 0, borderRadius: 16 }]}>
+                <View style={[styles.statsRow, { flexWrap: 'wrap' }]}>
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant, borderWidth: 0, borderRadius: 16, padding: 12, minWidth: 140 }]}>
                         <View style={[styles.statIcon, { backgroundColor: theme.colors.primaryContainer }]}>
                             <Icon source="arrow-down-left" color={theme.colors.primary} size={20} />
                         </View>
@@ -578,7 +583,7 @@ const WalletScreen = ({ navigation }) => {
                             )}
                         </View>
                     </View>
-                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant, borderWidth: 0, borderRadius: 16 }]}>
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant, borderWidth: 0, borderRadius: 16, padding: 12, minWidth: 140 }]}>
                         <View style={[styles.statIcon, { backgroundColor: theme.colors.errorContainer }]}>
                             <Icon source="arrow-up-right" color={theme.colors.error} size={20} />
                         </View>
