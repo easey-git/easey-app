@@ -405,8 +405,8 @@ const PayUScreen = ({ navigation }) => {
                 </View>
 
                 {recentTransactions.length > 0 ? (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        <DataTable style={{ minWidth: 600 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
+                        <DataTable style={{ minWidth: width > 900 ? '100%' : 600 }}>
                             <DataTable.Header>
                                 <DataTable.Title style={{ flex: 2 }}>ID / Name</DataTable.Title>
                                 <DataTable.Title numeric style={{ flex: 1 }}>Amount</DataTable.Title>
@@ -517,19 +517,19 @@ const PayUScreen = ({ navigation }) => {
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
                                 <DataTable style={{ minWidth: width > 900 ? '100%' : 800 }}>
                                     <DataTable.Header>
-                                        <DataTable.Title style={{ flex: 2.5 }}>ID</DataTable.Title>
+                                        <DataTable.Title style={{ flex: 1.5 }}>Customer</DataTable.Title>
                                         <DataTable.Title style={{ flex: 1.5 }}>Date</DataTable.Title>
                                         <DataTable.Title numeric style={{ flex: 1 }}>Amount</DataTable.Title>
                                         <DataTable.Title style={{ flex: 1.5, justifyContent: 'center' }}>Status</DataTable.Title>
-                                        <DataTable.Title numeric style={{ flex: 1.5 }}>Customer</DataTable.Title>
+                                        <DataTable.Title numeric style={{ flex: 2.5 }}>ID</DataTable.Title>
                                     </DataTable.Header>
 
                                     {transactionsList
                                         .filter(txn => selectedStatus === null || txn.status === selectedStatus)
                                         .map((txn, index) => (
                                             <DataTable.Row key={txn.txnid || index}>
-                                                <DataTable.Cell style={{ flex: 2.5 }}>
-                                                    <Text variant="labelSmall" selectable numberOfLines={1} ellipsizeMode="middle">{txn.txnid}</Text>
+                                                <DataTable.Cell style={{ flex: 1.5 }}>
+                                                    <Text variant="bodySmall" numberOfLines={1}>{txn.firstname || 'Guest'}</Text>
                                                 </DataTable.Cell>
                                                 <DataTable.Cell style={{ flex: 1.5 }}>
                                                     <Text variant="bodySmall">{txn.addedon ? txn.addedon.split(' ')[0] : 'N/A'}</Text>
@@ -553,8 +553,8 @@ const PayUScreen = ({ navigation }) => {
                                                         {(txn.status === 'success' || txn.status === 'captured') ? 'Success' : txn.status}
                                                     </Chip>
                                                 </DataTable.Cell>
-                                                <DataTable.Cell numeric style={{ flex: 1.5 }}>
-                                                    <Text variant="bodySmall" numberOfLines={1}>{txn.firstname || 'Guest'}</Text>
+                                                <DataTable.Cell numeric style={{ flex: 2.5 }}>
+                                                    <Text variant="labelSmall" selectable numberOfLines={1} ellipsizeMode="middle">{txn.txnid}</Text>
                                                 </DataTable.Cell>
                                             </DataTable.Row>
                                         ))}
