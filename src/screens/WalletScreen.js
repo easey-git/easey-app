@@ -63,7 +63,7 @@ const StatChart = ({ title, data, theme }) => {
                             <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.color, marginRight: 12 }} />
                             <View>
                                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
-                                    ₹{Math.abs(item.amount).toLocaleString('en-IN')}
+                                    ₹{(Math.abs(item.amount) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </Text>
                                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                                     {item.name}
@@ -168,7 +168,7 @@ const WalletScreen = ({ navigation }) => {
         // CASE 2: Week/Month (Client Aggregation of downloaded docs)
         else {
             chartTransactions.forEach(t => {
-                const amt = parseFloat(t.amount);
+                const amt = parseInt(t.amount) || 0;
                 const key = t.description || 'Unknown';
                 if (t.type === 'income') {
                     incomeItemTotals[key] = (incomeItemTotals[key] || 0) + amt;
@@ -533,7 +533,7 @@ const WalletScreen = ({ navigation }) => {
                     adjustsFontSizeToFit
                     minimumFontScale={0.7}
                 >
-                    {item.type === 'income' ? '+' : '-'}₹{Math.abs(item.amount).toLocaleString('en-IN')}
+                    {item.type === 'income' ? '+' : '-'}₹{(Math.abs(item.amount) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </Text>
             </View>
         </TouchableOpacity>
@@ -571,7 +571,7 @@ const WalletScreen = ({ navigation }) => {
                         numberOfLines={1}
                         minimumFontScale={0.5}
                     >
-                        ₹{globalStats.balance.toLocaleString('en-IN')}
+                        ₹{(globalStats.balance / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </Text>
                 )}
 
@@ -586,7 +586,7 @@ const WalletScreen = ({ navigation }) => {
                                 <ActivityIndicator size="small" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
                             ) : (
                                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
-                                    ₹{globalStats.income.toLocaleString('en-IN')}
+                                    ₹{(globalStats.income / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </Text>
                             )}
                         </View>
@@ -601,7 +601,7 @@ const WalletScreen = ({ navigation }) => {
                                 <ActivityIndicator size="small" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
                             ) : (
                                 <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.onSurface }} adjustsFontSizeToFit numberOfLines={1}>
-                                    ₹{globalStats.expense.toLocaleString('en-IN')}
+                                    ₹{(globalStats.expense / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </Text>
                             )}
                         </View>

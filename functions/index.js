@@ -17,7 +17,10 @@ exports.deleteAuthUser = userTriggers.deleteAuthUser;
 
 // Export Actions (Callable)
 const manageUsers = require('./actions/manageUsers');
+const walletActions = require('./actions/wallet');
 exports.toggleUserStatus = manageUsers.toggleUserStatus;
+exports.addTransaction = walletActions.addTransaction;
+exports.deleteTransaction = walletActions.deleteTransaction;
 
 // To add new domains:
 // exports.orderTriggers = require('./triggers/orders');
