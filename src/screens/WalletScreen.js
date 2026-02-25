@@ -144,12 +144,42 @@ const WalletScreen = ({ navigation }) => {
     useEffect(() => {
         if (timeRange !== 'all') return;
 
-        const unsubscribe = onSnapshot(doc(db, 'wallet_stats', 'global'), (doc) => {
-            if (doc.exists()) {
-                const data = doc.data();
-                setAllTimeStats(data);
+        const unsubscribe = onSnapshot(doc(db, 'wallet_stats', 'global'), (docSnapshot) => {
+            if (docSnapshot.exists()) {
+                const data = docSnapshot.data();
+                // Convert legacy float (Rupee) values to integer (Paise) for consistency
+                const processedData = { ...data };
+                if (processedData.balance && !Number.isInteger(processedData.balance)) {
+                    processedData.balance = Math.round(processedData.balance * 100);
+                }
+                if (processedData.income && !Number.isInteger(processedData.income)) {
+                    processedData.income = Math.round(processedData.income * 100);
+                }
+                if (processedData.expense && !Number.isInteger(processedData.expense)) {
+                    processedData.expense = Math.round(processedData.expense * 100);
+                }
+
+                // Process categoryBreakdown and descriptionBreakdown
+                ['income', 'expense'].forEach(type => {
+                    if (processedData.categoryBreakdown && processedData.categoryBreakdown[type]) {
+                        for (const key in processedData.categoryBreakdown[type]) {
+                            if (processedData.categoryBreakdown[type].hasOwnProperty(key) && !Number.isInteger(processedData.categoryBreakdown[type][key])) {
+                                processedData.categoryBreakdown[type][key] = Math.round(processedData.categoryBreakdown[type][key] * 100);
+                            }
+                        }
+                    }
+                    if (processedData.descriptionBreakdown && processedData.descriptionBreakdown[type]) {
+                        for (const key in processedData.descriptionBreakdown[type]) {
+                            if (processedData.descriptionBreakdown[type].hasOwnProperty(key) && !Number.isInteger(processedData.descriptionBreakdown[type][key])) {
+                                processedData.descriptionBreakdown[type][key] = Math.round(processedData.descriptionBreakdown[type][key] * 100);
+                            }
+                        }
+                    }
+                });
+
+                setAllTimeStats(processedData);
             } else {
-                setAllTimeStats({ balance: 0, income: 0, expense: 0, categoryBreakdown: { income: {}, expense: {} } });
+                setAllTimeStats({ balance: 0, income: 0, expense: 0, categoryBreakdown: { income: {}, expense: {} }, descriptionBreakdown: { income: {}, expense: {} } });
             }
         });
         return () => unsubscribe();
@@ -176,7 +206,14 @@ const WalletScreen = ({ navigation }) => {
         // CASE 2: Week/Month (Client Aggregation of downloaded docs)
         else {
             chartTransactions.forEach(t => {
-                const amt = parseInt(t.amount) || 0;
+                const rawAmt = t.amount || 0;
+                let amt = 0;
+                if (typeof rawAmt === 'number') {
+                    amt = Number.isInteger(rawAmt) ? rawAmt : Math.round(rawAmt * 100);
+                } else {
+                    amt = Math.round(parseFloat(rawAmt) * 100);
+                }
+
                 const key = t.description || 'Unknown';
                 if (t.type === 'income') {
                     incomeItemTotals[key] = (incomeItemTotals[key] || 0) + amt;
@@ -674,7 +711,7 @@ const WalletScreen = ({ navigation }) => {
         setLoading(true);
 
         try {
-            const { id: newId, keywords } = await WalletService.addTransaction({
+            const { id: newId, keywords: serverKeywords, amount: serverAmountInPaise } = await WalletService.addTransaction({
                 amount: numericAmount,
                 description: description.trim(),
                 category,
@@ -683,15 +720,15 @@ const WalletScreen = ({ navigation }) => {
                 userEmail: user?.email
             });
 
-            // Optimistic UI Update
+            // Optimistic UI Update - Use amount from server (already in Paise)
             const newTransaction = {
                 id: newId,
-                amount: numericAmount,
+                amount: serverAmountInPaise, // Use the amount returned from the server (already in paise)
                 description: description.trim(),
                 category,
                 type,
-                keywords, // Include keywords to prevent false "Migration Needed" alert
-                date: Timestamp.fromDate(new Date()), // Mock Firestore Timestamp
+                keywords: serverKeywords,
+                date: Timestamp.fromDate(new Date()),
                 userId: user?.uid
             };
             setTransactions(prev => [newTransaction, ...prev]);

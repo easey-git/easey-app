@@ -96,7 +96,12 @@ exports.addTransaction = onCall(async (request) => {
             transaction.set(monthlyStatsRef, { ...histUpdate, month: monthKey }, { merge: true });
         });
 
-        return { success: true };
+        return {
+            success: true,
+            id: newTxRef.id,
+            amount: amountInCents,
+            keywords: keywords
+        };
     } catch (error) {
         console.error("Wallet Add Error:", error);
         throw new HttpsError('internal', error.message);

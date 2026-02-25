@@ -98,11 +98,18 @@ export const WalletService = {
 
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    // Handle conversion from legacy string or double if any remain
+                    // Handle conversion from legacy values
                     let amount = 0;
                     if (typeof data.amount === 'number') {
-                        amount = Math.round(data.amount); // Already integer
+                        // If it's a float (has decimals), it's definitely legacy Rupees.
+                        // We multiply by 100 to convert to Paise.
+                        if (!Number.isInteger(data.amount)) {
+                            amount = Math.round(data.amount * 100);
+                        } else {
+                            amount = data.amount; // Assume already in Paise
+                        }
                     } else if (typeof data.amount === 'string') {
+                        // Legacy string amounts are always in Rupees
                         amount = Math.round(parseFloat(data.amount) * 100);
                     }
 
@@ -171,7 +178,16 @@ export const WalletService = {
 
             snapshot.forEach(doc => {
                 const data = doc.data();
-                const displayAmount = (data.amount || 0) / 100;
+                const rawAmount = data.amount || 0;
+                let displayAmount = 0;
+
+                if (typeof rawAmount === 'number') {
+                    // Logic: If it's a float, it's legacy Rupees. If integer, assume Paise.
+                    displayAmount = Number.isInteger(rawAmount) ? (rawAmount / 100) : rawAmount;
+                } else {
+                    displayAmount = parseFloat(rawAmount); // Legacy string Rupees
+                }
+
                 const keywords = generateKeywords(data.description, data.category, displayAmount.toString());
 
                 batch.update(doc.ref, { keywords });
