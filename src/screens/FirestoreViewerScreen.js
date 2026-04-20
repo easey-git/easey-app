@@ -999,15 +999,36 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         try {
             const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*' });
             if (!result.canceled && result.assets && result.assets.length > 0) {
-                // Return start of upload
                 const asset = result.assets[0];
+                
+                // Fetch the asset URI and convert to blob
                 const response = await fetch(asset.uri);
                 const blob = await response.blob();
-                const fileName = `voice_notes/${item.id}_${Date.now()}`;
+                
+                // Create unique filename
+                const timestamp = Date.now();
+                const extension = asset.name ? asset.name.split('.').pop() : 'mp3';
+                const fileName = `voice_notes/${item.id}_${timestamp}.${extension}`;
+                
                 const storageRef = ref(storage, fileName);
-                await uploadBytes(storageRef, blob);
+                
+                // Add metadata - help prevent 412 Precondition Failed
+                const metadata = {
+                    contentType: asset.mimeType || 'audio/mpeg',
+                    customMetadata: {
+                        'originalName': asset.name || 'voice_note',
+                        'orderId': item.id
+                    }
+                };
+
+                await uploadBytes(storageRef, blob, metadata);
                 const url = await getDownloadURL(storageRef);
-                await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: url, voiceNoteName: asset.name || 'Voice Note' });
+                
+                await updateDoc(doc(db, selectedCollection, item.id), { 
+                    voiceNoteUrl: url, 
+                    voiceNoteName: asset.name || 'Voice Note',
+                    voiceNoteAttachedAt: new Date()
+                });
 
                 // Log Activity
                 if (user) {
@@ -1023,14 +1044,23 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     );
                 }
 
-                setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: url, voiceNoteName: asset.name || 'Voice Note' } : d));
+                setDocuments(prev => prev.map(d => d.id === item.id ? { 
+                    ...d, 
+                    voiceNoteUrl: url, 
+                    voiceNoteName: asset.name || 'Voice Note' 
+                } : d));
+                
                 showSnackbar("Voice note attached");
                 return true;
             }
             return false; // Canceled
         } catch (err) {
-            console.error(err);
-            showSnackbar("Failed to upload voice note", true);
+            console.error("Error attaching voice note:", err);
+            // Provide more specific feedback if possible
+            const errorMsg = err.code === 'storage/unauthorized' 
+                ? "Permission denied to upload" 
+                : "Failed to upload voice note. Please check your connection.";
+            showSnackbar(errorMsg, true);
             return false;
         }
     };
