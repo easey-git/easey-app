@@ -425,13 +425,13 @@ module.exports = async (req, res) => {
         }
     }
 
-    // 3. Shopify / Shiprocket Webhook
+    // 3. Shopify Webhook
     if (!req.body.object) {
         try {
             const data = req.body;
             const queryParams = req.query || {};
 
-            // A. SHIPROCKET / ABANDONED CART
+            // A. ABANDONED CART
             if (data.cart_id || data.latest_stage) {
                 const checkoutId = data.cart_id || "";
                 const phoneNormalized = normalizePhone(data.phone_number);

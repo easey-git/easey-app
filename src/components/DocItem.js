@@ -85,7 +85,7 @@ const getKeyLocation = (item) => {
     // Try explicit addresses first, then customer default, then fallback to root properties
     const addr = item.shipping_address || item.billing_address || item.customer?.default_address || item.default_address || item;
 
-    // Some payloads (like Shiprocket) might have 'city' at root, others in address objs
+    // Some payloads might have 'city' at root, others in address objs
     const city = addr.city || item.city;
     const state = addr.province_code || addr.province || addr.state || item.province || item.state;
 

@@ -44,7 +44,7 @@ const HomeScreen = ({ navigation }) => {
     const [workQueue, setWorkQueue] = useState({ pending: 0, confirmed: 0 });
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
-    const [connectionStatus, setConnectionStatus] = useState({ firestore: true, shiprocket: false, shopify: false, vercel: false });
+    const [connectionStatus, setConnectionStatus] = useState({ firestore: true, shopify: false, vercel: false });
 
     // Staggered loading to prevent blocking navigation
     const loadPhase = useStaggeredLoad();
@@ -83,10 +83,6 @@ const HomeScreen = ({ navigation }) => {
 
         const checkWebhookHealth = async () => {
             try {
-                const shiprocketQuery = query(collection(db, "checkouts"), where("updatedAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))), orderBy("updatedAt", "desc"), limit(1));
-                const shiprocketSnapshot = await getDocs(shiprocketQuery);
-                setConnectionStatus(prev => ({ ...prev, shiprocket: !shiprocketSnapshot.empty }));
-
                 const shopifyQuery = query(collection(db, "orders"), where("createdAt", ">=", Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))), orderBy("createdAt", "desc"), limit(1));
                 const shopifySnapshot = await getDocs(shopifyQuery);
                 setConnectionStatus(prev => ({ ...prev, shopify: !shopifySnapshot.empty }));
@@ -147,7 +143,6 @@ const HomeScreen = ({ navigation }) => {
                 if (!isOrdered && !isAbandoned) activeCount++;
             });
             setStats(prev => ({ ...prev, activeCarts: activeCount }));
-            if (snapshot.size > 0) setConnectionStatus(prev => ({ ...prev, shiprocket: true }));
         }, (error) => {
             // Silently handle error
         });
@@ -180,7 +175,6 @@ const HomeScreen = ({ navigation }) => {
             <View style={{ padding: 16, gap: 12 }}>
                 {[
                     { label: 'Database', status: connectionStatus.firestore, icon: 'database' },
-                    { label: 'Webhooks', status: connectionStatus.shiprocket, icon: 'truck-delivery' },
                     { label: 'Storefront', status: connectionStatus.shopify, icon: 'store' },
                     { label: 'APIs', status: connectionStatus.vercel, icon: 'cloud' }
                 ].map((item, i) => (

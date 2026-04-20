@@ -62,7 +62,6 @@ const AdminPanelScreen = ({ navigation }) => {
         { id: 'access_wallet', label: 'Access Wallet' },
         { id: 'access_campaigns', label: 'Access Campaigns' },
         { id: 'access_whatsapp', label: 'Access WhatsApp' },
-        { id: 'access_logistics', label: 'Access Logistics' },
         { id: 'access_analytics', label: 'Access Analytics' },
         { id: 'gmail_view_access', label: 'Access Gmail' },
         { id: 'payu_access', label: 'Access PayU' },

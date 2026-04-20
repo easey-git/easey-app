@@ -25,7 +25,10 @@ function generateKeywords(description = '', category = '', amount = '') {
 /**
  * Add a transaction and atomically update multiple stats shards
  */
-exports.addTransaction = onCall(async (request) => {
+exports.addTransaction = onCall({ 
+    region: 'us-central1',
+    cors: true 
+}, async (request) => {
     // 1. Auth Check
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'User must be logged in.');
@@ -39,20 +42,22 @@ exports.addTransaction = onCall(async (request) => {
     if (!['income', 'expense'].includes(type)) throw new HttpsError('invalid-argument', 'Invalid type');
 
     // 3. Integer Math (Store as Paise/Cents)
-    // Using Math.round to avoid any float issues from the client
     const amountInCents = Math.round(parseFloat(amount) * 100);
     const timestamp = date ? admin.firestore.Timestamp.fromDate(new Date(date)) : admin.firestore.FieldValue.serverTimestamp();
     const isoDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
     const monthKey = isoDate.substring(0, 7); // YYYY-MM
 
     try {
+        let newTxId;
+        const keywords = generateKeywords(description, category, amount.toString());
+        
         await db.runTransaction(async (transaction) => {
             const statsRef = db.doc('wallet_stats/global');
             const dailyStatsRef = db.doc(`wallet_stats/daily_${isoDate}`);
             const monthlyStatsRef = db.doc(`wallet_stats/monthly_${monthKey}`);
 
-            const keywords = generateKeywords(description, category, amount.toString());
             const newTxRef = db.collection('wallet_transactions').doc();
+            newTxId = newTxRef.id;
 
             // Prepare update object
             const increment = admin.firestore.FieldValue.increment;
@@ -98,7 +103,7 @@ exports.addTransaction = onCall(async (request) => {
 
         return {
             success: true,
-            id: newTxRef.id,
+            id: newTxId,
             amount: amountInCents,
             keywords: keywords
         };
@@ -111,7 +116,10 @@ exports.addTransaction = onCall(async (request) => {
 /**
  * Delete a transaction and reverse its effect on all stats
  */
-exports.deleteTransaction = onCall(async (request) => {
+exports.deleteTransaction = onCall({ 
+    region: 'us-central1',
+    cors: true 
+}, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'User must be logged in.');
 
     const { transactionId } = request.data;
