@@ -1,12 +1,14 @@
-const functions = require("firebase-functions");
+// Using v1 for Auth triggers as v2 for these isn't available in this SDK version
+const { user } = require("firebase-functions/v1/auth");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { db, auth } = require("../config");
 
 /**
  * TRIGGER: Authentication User Deleted
  * GOAL: Two-way sync - ensure the Firestore profile is also removed.
  */
-exports.cleanupUserData = functions.auth.user().onDelete(async (user) => {
-    const uid = user.uid;
+exports.cleanupUserData = user().onDelete(async (userRecord) => {
+    const uid = userRecord.uid;
     console.log(`Auth user deleted: ${uid}, cleaning up Firestore profile...`);
 
     try {
@@ -18,19 +20,18 @@ exports.cleanupUserData = functions.auth.user().onDelete(async (user) => {
 });
 
 /**
- * TRIGGER: Scheduled Audit (Every 24h)
+ * TRIGGER: Scheduled Audit (Every 60 minutes)
  * GOAL: Ensure perfect consistency between Auth and Firestore.
- * This catches any manual changes made in the Console (like disabling a user).
  */
-exports.auditUserStatus = functions.pubsub.schedule('every 60 minutes').onRun(async (context) => {
+exports.auditUserStatus = onSchedule('every 60 minutes', async (event) => {
     const listUsersResult = await auth.listUsers(1000);
     const batch = db.batch();
     let updates = 0;
 
-    for (const user of listUsersResult.users) {
-        const userRef = db.collection("users").doc(user.uid);
+    for (const userRecord of listUsersResult.users) {
+        const userRef = db.collection("users").doc(userRecord.uid);
         // We blindly set the disabled status to match Auth. This ensures Firestore is always correct eventually.
-        batch.set(userRef, { disabled: user.disabled }, { merge: true });
+        batch.set(userRef, { disabled: userRecord.disabled }, { merge: true });
         updates++;
     }
 
@@ -39,5 +40,3 @@ exports.auditUserStatus = functions.pubsub.schedule('every 60 minutes').onRun(as
         console.log(`Audited ${updates} users for status consistency.`);
     }
 });
-
-

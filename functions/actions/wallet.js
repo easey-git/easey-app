@@ -35,11 +35,23 @@ exports.addTransaction = onCall({
     }
 
     const { amount, description, category, type, date } = request.data;
+    console.log("Adding transaction request:", { amount, description, category, type, userId: request.auth.uid });
 
     // 2. Validation
-    if (!amount || isNaN(amount) || amount <= 0) throw new HttpsError('invalid-argument', 'Invalid amount');
-    if (!description) throw new HttpsError('invalid-argument', 'Description required');
-    if (!['income', 'expense'].includes(type)) throw new HttpsError('invalid-argument', 'Invalid type');
+    if (!amount || isNaN(amount) || amount <= 0) {
+        console.error("Invalid amount received:", amount);
+        throw new HttpsError('invalid-argument', 'Invalid amount');
+    }
+    if (!description) {
+        console.error("Description missing");
+        throw new HttpsError('invalid-argument', 'Description required');
+    }
+    if (!['income', 'expense'].includes(type)) {
+        console.error("Invalid type received:", type);
+        throw new HttpsError('invalid-argument', 'Invalid type');
+    }
+
+    const safeCategory = category || 'Misc';
 
     // 3. Integer Math (Store as Paise/Cents)
     const amountInCents = Math.round(parseFloat(amount) * 100);
@@ -49,7 +61,7 @@ exports.addTransaction = onCall({
 
     try {
         let newTxId;
-        const keywords = generateKeywords(description, category, amount.toString());
+        const keywords = generateKeywords(description, safeCategory, amount.toString());
         
         await db.runTransaction(async (transaction) => {
             const statsRef = db.doc('wallet_stats/global');
@@ -67,14 +79,14 @@ exports.addTransaction = onCall({
             if (type === 'income') {
                 statsUpdate.balance = increment(amountInCents);
                 statsUpdate.income = increment(amountInCents);
-                statsUpdate[`categoryBreakdown.income.${category}`] = increment(amountInCents);
+                statsUpdate[`categoryBreakdown.income.${safeCategory}`] = increment(amountInCents);
 
                 histUpdate.income = increment(amountInCents);
                 histUpdate.balance = increment(amountInCents);
             } else {
                 statsUpdate.balance = increment(-amountInCents);
                 statsUpdate.expense = increment(amountInCents);
-                statsUpdate[`categoryBreakdown.expense.${category}`] = increment(amountInCents);
+                statsUpdate[`categoryBreakdown.expense.${safeCategory}`] = increment(amountInCents);
 
                 histUpdate.expense = increment(amountInCents);
                 histUpdate.balance = increment(-amountInCents);
@@ -84,11 +96,11 @@ exports.addTransaction = onCall({
             transaction.set(newTxRef, {
                 amount: amountInCents,
                 description,
-                category: category || 'Misc',
+                category: safeCategory,
                 type,
                 date: timestamp,
                 keywords,
-                createdByName: request.auth.token.name || request.auth.token.email,
+                createdByName: request.auth.token.name || request.auth.token.email || 'System',
                 createdByUid: request.auth.uid,
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
@@ -101,6 +113,7 @@ exports.addTransaction = onCall({
             transaction.set(monthlyStatsRef, { ...histUpdate, month: monthKey }, { merge: true });
         });
 
+        console.log("Transaction added successfully:", newTxId);
         return {
             success: true,
             id: newTxId,
@@ -108,8 +121,12 @@ exports.addTransaction = onCall({
             keywords: keywords
         };
     } catch (error) {
-        console.error("Wallet Add Error:", error);
-        throw new HttpsError('internal', error.message);
+        console.error("Detailed Wallet Add Error:", {
+            message: error.message,
+            stack: error.stack,
+            code: error.code
+        });
+        throw new HttpsError('internal', error.message || 'Unknown error occurred');
     }
 });
 

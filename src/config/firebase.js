@@ -27,4 +27,4 @@ export const auth = initializeAuth(app, {
     persistence
 });
 
-export const functions = getFunctions(app);
+export const functions = getFunctions(app, 'us-central1');
