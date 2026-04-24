@@ -32,9 +32,9 @@ function generateKeywords(description = '', category = '', amount = '') {
 /**
  * Add a transaction and atomically update multiple stats shards
  */
-exports.addTransaction = onCall({ 
+exports.addTransaction = onCall({
     region: 'us-central1',
-    cors: true 
+    cors: ['https://admin.easey.in', 'http://localhost:8081', 'http://localhost:19006', 'http://localhost:19000']
 }, async (request) => {
     // 1. Auth Check
     if (!request.auth) {
@@ -150,9 +150,9 @@ exports.addTransaction = onCall({
 /**
  * Delete a transaction and reverse its effect on all stats
  */
-exports.deleteTransaction = onCall({ 
+exports.deleteTransaction = onCall({
     region: 'us-central1',
-    cors: true 
+    cors: ['https://admin.easey.in', 'http://localhost:8081', 'http://localhost:19006', 'http://localhost:19000']
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'User must be logged in.');
 

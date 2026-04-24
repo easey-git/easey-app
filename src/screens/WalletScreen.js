@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, SectionList, ScrollView, Dimensions } from 'react-native';
 import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar, Banner, ProgressBar, Dialog } from 'react-native-paper';
-import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDoc, getDocs, startAfter, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDocs, startAfter, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { WalletService } from '../services/walletService';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
@@ -86,10 +86,6 @@ const WalletScreen = ({ navigation }) => {
     const theme = useTheme();
     const { hasPermission, user } = useAuth();
     const { isDesktop } = useResponsive();
-
-    if (!hasPermission('access_wallet')) {
-        return <AccessDenied title="Wallet Restricted" message="You need permission to access financial records." />;
-    }
 
     const [transactions, setTransactions] = useState([]);
     const [visible, setVisible] = useState(false);
@@ -381,19 +377,17 @@ const WalletScreen = ({ navigation }) => {
         // Don't show full screen loader for pagination, only for initial load
         if (isReset) setDataLoading(true);
 
+        const searchTerms = debouncedSearchQuery.trim().toLowerCase().split(/\s+/).filter(t => t.length > 0);
+
         try {
             let qConstraints = [];
 
             // 1. Search Query (Highest Priority constraint)
-            if (debouncedSearchQuery.trim().length > 0) {
-                // INDUSTRY STANDARD: Array-Contains Search
-                // Matches "server" in "Monthly Server Costs"
-                // Requires "keywords" field in docs (migrated via Banner)
-                const term = debouncedSearchQuery.trim().split(' ')[0].toLowerCase();
-
-                // Note: This requires index: 'keywords' (Arrays) + 'date' (Desc)
-                // If index is missing, Firestore will throw error with link to create it.
-                qConstraints.push(where('keywords', 'array-contains', term));
+            if (searchTerms.length > 0) {
+                // Use first word for Firestore (array-contains only supports one term).
+                // Additional words are filtered client-side below.
+                // Requires composite index: keywords (Arrays) + date (Desc)
+                qConstraints.push(where('keywords', 'array-contains', searchTerms[0]));
                 qConstraints.push(orderBy('date', 'desc'));
             } else {
                 // Default Sort
@@ -402,13 +396,13 @@ const WalletScreen = ({ navigation }) => {
 
             // 2. Type Filter
             // If searching, we ignore tabs to search GLOBALLY across all transaction types.
-            if (debouncedSearchQuery.trim().length === 0 && filterType !== 'all') {
+            if (searchTerms.length === 0 && filterType !== 'all') {
                 qConstraints.push(where('type', '==', filterType));
             }
 
             // 3. Date Filter
             // If searching text, we skip date filtering to strictly avoid needing N*M indexes.
-            if (debouncedSearchQuery.trim().length === 0) {
+            if (searchTerms.length === 0) {
                 if (timeRange === 'week') {
                     let d = new Date();
                     d.setDate(d.getDate() - 7);
@@ -429,10 +423,20 @@ const WalletScreen = ({ navigation }) => {
             const q = query(collection(db, "wallet_transactions"), ...qConstraints);
             const snapshot = await getDocs(q);
 
-            const list = [];
+            let list = [];
             snapshot.forEach((doc) => {
                 list.push({ id: doc.id, ...doc.data() });
             });
+
+            // Client-side filter for multi-word searches (Firestore only supports one array-contains term)
+            if (searchTerms.length > 1) {
+                list = list.filter(item =>
+                    searchTerms.every(term =>
+                        (item.description || '').toLowerCase().includes(term) ||
+                        (item.category || '').toLowerCase().includes(term)
+                    )
+                );
+            }
 
             if (isReset) {
                 setTransactions(list);
@@ -484,11 +488,10 @@ const WalletScreen = ({ navigation }) => {
             return acc;
         }, {});
 
-        // Sort keys desc (Date) if not searching. If searching, the order might be by description first.
-        // We can just rely on the order they came in (which is usually correct enough via query)
-        // But map order isn't guaranteed.
-        // Let's rely on the query order logic.
-        return Object.values(groups);
+        // Sort section keys descending by date for deterministic order
+        return Object.entries(groups)
+            .sort(([a], [b]) => new Date(b) - new Date(a))
+            .map(([, val]) => val);
     }, [transactions]);
 
     const handleDelete = useCallback(async (id) => {
@@ -498,15 +501,9 @@ const WalletScreen = ({ navigation }) => {
         }
 
         try {
-            const docRef = doc(db, "wallet_transactions", id);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                await WalletService.deleteTransaction(id, user?.uid, user?.email);
-
-                // Refresh list after delete
-                // Ideally we should just remove it from local state to avoid full re-fetch
-                setTransactions(prev => prev.filter(t => t.id !== id));
-            }
+            await WalletService.deleteTransaction(id, user?.uid, user?.email);
+            // Remove from local state immediately; Cloud Function handles Firestore delete
+            setTransactions(prev => prev.filter(t => t.id !== id));
 
             if (Platform.OS !== 'web') {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -716,8 +713,6 @@ const WalletScreen = ({ navigation }) => {
                 description: description.trim(),
                 category,
                 type,
-                userId: user?.uid,
-                userEmail: user?.email
             });
 
             // Optimistic UI Update - Use amount from server (already in Paise)
@@ -732,6 +727,16 @@ const WalletScreen = ({ navigation }) => {
                 userId: user?.uid
             };
             setTransactions(prev => [newTransaction, ...prev]);
+
+            // Optimistically update stats header (for week/month views).
+            // For 'all' timeRange the onSnapshot listener updates it automatically.
+            if (timeRange !== 'all') {
+                setGlobalStats(prev => ({
+                    income: type === 'income' ? prev.income + serverAmountInPaise : prev.income,
+                    expense: type === 'expense' ? prev.expense + serverAmountInPaise : prev.expense,
+                    balance: type === 'income' ? prev.balance + serverAmountInPaise : prev.balance - serverAmountInPaise,
+                }));
+            }
 
             setVisible(false);
             setAmount('');
@@ -760,7 +765,10 @@ const WalletScreen = ({ navigation }) => {
 
             <SegmentedButtons
                 value={type}
-                onValueChange={setType}
+                onValueChange={(val) => {
+                    setType(val);
+                    setCategory(val === 'income' ? INCOME_CATEGORIES[0] : EXPENSE_CATEGORIES[0]);
+                }}
                 buttons={[
                     { value: 'expense', label: 'Expense', icon: 'arrow-up-right', checkedColor: theme.colors.error, style: { borderColor: theme.colors.outline } },
                     { value: 'income', label: 'Income', icon: 'arrow-down-left', checkedColor: theme.colors.primary, style: { borderColor: theme.colors.outline } },
@@ -810,6 +818,11 @@ const WalletScreen = ({ navigation }) => {
             </Button>
         </>
     );
+
+    // Early return AFTER all hooks (React Rules of Hooks: hooks must not be called conditionally)
+    if (!hasPermission('access_wallet')) {
+        return <AccessDenied title="Wallet Restricted" message="You need permission to access financial records." />;
+    }
 
     return (
         <CRMLayout
