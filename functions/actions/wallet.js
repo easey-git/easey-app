@@ -2,6 +2,13 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { db, admin } = require("../config");
 
 /**
+ * Sanitize keys for Firestore field paths (remove dots)
+ */
+function sanitizeKey(key) {
+    return (key || 'Unknown').toString().replace(/\./g, '_');
+}
+
+/**
  * Generate keywords for prefix search
  */
 function generateKeywords(description = '', category = '', amount = '') {
@@ -62,6 +69,8 @@ exports.addTransaction = onCall({
     try {
         let newTxId;
         const keywords = generateKeywords(description, safeCategory, amount.toString());
+        const safeCategoryKey = sanitizeKey(safeCategory);
+        const safeDescKey = sanitizeKey(description);
         
         await db.runTransaction(async (transaction) => {
             const statsRef = db.doc('wallet_stats/global');
@@ -79,14 +88,16 @@ exports.addTransaction = onCall({
             if (type === 'income') {
                 statsUpdate.balance = increment(amountInCents);
                 statsUpdate.income = increment(amountInCents);
-                statsUpdate[`categoryBreakdown.income.${safeCategory}`] = increment(amountInCents);
+                statsUpdate[`categoryBreakdown.income.${safeCategoryKey}`] = increment(amountInCents);
+                statsUpdate[`descriptionBreakdown.income.${safeDescKey}`] = increment(amountInCents);
 
                 histUpdate.income = increment(amountInCents);
                 histUpdate.balance = increment(amountInCents);
             } else {
                 statsUpdate.balance = increment(-amountInCents);
                 statsUpdate.expense = increment(amountInCents);
-                statsUpdate[`categoryBreakdown.expense.${safeCategory}`] = increment(amountInCents);
+                statsUpdate[`categoryBreakdown.expense.${safeCategoryKey}`] = increment(amountInCents);
+                statsUpdate[`descriptionBreakdown.expense.${safeDescKey}`] = increment(amountInCents);
 
                 histUpdate.expense = increment(amountInCents);
                 histUpdate.balance = increment(-amountInCents);
@@ -124,9 +135,15 @@ exports.addTransaction = onCall({
         console.error("Detailed Wallet Add Error:", {
             message: error.message,
             stack: error.stack,
-            code: error.code
+            code: error.code,
+            details: error.details
         });
-        throw new HttpsError('internal', error.message || 'Unknown error occurred');
+        
+        // Re-throw HttpsErrors, wrap others
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', error.message || 'Unknown error occurred during addTransaction');
     }
 });
 
@@ -147,13 +164,28 @@ exports.deleteTransaction = onCall({
             const txRef = db.doc(`wallet_transactions/${transactionId}`);
             const txSnap = await transaction.get(txRef);
 
-            if (!txSnap.exists) throw new HttpsError('not-found', 'Transaction not found');
+            if (!txSnap.exists) {
+                console.error(`Transaction ${transactionId} not found`);
+                throw new HttpsError('not-found', 'Transaction not found');
+            }
 
             const txData = txSnap.data();
             const amount = txData.amount;
             const type = txData.type;
             const category = txData.category;
-            const txDate = txData.date.toDate();
+            
+            // Robust date handling
+            let txDate;
+            if (txData.date && typeof txData.date.toDate === 'function') {
+                txDate = txData.date.toDate();
+            } else if (txData.date instanceof Date) {
+                txDate = txData.date;
+            } else if (txData.date && (typeof txData.date === 'string' || typeof txData.date === 'number')) {
+                txDate = new Date(txData.date);
+            } else {
+                txDate = new Date(); // Fallback to current date
+            }
+
             const isoDate = txDate.toISOString().split('T')[0];
             const monthKey = isoDate.substring(0, 7);
 
@@ -164,21 +196,23 @@ exports.deleteTransaction = onCall({
             const increment = admin.firestore.FieldValue.increment;
             const statsUpdate = {};
             const histUpdate = {};
-            const descKey = (txData.description || 'Unknown').replace(/\./g, '_');
+            
+            const safeCategoryKey = sanitizeKey(category);
+            const safeDescKey = sanitizeKey(txData.description);
 
             if (type === 'income') {
                 statsUpdate.balance = increment(-amount);
                 statsUpdate.income = increment(-amount);
-                statsUpdate[`categoryBreakdown.income.${category}`] = increment(-amount);
-                statsUpdate[`descriptionBreakdown.income.${descKey}`] = increment(-amount);
+                statsUpdate[`categoryBreakdown.income.${safeCategoryKey}`] = increment(-amount);
+                statsUpdate[`descriptionBreakdown.income.${safeDescKey}`] = increment(-amount);
 
                 histUpdate.income = increment(-amount);
                 histUpdate.balance = increment(-amount);
             } else {
                 statsUpdate.balance = increment(amount);
                 statsUpdate.expense = increment(-amount);
-                statsUpdate[`categoryBreakdown.expense.${category}`] = increment(-amount);
-                statsUpdate[`descriptionBreakdown.expense.${descKey}`] = increment(-amount);
+                statsUpdate[`categoryBreakdown.expense.${safeCategoryKey}`] = increment(-amount);
+                statsUpdate[`descriptionBreakdown.expense.${safeDescKey}`] = increment(-amount);
 
                 histUpdate.expense = increment(-amount);
                 histUpdate.balance = increment(amount);
@@ -190,9 +224,18 @@ exports.deleteTransaction = onCall({
             transaction.set(monthlyStatsRef, histUpdate, { merge: true });
         });
 
+        console.log("Transaction deleted successfully:", transactionId);
         return { success: true };
     } catch (error) {
-        console.error("Wallet Delete Error:", error);
-        throw new HttpsError('internal', error.message);
+        console.error("Wallet Delete Error:", {
+            message: error.message,
+            stack: error.stack,
+            code: error.code
+        });
+
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', error.message || 'Unknown error occurred during deleteTransaction');
     }
 });
