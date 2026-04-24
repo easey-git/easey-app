@@ -307,7 +307,7 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                                                     width: `${Math.max(0, Math.min(100, ((accountData.limits.spendCap - accountData.limits.remainingSpendCap) / accountData.limits.spendCap) * 100))}%`,
                                                     backgroundColor: accountData.limits.remainingSpendCap < accountData.limits.spendCap * 0.1 ? theme.colors.error : theme.colors.primary
                                                 }
-                                            ]
+                                            ]}
                                         />
                                     </View>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
