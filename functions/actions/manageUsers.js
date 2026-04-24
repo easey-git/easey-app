@@ -1,4 +1,4 @@
-const functions = require("firebase-functions");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { auth, db } = require("../config");
 
 /**
@@ -6,40 +6,37 @@ const { auth, db } = require("../config");
  * 
  * This callable function allows an admin to disable or enable a user account.
  * It also updates the Firestore user document to reflect the 'disabled' status locally.
- * 
- * Usage from Client:
- * const toggleUserStatus = httpsCallable(functions, 'toggleUserStatus');
- * await toggleUserStatus({ uid: 'user_id', disabled: true });
  */
-exports.toggleUserStatus = functions.https.onCall(async (data, context) => {
+exports.toggleUserStatus = onCall({
+    region: 'us-central1',
+    cors: true
+}, async (request) => {
     // 1. Security Check: Ensure the caller is an authenticated admin
-    if (!context.auth) {
-        throw new functions.https.HttpsError(
+    if (!request.auth) {
+        throw new HttpsError(
             'unauthenticated',
             'The function must be called while authenticated.'
         );
     }
 
-    // Optional: Check if the caller has 'admin' role in custom claims or Firestore
-    // For now, we assume the AdminPanelScreen is guarded, but standard practice is to verify here too.
-    const callerUid = context.auth.uid;
-    const callerRef = await db.collection("users").doc(callerUid).get();
-    const callerData = callerRef.data();
-
-    if (callerData.role !== 'admin') {
-        throw new functions.https.HttpsError(
-            'permission-denied',
-            'Only admins can manage user status.'
-        );
-    }
-
-    const { uid, disabled } = data;
-
-    if (!uid) {
-        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a "uid" argument.');
-    }
-
     try {
+        const callerUid = request.auth.uid;
+        const callerRef = await db.collection("users").doc(callerUid).get();
+        const callerData = callerRef.data();
+
+        if (!callerData || callerData.role !== 'admin') {
+            throw new HttpsError(
+                'permission-denied',
+                'Only admins can manage user status.'
+            );
+        }
+
+        const { uid, disabled } = request.data;
+
+        if (!uid) {
+            throw new HttpsError('invalid-argument', 'The function must be called with a "uid" argument.');
+        }
+
         // 2. Update Auth (The Source of Truth)
         await auth.updateUser(uid, {
             disabled: disabled
@@ -55,6 +52,7 @@ exports.toggleUserStatus = functions.https.onCall(async (data, context) => {
 
     } catch (error) {
         console.error("Error managing user:", error);
-        throw new functions.https.HttpsError('internal', 'Unable to update user status.', error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', error.message || 'Unable to update user status.');
     }
 });
