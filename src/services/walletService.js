@@ -145,65 +145,6 @@ export const WalletService = {
             console.error("Recalculate failed:", error);
             throw error;
         }
-    },
-
-    /**
-     * MIGRATION UTILITY
-     * Loops through all transactions and adds 'keywords' array for search.
-     */
-    migrateSearchIndex: async (onProgress) => {
-        const { writeBatch } = await import('firebase/firestore');
-        console.log("Starting Search Index Migration...");
-        let lastDoc = null;
-        let hasMore = true;
-        const BATCH_SIZE = 500;
-        let processedCount = 0;
-
-        while (hasMore) {
-            let qConstraints = [orderBy('date', 'desc'), limit(BATCH_SIZE)];
-            if (lastDoc) {
-                qConstraints.push(startAfter(lastDoc));
-            }
-
-            const q = query(collection(db, TRANSACTION_COLLECTION), ...qConstraints);
-            const snapshot = await getDocs(q);
-
-            if (snapshot.empty) {
-                hasMore = false;
-                break;
-            }
-
-            const batch = writeBatch(db);
-            let operationsInBatch = 0;
-
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                const rawAmount = data.amount || 0;
-                let displayAmount = 0;
-
-                if (typeof rawAmount === 'number') {
-                    // Logic: If it's a float, it's legacy Rupees. If integer, assume Paise.
-                    displayAmount = Number.isInteger(rawAmount) ? (rawAmount / 100) : rawAmount;
-                } else {
-                    displayAmount = parseFloat(rawAmount); // Legacy string Rupees
-                }
-
-                const keywords = generateKeywords(data.description, data.category, displayAmount.toString());
-
-                batch.update(doc.ref, { keywords });
-                operationsInBatch++;
-            });
-
-            if (operationsInBatch > 0) {
-                await batch.commit();
-            }
-
-            lastDoc = snapshot.docs[snapshot.docs.length - 1];
-            processedCount += snapshot.size;
-            if (onProgress) onProgress(processedCount);
-            console.log(`Migrated ${processedCount} documents...`);
-        }
-        console.log("Migration Complete.");
     }
 };
 

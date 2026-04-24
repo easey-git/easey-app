@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, SectionList, ScrollView, Dimensions } from 'react-native';
-import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Divider, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar, Banner, ProgressBar, Dialog } from 'react-native-paper';
+import { View, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, SectionList, ScrollView, Dimensions } from 'react-native';
+import { Surface, Text, useTheme, Button, Modal, Portal, TextInput, SegmentedButtons, Icon, Appbar, ActivityIndicator, Chip, Snackbar, Searchbar, Dialog } from 'react-native-paper';
 import { collection, query, orderBy, limit, onSnapshot, doc, where, getAggregateFromServer, sum, getDocs, startAfter, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { WalletService } from '../services/walletService';
@@ -91,7 +91,6 @@ const WalletScreen = ({ navigation }) => {
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [dataLoading, setDataLoading] = useState(true);
-    const [displayLimit, setDisplayLimit] = useState(50); // Pagination Limit
 
     // Delete Dialog State
     const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
@@ -1006,6 +1005,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 16,
         paddingHorizontal: 16, // Add side padding for list items
+    },
+    iconContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     iconSurface: {
         padding: 10,
