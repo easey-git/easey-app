@@ -818,9 +818,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
                 await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: deleteField(), voiceNoteName: deleteField() });
 
-                if (user) {
-                    const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
-                }
+
 
                 setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: undefined, voiceNoteName: undefined } : d));
                 showSnackbar("Voice note deleted");
@@ -908,12 +906,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 adminModifiedFields: deleteField()
             });
 
-            // Log Activity
-            if (user) {
-                const docIdentifier = selectedDoc.order_number ? `#${selectedDoc.order_number}` : selectedDoc.id;
-                const meta = { docId: selectedDoc.id, collection: selectedCollection };
-                if (selectedDoc.order_number) meta.orderNumber = selectedDoc.order_number;
-            }
+
 
             setVisible(false);
             fetchDocuments();
@@ -1016,11 +1009,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 adminModifiedFields: deleteField()
             });
 
-            // Log Activity
-            if (user) {
-                const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
-                const meta = { docId: item.id, collection: selectedCollection };
-                if (item.order_number) meta.orderNumber = item.order_number;
+
             setDocuments(prev => prev.map(d => d.id === item.id ? {
                 ...d,
                 adminEdited: false,
@@ -1104,11 +1093,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             const newStatus = item.cod_status === 'shipped' ? 'confirmed' : 'shipped';
             await updateDoc(doc(db, selectedCollection, item.id), { cod_status: newStatus });
 
-            // Log Activity
-            if (user) {
-                const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
-                const meta = { docId: item.id, collection: selectedCollection, newStatus };
-                if (item.order_number) meta.orderNumber = item.order_number;
+
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
             showSnackbar(`Order marked as ${newStatus.toUpperCase()}`);
         } catch (error) {
@@ -1123,11 +1108,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             const newStatus = item.cod_status === 'cancelled' ? 'pending' : 'cancelled';
             await updateDoc(doc(db, selectedCollection, item.id), { cod_status: newStatus });
 
-            // Log Activity
-            if (user) {
-                const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
-                const meta = { docId: item.id, collection: selectedCollection, newStatus };
-                if (item.order_number) meta.orderNumber = item.order_number;
+
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
             showSnackbar(`Order marked as ${newStatus.toUpperCase()}`);
         } catch (error) {
