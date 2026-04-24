@@ -16,7 +16,7 @@ import WhatsAppManagerScreen from './src/screens/WhatsAppManagerScreen';
 import MetaScreen from './src/screens/MetaScreen';
 import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
-import ActivityLogScreen from './src/screens/ActivityLogScreen';
+
 import { PayUScreen } from './src/screens/PayUScreen';
 import GmailScreen from './src/screens/GmailScreen';
 
@@ -240,11 +240,6 @@ function AppStack() {
             <Stack.Screen
               name="Wallet"
               component={WalletScreen}
-            />
-            <Stack.Screen
-              name="ActivityLog"
-              component={ActivityLogScreen}
-              options={{ title: 'Activity Logs' }}
             />
             <Stack.Screen
               name="PayU"

@@ -7,7 +7,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { db, storage } from '../config/firebase';
 import DocItem from '../components/DocItem';
 import { CRMLayout } from '../components/CRMLayout';
-import { ActivityLogService } from '../services/activityLogService';
+
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
 import { useResponsive } from '../hooks/useResponsive';
@@ -797,16 +797,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 }
 
                 // Log Activity
-                if (user) {
-                    ActivityLogService.log(
-                        user.uid,
-                        user.email,
-                        'BULK_DELETE_DOCS',
-                        `Deleted ${itemsToDelete.length} docs from ${selectedCollection}`,
-                        { count: itemsToDelete.length, collection: selectedCollection }
-                    );
-                }
-
                 setSelectedItems(new Set());
                 fetchDocuments();
                 showSnackbar(`Successfully deleted ${itemsToDelete.length} documents`);
@@ -816,20 +806,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 await deleteDoc(docRef);
 
                 // Log Activity
-                if (user) {
-                    const deletedDoc = documents.find(d => d.id === pendingAction.id);
-                    const docIdentifier = deletedDoc?.order_number ? `#${deletedDoc.order_number}` : pendingAction.id;
-                    const meta = { docId: pendingAction.id, collection: selectedCollection };
-                    if (deletedDoc?.order_number) meta.orderNumber = deletedDoc.order_number;
-                    ActivityLogService.log(
-                        user.uid,
-                        user.email,
-                        'DELETE_DOC',
-                        `Deleted ${docIdentifier} from ${selectedCollection}`,
-                        meta
-                    );
-                }
-
                 setVisible(false);
                 fetchDocuments();
                 showSnackbar("Document deleted successfully");
@@ -844,13 +820,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
                 if (user) {
                     const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
-                    ActivityLogService.log(
-                        user.uid,
-                        user.email,
-                        'DELETE_VOICE_NOTE',
-                        `Deleted voice note from ${docIdentifier}`,
-                        { docId: item.id, collection: selectedCollection }
-                    );
                 }
 
                 setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: undefined, voiceNoteName: undefined } : d));
@@ -868,16 +837,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                         batch.update(docRef, { cod_status: status });
                     });
                     await batch.commit();
-                }
-
-                if (user) {
-                    ActivityLogService.log(
-                        user.uid,
-                        user.email,
-                        'BULK_UPDATE_STATUS',
-                        `Bulk updated ${itemsToUpdate.length} orders to ${status}`,
-                        { count: itemsToUpdate.length, collection: selectedCollection, status }
-                    );
                 }
 
                 setSelectedItems(new Set());
@@ -933,20 +892,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
             await updateDoc(doc(db, selectedCollection, id), dataToUpdate);
 
-            // Log Activity
-            if (user) {
-                const docIdentifier = selectedDoc.order_number ? `#${selectedDoc.order_number}` : id;
-                const meta = { docId: id, collection: selectedCollection, changedFields };
-                if (selectedDoc.order_number) meta.orderNumber = selectedDoc.order_number;
-                ActivityLogService.log(
-                    user.uid,
-                    user.email,
-                    'EDIT_DOC',
-                    `Edited doc ${docIdentifier} in ${selectedCollection}`,
-                    meta
-                );
-            }
-
             setIsEditing(false);
             fetchDocuments();
             showSnackbar("Document updated successfully");
@@ -968,13 +913,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 const docIdentifier = selectedDoc.order_number ? `#${selectedDoc.order_number}` : selectedDoc.id;
                 const meta = { docId: selectedDoc.id, collection: selectedCollection };
                 if (selectedDoc.order_number) meta.orderNumber = selectedDoc.order_number;
-                ActivityLogService.log(
-                    user.uid,
-                    user.email,
-                    'RESET_DOC_MODS',
-                    `Reset modifications for ${docIdentifier}`,
-                    meta
-                );
             }
 
             setVisible(false);
@@ -1063,21 +1001,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
             const newStatus = item.cod_status === 'confirmed' ? 'pending' : 'confirmed';
             await updateDoc(doc(db, selectedCollection, item.id), { cod_status: newStatus });
 
-            // Log Activity
-            if (user) {
-                const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
-                const meta = { docId: item.id, collection: selectedCollection, newStatus };
-                if (item.order_number) meta.orderNumber = item.order_number;
-                ActivityLogService.log(
-                    user.uid,
-                    user.email,
-                    'UPDATE_STATUS',
-                    `Toggled COD status to ${newStatus} for ${docIdentifier}`,
-                    meta
-                );
-            }
-
-            // Local state update (optional if real-time listener is fast enough, but good for UX)
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
             showSnackbar(`Order marked as ${newStatus}`);
         } catch (error) {
@@ -1098,16 +1021,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
                 const meta = { docId: item.id, collection: selectedCollection };
                 if (item.order_number) meta.orderNumber = item.order_number;
-                ActivityLogService.log(
-                    user.uid,
-                    user.email,
-                    'RESET_DOC_MODS',
-                    `Reset modifications for ${docIdentifier}`,
-                    meta
-                );
-            }
-
-            // Update local state immediately for snappy feel
             setDocuments(prev => prev.map(d => d.id === item.id ? {
                 ...d,
                 adminEdited: false,
@@ -1156,19 +1069,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 });
 
                 // Log Activity
-                if (user) {
-                    const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
-                    const meta = { docId: item.id, collection: selectedCollection };
-                    if (item.order_number) meta.orderNumber = item.order_number;
-                    ActivityLogService.log(
-                        user.uid,
-                        user.email,
-                        'ATTACH_VOICE_NOTE',
-                        `Attached voice note to ${docIdentifier}`,
-                        meta
-                    );
-                }
-
                 setDocuments(prev => prev.map(d => d.id === item.id ? { 
                     ...d, 
                     voiceNoteUrl: url, 
@@ -1209,15 +1109,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
                 const meta = { docId: item.id, collection: selectedCollection, newStatus };
                 if (item.order_number) meta.orderNumber = item.order_number;
-                ActivityLogService.log(
-                    user.uid,
-                    user.email,
-                    'UPDATE_STATUS',
-                    `Toggled SHIPPED status to ${newStatus} for ${docIdentifier}`,
-                    meta
-                );
-            }
-
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
             showSnackbar(`Order marked as ${newStatus.toUpperCase()}`);
         } catch (error) {
@@ -1237,15 +1128,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
                 const meta = { docId: item.id, collection: selectedCollection, newStatus };
                 if (item.order_number) meta.orderNumber = item.order_number;
-                ActivityLogService.log(
-                    user.uid,
-                    user.email,
-                    'UPDATE_STATUS',
-                    `Toggled CANCELLED status to ${newStatus} for ${docIdentifier}`,
-                    meta
-                );
-            }
-
             setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, cod_status: newStatus } : d));
             showSnackbar(`Order marked as ${newStatus.toUpperCase()}`);
         } catch (error) {
@@ -1818,18 +1700,6 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                         await updateDoc(doc(db, selectedCollection, targetNoteDoc.id), {
                             internal_notes: noteText
                         });
-
-                        // Log Activity
-                        if (user) {
-                            const docIdentifier = targetNoteDoc.order_number ? `#${targetNoteDoc.order_number}` : targetNoteDoc.id;
-                            ActivityLogService.log(
-                                user.uid,
-                                user.email,
-                                'UPDATE_NOTE',
-                                `Updated note for ${docIdentifier}`,
-                                { docId: targetNoteDoc.id, collection: selectedCollection }
-                            );
-                        }
 
                         // Optimistic Update
                         setDocuments(prev => prev.map(d => d.id === targetNoteDoc.id ? { ...d, internal_notes: noteText } : d));

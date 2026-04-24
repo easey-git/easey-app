@@ -1,7 +1,7 @@
 import { collection, doc, query, orderBy, limit, startAfter, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../config/firebase';
-import { ActivityLogService } from './activityLogService';
+
 
 const TRANSACTION_COLLECTION = 'wallet_transactions';
 
@@ -14,17 +14,6 @@ export const WalletService = {
         try {
             const addTx = httpsCallable(functions, 'addTransaction');
             const result = await addTx(transactionData);
-
-            // Log local activity if desired
-            if (userId) {
-                ActivityLogService.log(
-                    userId,
-                    userEmail,
-                    'ADD_TRANSACTION',
-                    `Added ${transactionData.type} of ${transactionData.amount}`,
-                    { ...transactionData }
-                );
-            }
 
             return result.data;
         } catch (error) {
@@ -40,15 +29,6 @@ export const WalletService = {
         try {
             const deleteTx = httpsCallable(functions, 'deleteTransaction');
             await deleteTx({ transactionId });
-
-            if (userId) {
-                ActivityLogService.log(
-                    userId,
-                    userEmail,
-                    'DELETE_TRANSACTION',
-                    `Deleted transaction ${transactionId}`
-                );
-            }
 
             return true;
         } catch (error) {

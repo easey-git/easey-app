@@ -5,7 +5,7 @@ import { Text, useTheme, Avatar, Surface, IconButton, ActivityIndicator, Chip, D
 import { collection, getDocs, query, orderBy, doc, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { db, functions } from '../config/firebase';
 import { httpsCallable } from 'firebase/functions';
-import { ActivityLogService } from '../services/activityLogService';
+
 import { CRMLayout } from '../components/CRMLayout';
 
 const AdminPanelScreen = ({ navigation }) => {
@@ -95,16 +95,7 @@ const AdminPanelScreen = ({ navigation }) => {
                 permissions: tempPermissions
             });
 
-            // Log Activity
-            if (currentUser) {
-                ActivityLogService.log(
-                    currentUser.uid,
-                    currentUser.email,
-                    'UPDATE_PERMISSIONS',
-                    `Updated permissions for user ${selectedUser.email}`,
-                    { targetUserId: selectedUser.id, permissions: tempPermissions }
-                );
-            }
+
 
             setPermissionsDialogVisible(false);
         } catch (error) {
@@ -138,17 +129,6 @@ const AdminPanelScreen = ({ navigation }) => {
     const handleDeleteUser = async (userId) => {
         try {
             await deleteDoc(doc(db, 'users', userId));
-
-            // Log Activity
-            if (currentUser) {
-                ActivityLogService.log(
-                    currentUser.uid,
-                    currentUser.email,
-                    'DELETE_USER',
-                    `Deleted user ${userId}`,
-                    { targetUserId: userId }
-                );
-            }
 
             setConfirmDialogVisible(false);
         } catch (error) {
@@ -186,17 +166,6 @@ const AdminPanelScreen = ({ navigation }) => {
             ));
 
             Alert.alert("Success", `User ${!user.disabled ? 'disabled' : 'enabled'} successfully.`);
-
-            // Log Activity
-            if (currentUser) {
-                ActivityLogService.log(
-                    currentUser.uid,
-                    currentUser.email,
-                    'TOGGLE_USER_STATUS',
-                    `${!user.disabled ? 'Disabled' : 'Enabled'} user ${user.email}`,
-                    { targetUserId: user.id, newStatus: !user.disabled ? 'disabled' : 'enabled' }
-                );
-            }
         } catch (error) {
             console.error("Error toggling status:", error);
             Alert.alert("Error", error.message || "Failed to update user status.");
@@ -319,15 +288,6 @@ const AdminPanelScreen = ({ navigation }) => {
                     <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, paddingHorizontal: 16 }}>
                         Manage access and roles for all registered users.
                     </Text>
-                    <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
-                        <Button
-                            mode="contained-tonal"
-                            icon="history"
-                            onPress={() => navigation.navigate('ActivityLog')}
-                        >
-                            View Activity Logs
-                        </Button>
-                    </View>
                 </View>
 
                 {loading ? (

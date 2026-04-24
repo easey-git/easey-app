@@ -5,7 +5,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { usePreferences } from '../context/PreferencesContext';
 import { useAuth } from '../context/AuthContext';
 import { CRMLayout } from '../components/CRMLayout';
-import { ActivityLogService } from '../services/activityLogService';
+
 
 const SettingsScreen = ({ navigation }) => {
     const theme = useTheme();
@@ -66,15 +66,6 @@ const SettingsScreen = ({ navigation }) => {
 
                                         try {
                                             await toggleTheme();
-                                            if (user) {
-                                                await ActivityLogService.log(
-                                                    user.uid,
-                                                    user.email,
-                                                    'UPDATE_PREFERENCE',
-                                                    `Changed theme to ${!isThemeDark ? 'Dark' : 'Light'}`,
-                                                    { type: 'theme', value: !isThemeDark }
-                                                );
-                                            }
                                             await minLoadTime;
                                         } catch (error) {
                                             console.error("Theme toggle failed:", error);
@@ -98,15 +89,6 @@ const SettingsScreen = ({ navigation }) => {
                         left={props => <List.Icon {...props} icon="bell-outline" />}
                         right={() => <Switch value={notificationsEnabled} onValueChange={() => {
                             toggleNotifications();
-                            if (user) {
-                                ActivityLogService.log(
-                                    user.uid,
-                                    user.email,
-                                    'UPDATE_PREFERENCE',
-                                    `${!notificationsEnabled ? 'Enabled' : 'Disabled'} notifications`,
-                                    { type: 'notifications', value: !notificationsEnabled }
-                                );
-                            }
                         }} />}
                         style={styles.listItem}
                     />
@@ -120,15 +102,6 @@ const SettingsScreen = ({ navigation }) => {
                         left={props => <List.Icon {...props} icon="fingerprint" />}
                         right={() => <Switch value={biometricsEnabled} onValueChange={() => {
                             toggleBiometrics();
-                            if (user) {
-                                ActivityLogService.log(
-                                    user.uid,
-                                    user.email,
-                                    'UPDATE_PREFERENCE',
-                                    `${!biometricsEnabled ? 'Enabled' : 'Disabled'} biometrics`,
-                                    { type: 'biometrics', value: !biometricsEnabled }
-                                );
-                            }
                         }} disabled={!isBiometricSupported} />}
                         style={styles.listItem}
                     />

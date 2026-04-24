@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveContainer } from './ResponsiveContainer';
 import { useDrawer } from '../context/DrawerContext';
-import { ActivityLogService } from '../services/activityLogService';
+
 import { useAuth } from '../context/AuthContext';
 import { LAYOUT } from '../theme/layout';
 
@@ -14,21 +14,6 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
     const { isDesktop } = useResponsive();
     const { openDrawer, isSidebarPinned } = useDrawer();
     const { user } = useAuth();
-
-    // Activity Logging
-    React.useEffect(() => {
-        if (user) {
-            // Log Screen View
-            ActivityLogService.log(
-                user.uid,
-                user.email,
-                'VIEW_SCREEN',
-                `Viewed ${title}`
-            );
-            // Update Presence
-            ActivityLogService.heartbeat(user.uid);
-        }
-    }, [title, user]);
 
     const containerProps = fullWidth ? {
         maxWidth: '100%',

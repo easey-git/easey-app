@@ -4,7 +4,7 @@ import { Surface, Text, TextInput, useTheme, IconButton } from 'react-native-pap
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { ActivityLogService } from '../services/activityLogService';
+
 
 let lastTeamBoardCache = {
     content: '',

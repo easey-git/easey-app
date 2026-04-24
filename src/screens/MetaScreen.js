@@ -11,7 +11,7 @@ import { AccessDenied } from '../components/AccessDenied';
  * Fully wired with all backend APIs
  */
 
-import { ActivityLogService } from '../services/activityLogService';
+
 
 const BASE_URL = 'https://easey-app.vercel.app/api';
 
@@ -307,7 +307,7 @@ const OverviewTab = ({ accountData, error, theme, getAlertColor, getStatusColor,
                                                     width: `${Math.max(0, Math.min(100, ((accountData.limits.spendCap - accountData.limits.remainingSpendCap) / accountData.limits.spendCap) * 100))}%`,
                                                     backgroundColor: accountData.limits.remainingSpendCap < accountData.limits.spendCap * 0.1 ? theme.colors.error : theme.colors.primary
                                                 }
-                                            ]}
+                                            ]
                                         />
                                     </View>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
@@ -410,16 +410,6 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
             });
 
             if (response.ok) {
-                // Log Activity
-                if (user) {
-                    ActivityLogService.log(
-                        user.uid,
-                        user.email,
-                        'TOGGLE_CAMPAIGN_STATUS',
-                        `Toggled campaign ${campaignId} status to ${newStatus}`,
-                        { campaignId, newStatus }
-                    ).catch(err => console.error('Activity log error:', err));
-                }
                 // Success - optimistic update is already applied
             } else {
                 // Rollback optimistic update on error
@@ -536,22 +526,6 @@ const CampaignsTab = ({ campaignsData, error, theme, getCampaignStatusColor, fet
                     Alert.alert('Success', 'Ad Set budget updated');
                 } else {
                     fetchData(); // Refresh campaign list
-                }
-
-                // Log Activity
-                if (user) {
-                    ActivityLogService.log(
-                        user.uid,
-                        user.email,
-                        'UPDATE_BUDGET',
-                        `Updated budget for ${isEditingAdSet ? 'AdSet' : 'Campaign'} ${editingItem.id}`,
-                        {
-                            itemId: editingItem.id,
-                            type: isEditingAdSet ? 'AdSet' : 'Campaign',
-                            amount: amount,
-                            budgetType: isLifetime ? 'lifetime' : 'daily'
-                        }
-                    );
                 }
             } else {
                 const errorData = await response.json();

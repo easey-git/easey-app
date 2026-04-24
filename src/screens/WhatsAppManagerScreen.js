@@ -5,7 +5,7 @@ import { BarChart } from 'react-native-gifted-charts';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CRMLayout } from '../components/CRMLayout';
-import { ActivityLogService } from '../services/activityLogService';
+
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
 
@@ -204,17 +204,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
             const data = await response.json();
             if (response.ok) {
-                // Log Activity
-                if (user) {
-                    ActivityLogService.log(
-                        user.uid,
-                        user.email,
-                        'SEND_VERIFICATION_MSG',
-                        `Sent verification to ${order.phone} for order #${order.orderNumber}`,
-                        { orderId: order.id, customerName: order.customerName }
-                    );
-                }
-                Alert.alert("Success", "Verification message sent!");
+                showSnackbar("Message sent successfully");
             } else {
                 Alert.alert("Error", "Failed to send: " + (data.error || "Unknown error"));
             }
@@ -314,16 +304,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 updatedAt: new Date()
             });
 
-            // Log Activity
-            if (user) {
-                ActivityLogService.log(
-                    user.uid,
-                    user.email,
-                    'MANUAL_STATUS_UPDATE',
-                    `Manually updated order ${orderId} status to ${newStatus}`,
-                    { orderId, newStatus }
-                );
-            }
+            showSnackbar("Status updated successfully");
 
             setMenuVisible(null);
         } catch (error) {
