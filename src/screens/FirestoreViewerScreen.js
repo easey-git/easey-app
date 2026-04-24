@@ -758,6 +758,28 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                 setVisible(false);
                 fetchDocuments();
                 showSnackbar("Document deleted successfully");
+            } else if (pendingAction?.type === 'deleteVoice') {
+                const { item } = pendingAction;
+                try {
+                    const storageRef = ref(storage, item.voiceNoteUrl);
+                    await deleteObject(storageRef);
+                } catch (e) { console.warn("Storage delete failed (file may already be gone)", e); }
+
+                await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: deleteField(), voiceNoteName: deleteField() });
+
+                if (user) {
+                    const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
+                    ActivityLogService.log(
+                        user.uid,
+                        user.email,
+                        'DELETE_VOICE_NOTE',
+                        `Deleted voice note from ${docIdentifier}`,
+                        { docId: item.id, collection: selectedCollection }
+                    );
+                }
+
+                setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: undefined, voiceNoteName: undefined } : d));
+                showSnackbar("Voice note deleted");
             }
         } catch (error) {
             console.error("Error executing action:", error);
@@ -1065,43 +1087,11 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     };
 
-    const handleDeleteVoice = async (item) => {
-        if (Platform.OS === 'web') {
-            if (!confirm("Are you sure you want to delete this voice note?")) return;
-        }
-        // For native, Alert.alert should be used, but keeping it simple for now or assuming Alert works on web via polyfill (it often does)
-
-        setLoading(true);
-        try {
-            try {
-                const storageRef = ref(storage, item.voiceNoteUrl);
-                await deleteObject(storageRef);
-            } catch (e) { console.warn("Storage delete failed", e); }
-
-            await updateDoc(doc(db, selectedCollection, item.id), { voiceNoteUrl: deleteField(), voiceNoteName: deleteField() });
-
-            // Log Activity
-            if (user) {
-                const docIdentifier = item.order_number ? `#${item.order_number}` : item.id;
-                const meta = { docId: item.id, collection: selectedCollection };
-                if (item.order_number) meta.orderNumber = item.order_number;
-                ActivityLogService.log(
-                    user.uid,
-                    user.email,
-                    'DELETE_VOICE_NOTE',
-                    `Deleted voice note from ${docIdentifier}`,
-                    meta
-                );
-            }
-
-            setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: undefined, voiceNoteName: undefined } : d));
-            showSnackbar("Voice note deleted");
-        } catch (err) {
-            console.error(err);
-            showSnackbar("Failed to delete voice note", true);
-        } finally {
-            setLoading(false);
-        }
+    const handleDeleteVoice = (item) => {
+        setConfirmTitle("Remove Voice Note");
+        setConfirmMessage("Are you sure you want to delete this voice note? This cannot be undone.");
+        setPendingAction({ type: 'deleteVoice', item });
+        setConfirmVisible(true);
     };
 
     const handleShippedToggle = async (item) => {
