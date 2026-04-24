@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'; // Cache bust 1
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Platform, KeyboardAvoidingView } from 'react-native';
-import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon, ActivityIndicator } from 'react-native-paper';
+import { Text, useTheme, Appbar, Surface, IconButton, Portal, Dialog, Modal, Button, Divider, TextInput, Switch, List, Checkbox, FAB, Paragraph, Snackbar, Avatar, Chip, Icon, ActivityIndicator, Menu } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
 import { collection, query, where, limit, getDocs, doc, updateDoc, writeBatch, deleteField, getDocsFromServer, orderBy, startAfter, Timestamp, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -370,7 +370,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [lastDoc, setLastDoc] = useState(null);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
-    const PAGE_SIZE = 25; // Reduced from 100 for better performance
+    const PAGE_SIZE = 50; // Increased for better bulk management
 
     // Filter Documents with debouncing
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -390,6 +390,7 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
     const [confirmTitle, setConfirmTitle] = useState('');
     const [confirmMessage, setConfirmMessage] = useState('');
     const [pendingAction, setPendingAction] = useState(null);
+    const [bulkMenuVisible, setBulkMenuVisible] = useState(false);
 
     // Note Dialog State
     const [noteDialogVisible, setNoteDialogVisible] = useState(false);
@@ -671,6 +672,67 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         }
     };
 
+    const handleSelectAll = async () => {
+        if (selectedItems.size === documents.length && !hasMore) {
+            setSelectedItems(new Set());
+            return;
+        }
+
+        // Initially select what's already loaded
+        const allLoadedIds = new Set(documents.map(d => d.id));
+        setSelectedItems(allLoadedIds);
+
+        // If there's more in the DB, ask or just fetch them?
+        // User said "it should dynamically fetch", so let's offer to fetch all or just do it.
+        // To be safe and avoid unexpected costs, we can just fetch the next batch or all.
+        if (hasMore) {
+            setLoadingMore(true);
+            try {
+                let allDocs = [...documents];
+                let currentLastDoc = lastDoc;
+                let moreAvailable = true;
+
+                while (moreAvailable) {
+                    const nextConstraints = buildQueryConstraints(
+                        activeFilters,
+                        customDate,
+                        selectedCollection,
+                        true,
+                        currentLastDoc,
+                        PAGE_SIZE
+                    );
+                    const nextQ = query(collection(db, selectedCollection), ...nextConstraints);
+                    const nextSnapshot = await getDocs(nextQ);
+                    
+                    if (nextSnapshot.empty) {
+                        moreAvailable = false;
+                    } else {
+                        const nextDocs = nextSnapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ref: doc.ref,
+                            ...doc.data()
+                        }));
+                        allDocs = [...allDocs, ...nextDocs];
+                        currentLastDoc = nextSnapshot.docs[nextSnapshot.docs.length - 1];
+                        moreAvailable = nextSnapshot.docs.length === PAGE_SIZE;
+                        
+                        // Update selection as we go
+                        const updatedIds = new Set(allDocs.map(d => d.id));
+                        setSelectedItems(updatedIds);
+                        setDocuments(allDocs);
+                        setLastDoc(currentLastDoc);
+                    }
+                }
+                setHasMore(false);
+            } catch (error) {
+                console.error("Error selecting all:", error);
+                showSnackbar("Failed to load all items", true);
+            } finally {
+                setLoadingMore(false);
+            }
+        }
+    };
+
     const toggleSelection = useCallback((id) => {
         setSelectedItems(prev => {
             const newSelected = new Set(prev);
@@ -698,6 +760,17 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setConfirmVisible(true);
     };
 
+    const handleBulkUpdateStatus = (status) => {
+        if (selectedItems.size === 0) return;
+        setBulkMenuVisible(false);
+
+        const statusLabel = status.toUpperCase();
+        setConfirmTitle("Bulk Update Status");
+        setConfirmMessage(`Change status to ${statusLabel} for ${selectedItems.size} orders?`);
+        setPendingAction({ type: 'bulkStatusUpdate', status });
+        setConfirmVisible(true);
+    };
+
     const handleDelete = (id) => {
         setConfirmTitle("Delete Document");
         setConfirmMessage("Are you sure you want to delete this document?");
@@ -709,17 +782,19 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
         setLoading(true);
         try {
             if (pendingAction?.type === 'bulk') {
-                const batch = writeBatch(db);
                 const itemsToDelete = Array.from(selectedItems);
 
-                itemsToDelete.forEach(id => {
-                    // Always create a fresh reference from the current db instance
-                    const cleanId = id.trim();
-                    const docRef = doc(db, selectedCollection, cleanId);
-                    batch.delete(docRef);
-                });
-
-                await batch.commit();
+                // Firestore batch limit is 500
+                for (let i = 0; i < itemsToDelete.length; i += 500) {
+                    const chunk = itemsToDelete.slice(i, i + 500);
+                    const batch = writeBatch(db);
+                    chunk.forEach(id => {
+                        const cleanId = id.trim();
+                        const docRef = doc(db, selectedCollection, cleanId);
+                        batch.delete(docRef);
+                    });
+                    await batch.commit();
+                }
 
                 // Log Activity
                 if (user) {
@@ -780,6 +855,34 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
 
                 setDocuments(prev => prev.map(d => d.id === item.id ? { ...d, voiceNoteUrl: undefined, voiceNoteName: undefined } : d));
                 showSnackbar("Voice note deleted");
+            } else if (pendingAction?.type === 'bulkStatusUpdate') {
+                const { status } = pendingAction;
+                const itemsToUpdate = Array.from(selectedItems);
+
+                // Firestore batch limit is 500
+                for (let i = 0; i < itemsToUpdate.length; i += 500) {
+                    const chunk = itemsToUpdate.slice(i, i + 500);
+                    const batch = writeBatch(db);
+                    chunk.forEach(id => {
+                        const docRef = doc(db, selectedCollection, id.trim());
+                        batch.update(docRef, { cod_status: status });
+                    });
+                    await batch.commit();
+                }
+
+                if (user) {
+                    ActivityLogService.log(
+                        user.uid,
+                        user.email,
+                        'BULK_UPDATE_STATUS',
+                        `Bulk updated ${itemsToUpdate.length} orders to ${status}`,
+                        { count: itemsToUpdate.length, collection: selectedCollection, status }
+                    );
+                }
+
+                setSelectedItems(new Set());
+                fetchDocuments();
+                showSnackbar(`Successfully updated ${itemsToUpdate.length} orders to ${status.toUpperCase()}`);
             }
         } catch (error) {
             console.error("Error executing action:", error);
@@ -1192,23 +1295,40 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     {/* Select All Checkbox */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
                         <Checkbox
-                            status={documents.length > 0 && selectedItems.size === documents.length ? 'checked' : 'unchecked'}
-                            onPress={() => {
-                                if (selectedItems.size === documents.length) {
-                                    setSelectedItems(new Set());
-                                } else {
-                                    const allIds = new Set(documents.map(d => d.id));
-                                    setSelectedItems(allIds);
-                                }
-                            }}
+                            status={documents.length > 0 && selectedItems.size === documents.length ? 'checked' : (selectedItems.size > 0 ? 'indeterminate' : 'unchecked')}
+                            onPress={handleSelectAll}
                         />
                         <Text variant="labelSmall">All</Text>
                     </View>
 
                     {selectedItems.size > 0 ? (
-                        <Button textColor={theme.colors.error} onPress={handleBulkDelete}>
-                            {selectedItems.size === 1 ? 'Delete Item' : `Bulk Delete (${selectedItems.size})`}
-                        </Button>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {selectedCollection === 'orders' && (
+                                <Menu
+                                    visible={bulkMenuVisible}
+                                    onDismiss={() => setBulkMenuVisible(false)}
+                                    anchor={
+                                        <Button
+                                            mode="text"
+                                            onPress={() => setBulkMenuVisible(true)}
+                                            textColor={theme.colors.primary}
+                                            icon="chevron-down"
+                                            contentStyle={{ flexDirection: 'row-reverse' }}
+                                        >
+                                            Update Status
+                                        </Button>
+                                    }
+                                >
+                                    <Menu.Item onPress={() => handleBulkUpdateStatus('pending')} title="Pending" leadingIcon="clock-outline" />
+                                    <Menu.Item onPress={() => handleBulkUpdateStatus('confirmed')} title="Confirmed" leadingIcon="check-circle-outline" />
+                                    <Menu.Item onPress={() => handleBulkUpdateStatus('shipped')} title="Shipped" leadingIcon="truck-delivery-outline" />
+                                    <Menu.Item onPress={() => handleBulkUpdateStatus('cancelled')} title="Cancelled" leadingIcon="close-circle-outline" />
+                                </Menu>
+                            )}
+                            <Button textColor={theme.colors.error} onPress={handleBulkDelete}>
+                                {selectedItems.size === 1 ? 'Delete' : `Delete (${selectedItems.size})`}
+                            </Button>
+                        </View>
                     ) : (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             {customDate ? (
@@ -1673,7 +1793,14 @@ const FirestoreViewerScreen = ({ navigation, route }) => {
                     </Dialog.Content>
                     <Dialog.Actions style={{ justifyContent: 'center', paddingBottom: 16 }}>
                         <Button onPress={() => setConfirmVisible(false)} style={{ marginRight: 8 }}>Cancel</Button>
-                        <Button mode="contained" onPress={executeConfirm} buttonColor={theme.colors.error} textColor={theme.colors.onError}>Delete</Button>
+                        <Button 
+                            mode="contained" 
+                            onPress={executeConfirm} 
+                            buttonColor={pendingAction?.type?.includes('StatusUpdate') ? theme.colors.primary : theme.colors.error} 
+                            textColor={pendingAction?.type?.includes('StatusUpdate') ? theme.colors.onPrimary : theme.colors.onError}
+                        >
+                            {pendingAction?.type?.includes('StatusUpdate') ? 'Update' : 'Delete'}
+                        </Button>
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
