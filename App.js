@@ -18,7 +18,7 @@ import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
 
 import { PayUScreen } from './src/screens/PayUScreen';
-import GmailScreen from './src/screens/GmailScreen';
+
 
 
 import AdminPanelScreen from './src/screens/AdminPanelScreen';
@@ -246,11 +246,7 @@ function AppStack() {
               component={PayUScreen}
               options={{ title: 'PayU Dash' }}
             />
-            <Stack.Screen
-              name="Gmail"
-              component={GmailScreen}
-              options={{ title: 'Gmail' }}
-            />
+
 
 
 
