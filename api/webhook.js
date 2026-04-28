@@ -657,7 +657,7 @@ module.exports = async (req, res) => {
                             });
 
                             if (messagePayload) {
-                                await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
+                                await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components, "en_US");
                             }
                         } catch (err) {
                             console.error('[WhatsApp] Error:', err.message);
