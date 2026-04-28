@@ -541,13 +541,19 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
             {/* Chat Dialog */}
             <Portal>
-                <Dialog visible={chatDialogVisible} onDismiss={() => setChatDialogVisible(false)} style={styles.modalCard}>
-                    <Dialog.Title style={{ fontSize: 18, paddingBottom: 0 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <View>
-                                <Text style={{ fontSize: 18, fontWeight: 'bold' }}>{selectedCustomer?.customerName || 'Customer'}</Text>
-                                <Text variant="bodySmall" style={{ opacity: 0.6 }}>{selectedCustomer?.phone}</Text>
-                            </View>
+                <Dialog 
+                    visible={chatDialogVisible} 
+                    onDismiss={() => setChatDialogVisible(false)} 
+                    style={styles.modalCard}
+                >
+                    {/* Header: More compact and includes Close button */}
+                    <View style={styles.modalHeader}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.headerTitle}>{selectedCustomer?.customerName || 'Customer'}</Text>
+                            <Text variant="bodySmall" style={{ opacity: 0.6 }}>{selectedCustomer?.phone}</Text>
+                        </View>
+                        
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             {(() => {
                                 const lastInbound = chatHistory.find(m => m.direction === 'inbound');
                                 const isWindowOpen = lastInbound && (new Date() - new Date(lastInbound.createdAt)) < 24 * 60 * 60 * 1000;
@@ -563,9 +569,18 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     </Badge>
                                 );
                             })()}
+                            <IconButton 
+                                icon="close" 
+                                size={24} 
+                                onPress={() => setChatDialogVisible(false)} 
+                                style={{ margin: 0 }}
+                            />
                         </View>
-                    </Dialog.Title>
-                    <Dialog.Content style={{ flex: 1, paddingHorizontal: 0, paddingBottom: 0 }}>
+                    </View>
+
+                    <Divider />
+
+                    <View style={{ flex: 1, position: 'relative' }}>
                         {(() => {
                             const lastInbound = chatHistory.find(m => m.direction === 'inbound');
                             const isWindowOpen = lastInbound && (new Date() - new Date(lastInbound.createdAt)) < 24 * 60 * 60 * 1000;
@@ -573,14 +588,15 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             return (
                                 <View style={{ flex: 1 }}>
                                     {!isWindowOpen && (
-                                        <Surface style={{ padding: 8, backgroundColor: theme.colors.errorContainer, flexDirection: 'row', alignItems: 'center' }} elevation={0}>
-                                            <Icon source="alert-circle-outline" size={20} color={theme.colors.onErrorContainer} />
-                                            <Text style={{ marginLeft: 8, fontSize: 12, flex: 1, color: theme.colors.onErrorContainer }}>
-                                                Service window closed. Send a template to re-engage.
+                                        <Surface style={styles.windowAlert} elevation={0}>
+                                            <Icon source="alert-circle-outline" size={18} color={theme.colors.onErrorContainer} />
+                                            <Text style={styles.windowAlertText}>
+                                                Service window closed. Use a template to reply.
                                             </Text>
                                         </Surface>
                                     )}
-                                    <View style={{ flex: 1, backgroundColor: theme.colors.surface }}>
+                                    
+                                    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
                                         <GiftedChat
                                             messages={chatHistory}
                                             onSend={messages => onSend(messages)}
@@ -588,7 +604,16 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             renderUsernameOnMessage={true}
                                             showUserAvatar={false}
                                             alwaysShowSend={isWindowOpen}
-                                            renderInputToolbar={props => isWindowOpen ? <InputToolbar {...props} /> : null}
+                                            renderInputToolbar={props => isWindowOpen ? (
+                                                <InputToolbar 
+                                                    {...props} 
+                                                    containerStyle={{ 
+                                                        borderTopWidth: 1, 
+                                                        borderTopColor: theme.colors.outlineVariant,
+                                                        backgroundColor: theme.colors.surface
+                                                    }} 
+                                                />
+                                            ) : null}
                                             scrollToBottom
                                             textInputStyle={{ color: theme.colors.onSurface }}
                                             renderLoading={() => <ActivityIndicator style={{ marginTop: 20 }} />}
@@ -597,7 +622,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                                     {...props}
                                                     wrapperStyle={{
                                                         right: { backgroundColor: theme.colors.primary },
-                                                        left: { backgroundColor: theme.colors.surfaceVariant }
+                                                        left: { backgroundColor: theme.colors.elevation.level2 }
                                                     }}
                                                     renderTicks={(msg) => {
                                                         if (msg.user._id !== 1) return null;
@@ -623,59 +648,58 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 </View>
                             );
                         })()}
-                        
-                        {/* Quick Action Bar */}
-                        <Divider />
-                        <View style={{ backgroundColor: theme.colors.surfaceVariant, paddingVertical: 4 }}>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ padding: 4 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 8 }}>
-                                <Button 
-                                    mode="elevated" 
-                                    compact 
-                                    icon="check-circle"
-                                    style={{ borderRadius: 20 }}
-                                    onPress={() => sendQuickTemplate('cod_auto_confirmation', [
-                                        { type: 'body', parameters: [
-                                            { type: 'text', text: selectedCustomer?.customerName || 'Customer' },
-                                            { type: 'text', text: selectedCustomer?.orderNumber || 'Order' },
-                                            { type: 'text', text: selectedCustomer?.items?.[0]?.name || 'Item' },
-                                            { type: 'text', text: String(selectedCustomer?.totalPrice || '0') }
-                                        ]}
-                                    ])}
-                                >
-                                    Confirm COD
-                                </Button>
-                                <Button 
-                                    mode="elevated" 
-                                    compact 
-                                    icon="map-marker"
-                                    style={{ borderRadius: 20 }}
-                                    onPress={() => sendQuickTemplate('update_address', [
-                                        { type: 'body', parameters: [{ type: 'text', text: selectedCustomer?.customerName || 'Customer' }] }
-                                    ])}
-                                >
-                                    Req Address
-                                </Button>
-                                <Button 
-                                    mode="elevated" 
-                                    compact 
-                                    icon="cart-arrow-down"
-                                    style={{ borderRadius: 20 }}
-                                    onPress={() => sendQuickTemplate('cart_recovery', [
-                                        { type: 'body', parameters: [
-                                            { type: 'text', text: selectedCustomer?.customerName || 'Customer' },
-                                            { type: 'text', text: String(selectedCustomer?.totalPrice || '0') },
-                                            { type: 'text', text: 'https://easey.in/cart' }
-                                        ]}
-                                    ])}
-                                >
-                                    Recovery
-                                </Button>
-                            </ScrollView>
-                        </View>
-                    </Dialog.Content>
-                    <Dialog.Actions>
-                        <Button onPress={() => setChatDialogVisible(false)}>Close</Button>
-                    </Dialog.Actions>
+                    </View>
+                    
+                    {/* Integrated Quick Action Footer */}
+                    <Surface style={styles.modalFooter} elevation={2}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}>
+                            <Button 
+                                mode="outlined" 
+                                compact 
+                                icon="check-circle"
+                                style={styles.quickActionButton}
+                                labelStyle={{ fontSize: 11 }}
+                                onPress={() => sendQuickTemplate('cod_auto_confirmation', [
+                                    { type: 'body', parameters: [
+                                        { type: 'text', text: selectedCustomer?.customerName || 'Customer' },
+                                        { type: 'text', text: selectedCustomer?.orderNumber || 'Order' },
+                                        { type: 'text', text: selectedCustomer?.items?.[0]?.name || 'Item' },
+                                        { type: 'text', text: String(selectedCustomer?.totalPrice || '0') }
+                                    ]}
+                                ])}
+                            >
+                                Confirm COD
+                            </Button>
+                            <Button 
+                                mode="outlined" 
+                                compact 
+                                icon="map-marker"
+                                style={styles.quickActionButton}
+                                labelStyle={{ fontSize: 11 }}
+                                onPress={() => sendQuickTemplate('update_address', [
+                                    { type: 'body', parameters: [{ type: 'text', text: selectedCustomer?.customerName || 'Customer' }] }
+                                ])}
+                            >
+                                Req Address
+                            </Button>
+                            <Button 
+                                mode="outlined" 
+                                compact 
+                                icon="cart-arrow-down"
+                                style={styles.quickActionButton}
+                                labelStyle={{ fontSize: 11 }}
+                                onPress={() => sendQuickTemplate('cart_recovery', [
+                                    { type: 'body', parameters: [
+                                        { type: 'text', text: selectedCustomer?.customerName || 'Customer' },
+                                        { type: 'text', text: String(selectedCustomer?.totalPrice || '0') },
+                                        { type: 'text', text: 'https://easey.in/cart' }
+                                    ]}
+                                ])}
+                            >
+                                Recovery
+                            </Button>
+                        </ScrollView>
+                    </Surface>
                 </Dialog>
             </Portal>
         </CRMLayout>
@@ -820,8 +844,41 @@ const styles = StyleSheet.create({
         height: '85%',
         maxHeight: '85%',
         alignSelf: 'center',
-        borderRadius: 32,
-        overflow: 'hidden'
+        borderRadius: 24,
+        overflow: 'hidden',
+        padding: 0, // CRITICAL: Remove Dialog internal padding
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    windowAlert: {
+        padding: 8,
+        backgroundColor: '#fee2e2', // Light red for window closed
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    windowAlertText: {
+        marginLeft: 8,
+        fontSize: 12,
+        fontWeight: '500',
+        color: '#991b1b',
+    },
+    modalFooter: {
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#f1f5f9',
+    },
+    quickActionButton: {
+        borderRadius: 20,
+        borderColor: '#e2e8f0',
     }
 });
 

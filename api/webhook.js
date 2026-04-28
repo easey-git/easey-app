@@ -234,8 +234,8 @@ module.exports = async (req, res) => {
                     await batch.commit();
                 }
 
-                // Log Inbound Message
-                await db.collection('whatsapp_messages').add({
+                // Log Inbound Message with Idempotency (use msgId as doc ID)
+                await db.collection('whatsapp_messages').doc(msgId).set({
                     id: msgId,
                     phone: senderPhone,
                     phoneNormalized,
@@ -246,7 +246,7 @@ module.exports = async (req, res) => {
                     isOptOut,
                     raw: JSON.stringify(message),
                     timestamp: admin.firestore.Timestamp.now()
-                });
+                }, { merge: true });
 
                 // ---------------------------------------------------------
                 // AUTOMATION LOGIC
@@ -286,9 +286,14 @@ module.exports = async (req, res) => {
                             const freshSnap = await t.get(orderRef);
                             const data = freshSnap.data();
 
-                            // Idempotency Check
+                            // Idempotency Check: If already processed, let the customer know
                             if (data.verificationStatus === 'verified_pending_address' || data.verificationStatus === 'approved') {
-                                console.info(`Order ${orderDoc.id} already processed. Skipping.`);
+                                console.info(`Order ${orderDoc.id} already processed. Sending feedback.`);
+                                messagePayload = {
+                                    to: senderPhone,
+                                    type: 'text',
+                                    message: `Your order #${data.orderNumber} is already confirmed and being processed! 🚀`
+                                };
                                 return;
                             }
 
@@ -318,7 +323,23 @@ module.exports = async (req, res) => {
                         });
 
                         if (messagePayload) {
-                            await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
+                            if (messagePayload.type === 'template') {
+                                await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
+                            } else {
+                                // Send simple text feedback for duplicates
+                                const token = process.env.WHATSAPP_ACCESS_TOKEN;
+                                const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+                                await fetch(`https://graph.facebook.com/v18.0/${phoneId}/messages`, {
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        messaging_product: "whatsapp",
+                                        to: messagePayload.to,
+                                        type: "text",
+                                        text: { body: messagePayload.message }
+                                    })
+                                });
+                            }
                         }
                     }
 
@@ -412,6 +433,9 @@ module.exports = async (req, res) => {
 
                 if (!msgQuery.empty) {
                     const msgDoc = msgQuery.docs[0];
+                    // Idempotency: skip if already processed this status
+                    if (msgDoc.data().status === newStatus) return res.status(200).send('ALREADY_PROCESSED');
+
                     const updateData = { status: newStatus };
 
                     if (newStatus === 'read') {
@@ -460,19 +484,45 @@ module.exports = async (req, res) => {
                     rawJson: JSON.stringify(data)
                 }, { merge: true });
 
-                // Abandoned Cart Recovery
+                // Abandoned Cart Recovery with Idempotency & Order Check
                 if (eventType === 'ABANDONED' && phoneNormalized && data.total_price > 0) {
-                    const checkoutUrl = data.cart_attributes?.landing_page_url || `https://yourstore.com/cart`;
-                    await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, [
-                        {
-                            type: 'body',
-                            parameters: [
-                                { type: 'text', text: data.first_name || 'Shopper' },
-                                { type: 'text', text: String(data.total_price || '0') },
-                                { type: 'text', text: checkoutUrl }
-                            ]
+                    const checkoutDocRef = db.collection("checkouts").doc(docId);
+                    
+                    await db.runTransaction(async (t) => {
+                        const snap = await t.get(checkoutDocRef);
+                        const cData = snap.data();
+
+                        // 1. Skip if already sent
+                        if (cData?.recoverySent) return;
+
+                        // 2. Skip if an order already exists for this phone recently (last 2 hours)
+                        const twoHoursAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 2 * 60 * 60 * 1000));
+                        const recentOrder = await db.collection('orders')
+                            .where('phoneNormalized', '==', phoneNormalized)
+                            .where('createdAt', '>=', twoHoursAgo)
+                            .limit(1)
+                            .get();
+
+                        if (!recentOrder.empty) {
+                            console.info(`Skipping recovery for ${phoneNormalized}: Order already exists.`);
+                            return;
                         }
-                    ]);
+
+                        // 3. Mark as sent and send message
+                        t.update(checkoutDocRef, { recoverySent: true, recoverySentAt: admin.firestore.Timestamp.now() });
+
+                        const checkoutUrl = data.cart_attributes?.landing_page_url || `https://yourstore.com/cart`;
+                        await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, [
+                            {
+                                type: 'body',
+                                parameters: [
+                                    { type: 'text', text: data.first_name || 'Shopper' },
+                                    { type: 'text', text: String(data.total_price || '0') },
+                                    { type: 'text', text: checkoutUrl }
+                                ]
+                            }
+                        ]);
+                    });
                 }
 
                 // Push Notification
