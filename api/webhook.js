@@ -485,6 +485,9 @@ module.exports = async (req, res) => {
                     ...data,
                     eventType,
                     phoneNormalized,
+                    customerName: `${data.first_name || data.billing_address?.first_name || "Guest"} ${data.last_name || data.billing_address?.last_name || ""}`.trim(),
+                    totalPrice: data.total_price || data.total_line_items_price || 0,
+                    items: data.line_items || data.items || [],
                     updatedAt: admin.firestore.Timestamp.now(),
                     rawJson: JSON.stringify(data)
                 }, { merge: true });
