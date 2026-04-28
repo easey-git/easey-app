@@ -68,7 +68,7 @@ const normalizePhone = (phone) => {
 /**
  * Sends a WhatsApp Template Message.
  */
-const sendWhatsAppMessage = async (to, templateName, components) => {
+const sendWhatsAppMessage = async (to, templateName, components, languageCode = "en") => {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
@@ -85,7 +85,7 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
             type: "template",
             template: {
                 name: templateName,
-                language: { code: "en" },
+                language: { code: languageCode },
                 components: components
             }
         };
@@ -550,7 +550,7 @@ module.exports = async (req, res) => {
                             ]
                         });
 
-                        await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, components);
+                        await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, components, "en");
                     });
                 }
 
