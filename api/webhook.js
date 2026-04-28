@@ -471,8 +471,13 @@ module.exports = async (req, res) => {
             // A. ABANDONED CART
             if (data.cart_id || data.latest_stage) {
                 const checkoutId = data.cart_id || "";
-                const phoneNormalized = normalizePhone(data.phone_number);
-                let eventType = queryParams.abandoned === "1" ? "ABANDONED" : "ACTIVE_CART";
+                const phone_number = data.phone_number || data.billing_address?.phone || data.shipping_address?.phone;
+                const phoneNormalized = normalizePhone(phone_number);
+                
+                // Fastrr stages check: Only block if they actually finished the order
+                const finishedStages = ['ORDER_PLACED', 'COMPLETED'];
+                const isActuallyAbandoned = queryParams.abandoned === "1" && !finishedStages.includes(data.latest_stage);
+                let eventType = isActuallyAbandoned ? "ABANDONED" : "ACTIVE_CART";
 
                 // Save Checkout Data
                 const docId = checkoutId ? `checkout_${checkoutId}` : `unknown_${Date.now()}`;
@@ -511,7 +516,7 @@ module.exports = async (req, res) => {
                         // 3. Mark as sent and send message
                         t.update(checkoutDocRef, { recoverySent: true, recoverySentAt: admin.firestore.Timestamp.now() });
 
-                        const checkoutUrl = data.cart_attributes?.landing_page_url || `https://yourstore.com/cart`;
+                        const checkoutUrl = data.checkout_url || data.custom_attributes?.landing_page_url || `https://easey.in/cart`;
                         await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, [
                             {
                                 type: 'body',
@@ -581,6 +586,7 @@ module.exports = async (req, res) => {
                             let queryRefs = [];
 
                             if (data.checkout_token) queryRefs.push(checkoutsRef.where("shopifyCartToken", "==", data.checkout_token));
+                            if (data.cart_id) queryRefs.push(checkoutsRef.where("cart_id", "==", data.cart_id));
                             if (data.email) queryRefs.push(checkoutsRef.where("email", "==", data.email));
                             if (phoneNormalized) queryRefs.push(checkoutsRef.where("phoneNormalized", "==", phoneNormalized));
 
