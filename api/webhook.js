@@ -319,6 +319,7 @@ module.exports = async (req, res) => {
                             const address = `${data.address1}, ${data.city}, ${data.state || ''}`;
                             messagePayload = {
                                 to: senderPhone,
+                                type: 'template',
                                 template: CONSTANTS.TEMPLATES.ORDER_CONFIRM_SCHEDULE,
                                 components: [
                                     {
@@ -378,6 +379,7 @@ module.exports = async (req, res) => {
 
                             messagePayload = {
                                 to: senderPhone,
+                                type: 'template',
                                 template: CONSTANTS.TEMPLATES.COD_CONFIRMED,
                                 components: [
                                     {
