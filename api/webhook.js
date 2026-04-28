@@ -85,7 +85,7 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
             type: "template",
             template: {
                 name: templateName,
-                language: { code: "en_US" },
+                language: { code: "en" },
                 components: components
             }
         };
