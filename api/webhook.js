@@ -292,7 +292,7 @@ module.exports = async (req, res) => {
                                 messagePayload = {
                                     to: senderPhone,
                                     type: 'text',
-                                    message: `Your order #${data.orderNumber} is already confirmed and being processed! 🚀`
+                                    message: `Your Easey order #${data.orderNumber} is already confirmed and being processed! 🚀`
                                 };
                                 return;
                             }
@@ -498,7 +498,10 @@ module.exports = async (req, res) => {
                         const cData = snap.data();
 
                         // 1. Skip if already sent
-                        if (cData?.recoverySent) return;
+                        if (cData?.recoverySent) {
+                            console.info(`[Recovery] Skipping: Already sent for cart ${docId}`);
+                            return;
+                        }
 
                         // 2. Skip if an order already exists for this phone recently (last 2 hours)
                         const twoHoursAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 2 * 60 * 60 * 1000));
@@ -509,15 +512,19 @@ module.exports = async (req, res) => {
                             .get();
 
                         if (!recentOrder.empty) {
-                            console.info(`Skipping recovery for ${phoneNormalized}: Order already exists.`);
+                            console.info(`[Recovery] Skipping for ${phoneNormalized}: Recent order found in last 2h.`);
                             return;
                         }
+
+                        console.info(`[Recovery] Triggering WhatsApp for ${phoneNormalized}...`);
 
                         // 3. Mark as sent and send message
                         t.update(checkoutDocRef, { recoverySent: true, recoverySentAt: admin.firestore.Timestamp.now() });
 
                         const checkoutUrl = data.checkout_url || data.custom_attributes?.landing_page_url || `https://easey.in/cart`;
-                        await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, [
+                        const productImage = data.img_url || data.items?.[0]?.img_url;
+
+                        const components = [
                             {
                                 type: 'body',
                                 parameters: [
@@ -526,7 +533,21 @@ module.exports = async (req, res) => {
                                     { type: 'text', text: checkoutUrl }
                                 ]
                             }
-                        ]);
+                        ];
+
+                        // Add Image Header (REQUIRED by your Meta Template)
+                        const fallbackImage = "https://easey.in/logo.png"; // Replace with your actual logo URL
+                        components.unshift({
+                            type: 'header',
+                            parameters: [
+                                {
+                                    type: 'image',
+                                    image: { link: productImage || fallbackImage }
+                                }
+                            ]
+                        });
+
+                        await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, components);
                     });
                 }
 
