@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList, Alert } from 'react-native';
-import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip } from 'react-native-paper';
+import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip, TextInput } from 'react-native-paper';
 import { BarChart } from 'react-native-gifted-charts';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CRMLayout } from '../components/CRMLayout';
+import { useResponsive } from '../hooks/useResponsive';
+import { GiftedChat, Bubble, Send, InputToolbar } from 'react-native-gifted-chat';
 
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
@@ -12,6 +14,7 @@ import { AccessDenied } from '../components/AccessDenied';
 const WhatsAppManagerScreen = ({ navigation }) => {
     const theme = useTheme();
     const { hasPermission, user } = useAuth();
+    const { isDesktop, width: screenWidth } = useResponsive();
 
     if (!hasPermission('access_whatsapp')) {
         return <AccessDenied title="WhatsApp Restricted" message="You need permission to access WhatsApp tools." />;
@@ -19,7 +22,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     const [tab, setTab] = useState('overview');
     const [codTab, setCodTab] = useState('pending'); // pending | approved
-    const screenWidth = Dimensions.get('window').width;
 
     // Data State
     const [codOrders, setCodOrders] = useState([]);
@@ -150,17 +152,88 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         const qChat = query(
             collection(db, "whatsapp_messages"),
             where("phoneNormalized", "==", phoneDigits),
-            orderBy("timestamp", "asc")
+            orderBy("timestamp", "desc"), // GiftedChat expects latest first for its internal paging, or we can reverse
+            limit(100)
         );
 
         const unsubChat = onSnapshot(qChat, (snapshot) => {
-            const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const messages = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    _id: doc.id,
+                    text: data.body || (data.type === 'template' ? `Template: ${data.templateName}` : ''),
+                    createdAt: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
+                    user: {
+                        _id: data.direction === 'outbound' ? 1 : 2,
+                        name: data.direction === 'outbound' ? 'Admin' : (selectedCustomer.customerName || 'Customer'),
+                        avatar: data.direction === 'outbound' ? null : 'https://placeimg.com/140/140/any',
+                    },
+                    received: data.status === 'delivered' || data.status === 'read',
+                    sent: data.status === 'sent' || data.status === 'delivered' || data.status === 'read',
+                    pending: data.status === 'pending',
+                    status: data.status,
+                    whatsappId: data.whatsappId,
+                    direction: data.direction
+                };
+            });
             setChatHistory(messages);
             setChatLoading(false);
         });
 
         return () => unsubChat();
     }, [selectedCustomer]);
+
+    const onSend = async (newMessages = []) => {
+        const msg = newMessages[0];
+        if (!msg || !selectedCustomer) return;
+
+        try {
+            const response = await fetch('/api/whatsapp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: selectedCustomer.phone,
+                    message: msg.text,
+                    type: 'text'
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                Alert.alert("Failed to send", errorData.error || "Unknown error");
+            }
+        } catch (error) {
+            console.error("Error sending message:", error);
+            Alert.alert("Error", "Network error while sending message.");
+        }
+    };
+
+    const sendQuickTemplate = async (templateName, components = []) => {
+        if (!selectedCustomer) return;
+        
+        try {
+            const response = await fetch('/api/whatsapp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: selectedCustomer.phone,
+                    type: 'template',
+                    templateName,
+                    components
+                })
+            });
+
+            if (response.ok) {
+                Alert.alert("Success", `Template ${templateName} sent.`);
+            } else {
+                const errorData = await response.json();
+                Alert.alert("Failed to send", errorData.error || "Unknown error");
+            }
+        } catch (error) {
+            console.error("Error sending template:", error);
+            Alert.alert("Error", "Network error while sending template.");
+        }
+    };
 
     const handleVerifyOrder = async (orderId, status) => {
         try {
@@ -224,43 +297,45 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const renderOverview = () => (
         <ScrollView style={styles.tabContent}>
             <View style={styles.statsGrid}>
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
-                    <Avatar.Icon size={40} icon="whatsapp" style={{ backgroundColor: '#25D366' }} />
-                    <Text variant="titleLarge" style={{ fontWeight: 'bold', marginTop: 8 }} numberOfLines={1} adjustsFontSizeToFit>
+                <Surface style={[styles.statCard, { backgroundColor: theme.dark ? theme.colors.elevation.level2 : '#f8fafc' }]} elevation={2}>
+                    <Avatar.Icon size={44} icon="whatsapp" style={{ backgroundColor: '#25D366' }} />
+                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12, color: theme.colors.onSurface }}>
                         {codOrders.length + abandonedCarts.length}
                     </Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Active Targets</Text>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Active Targets</Text>
                 </Surface>
-                <Surface style={[styles.statCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
-                    <Avatar.Icon size={40} icon="cash-check" style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.primary} />
-                    <Text variant="titleLarge" style={{ fontWeight: 'bold', marginTop: 8 }} numberOfLines={1} adjustsFontSizeToFit>
+                <Surface style={[styles.statCard, { backgroundColor: theme.dark ? theme.colors.elevation.level2 : '#f0fdf4' }]} elevation={2}>
+                    <Avatar.Icon size={44} icon="cash-check" style={{ backgroundColor: '#4ade80' }} color="white" />
+                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12, color: theme.colors.onSurface }}>
                         {codOrders.filter(o => o.verificationStatus === 'approved').length}
                     </Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Verified Orders</Text>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Verified Orders</Text>
                 </Surface>
             </View>
 
-            <Surface style={[styles.chartCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
+            <Surface style={[styles.chartCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
                 <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 16, color: theme.colors.onSurface }}>Message Performance (Last 24h)</Text>
-                <BarChart
-                    data={messageStats}
-                    width={screenWidth - 120}
-                    height={200}
-                    barWidth={22}
-                    spacing={35}
-                    initialSpacing={10}
-                    xAxisLength={screenWidth - 120}
-                    roundedTop
-                    yAxisThickness={0}
-                    xAxisThickness={1}
-                    xAxisColor={theme.colors.outlineVariant}
-                    yAxisColor={theme.colors.outlineVariant}
-                    yAxisTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                    xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                    labelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                    rulesColor={theme.colors.outlineVariant}
-                    hideRules
-                />
+                <View style={{ width: '100%', alignItems: 'center' }}>
+                    <BarChart
+                        data={messageStats}
+                        width={screenWidth - (isDesktop ? 340 : 80)} // Dynamic width based on sidebar
+                        height={240}
+                        barWidth={32}
+                        spacing={40}
+                        initialSpacing={30}
+                        roundedTop
+                        yAxisThickness={0}
+                        xAxisThickness={1}
+                        xAxisColor={theme.colors.outlineVariant}
+                        yAxisColor={theme.colors.outlineVariant}
+                        yAxisTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                        xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                        labelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
+                        rulesColor={theme.colors.outlineVariant}
+                        hideRules
+                        noOfSections={5}
+                    />
+                </View>
             </Surface>
 
             {/* Recent Activity Section */}
@@ -423,20 +498,17 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     return (
         <CRMLayout title="WhatsApp Manager" navigation={navigation} scrollable={false} fullWidth={true}>
-            <View style={styles.segmentContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
-                    <SegmentedButtons
-                        value={tab}
-                        onValueChange={setTab}
-                        density="small"
-                        buttons={[
-                            { value: 'overview', label: 'Overview' },
-                            { value: 'cod', label: 'COD Verify' },
-                            { value: 'abandoned', label: 'Recovery' },
-                        ]}
-                        style={{ minWidth: 320 }}
-                    />
-                </ScrollView>
+            <View style={[styles.segmentContainer, { paddingHorizontal: 16 }]}>
+                <SegmentedButtons
+                    value={tab}
+                    onValueChange={setTab}
+                    density="medium"
+                    buttons={[
+                        { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
+                        { value: 'cod', label: 'COD Verify', icon: 'checkbox-marked-circle-outline' },
+                        { value: 'abandoned', label: 'Recovery', icon: 'cart-arrow-down' },
+                    ]}
+                />
             </View>
 
             {tab === 'overview' && renderOverview()}
@@ -469,35 +541,138 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
             {/* Chat Dialog */}
             <Portal>
-                <Dialog visible={chatDialogVisible} onDismiss={() => setChatDialogVisible(false)} style={{ maxHeight: '80%' }}>
-                    <Dialog.Title>
-                        {selectedCustomer?.customerName || 'Customer'}
+                <Dialog visible={chatDialogVisible} onDismiss={() => setChatDialogVisible(false)} style={styles.modalCard}>
+                    <Dialog.Title style={{ fontSize: 18, paddingBottom: 0 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <View>
+                                <Text style={{ fontSize: 18, fontWeight: 'bold' }}>{selectedCustomer?.customerName || 'Customer'}</Text>
+                                <Text variant="bodySmall" style={{ opacity: 0.6 }}>{selectedCustomer?.phone}</Text>
+                            </View>
+                            {(() => {
+                                const lastInbound = chatHistory.find(m => m.direction === 'inbound');
+                                const isWindowOpen = lastInbound && (new Date() - new Date(lastInbound.createdAt)) < 24 * 60 * 60 * 1000;
+                                return (
+                                    <Badge 
+                                        style={{ 
+                                            backgroundColor: isWindowOpen ? '#4ade80' : theme.colors.error, 
+                                            color: 'white',
+                                            paddingHorizontal: 8
+                                        }}
+                                    >
+                                        {isWindowOpen ? '24h Window Open' : 'Window Closed'}
+                                    </Badge>
+                                );
+                            })()}
+                        </View>
                     </Dialog.Title>
-                    <Dialog.ScrollArea style={{ paddingHorizontal: 0 }}>
-                        <ScrollView contentContainerStyle={{ padding: 16 }}>
-                            {chatLoading ? (
-                                <ActivityIndicator />
-                            ) : chatHistory.length > 0 ? (
-                                chatHistory.map((msg) => (
-                                    <View key={msg.id} style={{
-                                        alignSelf: msg.direction === 'outbound' ? 'flex-end' : 'flex-start',
-                                        backgroundColor: msg.direction === 'outbound' ? theme.colors.primaryContainer : theme.colors.surfaceVariant,
-                                        padding: 10,
-                                        borderRadius: 12,
-                                        marginBottom: 8,
-                                        maxWidth: '80%'
-                                    }}>
-                                        <Text variant="bodyMedium">{msg.body || msg.type}</Text>
-                                        <Text variant="labelSmall" style={{ opacity: 0.7, marginTop: 4, alignSelf: 'flex-end' }}>
-                                            {msg.timestamp ? new Date(msg.timestamp.toDate ? msg.timestamp.toDate() : msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                                        </Text>
+                    <Dialog.Content style={{ flex: 1, paddingHorizontal: 0, paddingBottom: 0 }}>
+                        {(() => {
+                            const lastInbound = chatHistory.find(m => m.direction === 'inbound');
+                            const isWindowOpen = lastInbound && (new Date() - new Date(lastInbound.createdAt)) < 24 * 60 * 60 * 1000;
+                            
+                            return (
+                                <View style={{ flex: 1 }}>
+                                    {!isWindowOpen && (
+                                        <Surface style={{ padding: 8, backgroundColor: theme.colors.errorContainer, flexDirection: 'row', alignItems: 'center' }} elevation={0}>
+                                            <Icon source="alert-circle-outline" size={20} color={theme.colors.onErrorContainer} />
+                                            <Text style={{ marginLeft: 8, fontSize: 12, flex: 1, color: theme.colors.onErrorContainer }}>
+                                                Service window closed. Send a template to re-engage.
+                                            </Text>
+                                        </Surface>
+                                    )}
+                                    <View style={{ flex: 1, backgroundColor: theme.colors.surface }}>
+                                        <GiftedChat
+                                            messages={chatHistory}
+                                            onSend={messages => onSend(messages)}
+                                            user={{ _id: 1 }}
+                                            renderUsernameOnMessage={true}
+                                            showUserAvatar={false}
+                                            alwaysShowSend={isWindowOpen}
+                                            renderInputToolbar={props => isWindowOpen ? <InputToolbar {...props} /> : null}
+                                            scrollToBottom
+                                            textInputStyle={{ color: theme.colors.onSurface }}
+                                            renderLoading={() => <ActivityIndicator style={{ marginTop: 20 }} />}
+                                            renderBubble={props => (
+                                                <Bubble
+                                                    {...props}
+                                                    wrapperStyle={{
+                                                        right: { backgroundColor: theme.colors.primary },
+                                                        left: { backgroundColor: theme.colors.surfaceVariant }
+                                                    }}
+                                                    renderTicks={(msg) => {
+                                                        if (msg.user._id !== 1) return null;
+                                                        const color = msg.status === 'read' ? '#3b82f6' : '#fff';
+                                                        const icon = (msg.status === 'delivered' || msg.status === 'read') ? 'check-all' : 'check';
+                                                        return (
+                                                            <View style={{ marginRight: 5 }}>
+                                                                <Icon source={icon} size={14} color={color} />
+                                                            </View>
+                                                        );
+                                                    }}
+                                                />
+                                            )}
+                                            renderSend={props => (
+                                                <Send {...props}>
+                                                    <View style={{ marginRight: 10, marginBottom: 5 }}>
+                                                        <IconButton icon="send" iconColor={theme.colors.primary} />
+                                                    </View>
+                                                </Send>
+                                            )}
+                                        />
                                     </View>
-                                ))
-                            ) : (
-                                <Text style={{ textAlign: 'center', color: theme.colors.onSurfaceVariant }}>No messages found.</Text>
-                            )}
-                        </ScrollView>
-                    </Dialog.ScrollArea>
+                                </View>
+                            );
+                        })()}
+                        
+                        {/* Quick Action Bar */}
+                        <Divider />
+                        <View style={{ backgroundColor: theme.colors.surfaceVariant, paddingVertical: 4 }}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ padding: 4 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 8 }}>
+                                <Button 
+                                    mode="elevated" 
+                                    compact 
+                                    icon="check-circle"
+                                    style={{ borderRadius: 20 }}
+                                    onPress={() => sendQuickTemplate('cod_auto_confirmation', [
+                                        { type: 'body', parameters: [
+                                            { type: 'text', text: selectedCustomer?.customerName || 'Customer' },
+                                            { type: 'text', text: selectedCustomer?.orderNumber || 'Order' },
+                                            { type: 'text', text: selectedCustomer?.items?.[0]?.name || 'Item' },
+                                            { type: 'text', text: String(selectedCustomer?.totalPrice || '0') }
+                                        ]}
+                                    ])}
+                                >
+                                    Confirm COD
+                                </Button>
+                                <Button 
+                                    mode="elevated" 
+                                    compact 
+                                    icon="map-marker"
+                                    style={{ borderRadius: 20 }}
+                                    onPress={() => sendQuickTemplate('update_address', [
+                                        { type: 'body', parameters: [{ type: 'text', text: selectedCustomer?.customerName || 'Customer' }] }
+                                    ])}
+                                >
+                                    Req Address
+                                </Button>
+                                <Button 
+                                    mode="elevated" 
+                                    compact 
+                                    icon="cart-arrow-down"
+                                    style={{ borderRadius: 20 }}
+                                    onPress={() => sendQuickTemplate('cart_recovery', [
+                                        { type: 'body', parameters: [
+                                            { type: 'text', text: selectedCustomer?.customerName || 'Customer' },
+                                            { type: 'text', text: String(selectedCustomer?.totalPrice || '0') },
+                                            { type: 'text', text: 'https://easey.in/cart' }
+                                        ]}
+                                    ])}
+                                >
+                                    Recovery
+                                </Button>
+                            </ScrollView>
+                        </View>
+                    </Dialog.Content>
                     <Dialog.Actions>
                         <Button onPress={() => setChatDialogVisible(false)}>Close</Button>
                     </Dialog.Actions>
@@ -599,17 +774,55 @@ const AbandonedCartItem = React.memo(({ item, theme, onOpenChat }) => (
 ));
 
 const styles = StyleSheet.create({
-    segmentContainer: { padding: 12 }, // Reduced from 16
-    tabContent: { flex: 1, paddingHorizontal: 12 }, // Reduced from 16
-    statsGrid: { flexDirection: 'row', gap: 8, marginBottom: 12 }, // Reduced gap & margin
-    statCard: { flex: 1, padding: 12, borderRadius: 16, alignItems: 'center' }, // Reduced padding, rounded 16
-    chartCard: { padding: 12, borderRadius: 16, marginBottom: 12, alignItems: 'center' }, // Reduced padding/margin
-    listCard: { padding: 12, borderRadius: 16, marginBottom: 12 }, // Reduced padding/margin
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    listItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#eee' },
-    actionCard: { padding: 12, borderRadius: 16, marginBottom: 12 }, // Reduced padding/margin
-    cardActions: { flexDirection: 'row', justifyContent: 'flex-start', marginTop: 8 }, // Reduced margin
-    infoBanner: { flexDirection: 'row', padding: 12, borderRadius: 12, marginBottom: 12, alignItems: 'center' } // Rounded 12 -> 16 consistent? Keeping 12 or 16. Let's do 12 for banner or 16. Let's stick to 12 for inner elements? Meta used 16 for cards. I'll use 12 for padding.
+    segmentContainer: { paddingVertical: 16 },
+    tabContent: { flex: 1, paddingHorizontal: 16 },
+    statsGrid: { flexDirection: 'row', gap: 16, marginBottom: 16 },
+    statCard: { 
+        flex: 1, 
+        padding: 24, 
+        borderRadius: 24, 
+        alignItems: 'center',
+    },
+    chartCard: { 
+        padding: 24, 
+        borderRadius: 24, 
+        marginBottom: 24, 
+        alignItems: 'center',
+    },
+    listCard: { 
+        padding: 24, 
+        borderRadius: 24, 
+        marginBottom: 24,
+    },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    listItem: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingVertical: 16, 
+        borderBottomWidth: 0.5, 
+    },
+    actionCard: { 
+        padding: 24, 
+        borderRadius: 24, 
+        marginBottom: 16,
+    },
+    cardActions: { flexDirection: 'row', justifyContent: 'flex-start', marginTop: 16, gap: 12 },
+    infoBanner: { 
+        flexDirection: 'row', 
+        padding: 16, 
+        borderRadius: 16, 
+        marginBottom: 16, 
+        alignItems: 'center' 
+    },
+    modalCard: {
+        maxWidth: 800,
+        width: '95%',
+        height: '85%',
+        maxHeight: '85%',
+        alignSelf: 'center',
+        borderRadius: 32,
+        overflow: 'hidden'
+    }
 });
 
 export default WhatsAppManagerScreen;

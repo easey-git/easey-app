@@ -78,7 +78,7 @@ const sendWhatsAppMessage = async (to, templateName, components) => {
     }
 
     try {
-        const url = `https://graph.facebook.com/v17.0/${phoneId}/messages`;
+        const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
         const body = {
             messaging_product: "whatsapp",
             to: to,
@@ -222,6 +222,18 @@ module.exports = async (req, res) => {
                     payload = message.button.payload;
                 }
 
+                // Check for Opt-out keywords
+                const lowerBody = body.toLowerCase().trim();
+                const isOptOut = ['stop', 'unsubscribe', 'block'].includes(lowerBody);
+
+                if (isOptOut) {
+                    // Update all related orders/checkouts to mark as unsubscribed
+                    const batch = db.batch();
+                    const ordersSnap = await db.collection('orders').where('phoneNormalized', '==', phoneNormalized).get();
+                    ordersSnap.forEach(doc => batch.update(doc.ref, { isSubscribed: false, optedOutAt: admin.firestore.Timestamp.now() }));
+                    await batch.commit();
+                }
+
                 // Log Inbound Message
                 await db.collection('whatsapp_messages').add({
                     id: msgId,
@@ -231,6 +243,7 @@ module.exports = async (req, res) => {
                     type,
                     body,
                     payload,
+                    isOptOut,
                     raw: JSON.stringify(message),
                     timestamp: admin.firestore.Timestamp.now()
                 });
