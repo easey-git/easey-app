@@ -220,7 +220,15 @@ module.exports = async (req, res) => {
                 } else if (type === 'button') {
                     body = message.button.text;
                     payload = message.button.payload;
+                } else if (type === 'interactive') {
+                    // Handle list replies or button replies
+                    if (message.interactive.button_reply) {
+                        body = message.interactive.button_reply.title;
+                        payload = message.interactive.button_reply.id;
+                    }
                 }
+
+                console.info(`[Inbound] From: ${senderPhone}, Type: ${type}, Body: "${body}", Payload: "${payload}"`);
 
                 // Check for Opt-out keywords
                 const lowerBody = body.toLowerCase().trim();
@@ -254,18 +262,21 @@ module.exports = async (req, res) => {
                 if (type === 'button' || type === 'text') {
                     const ordersRef = db.collection('orders');
 
-                    // Helper to find latest COD order using INDEXED QUERY
-                    // Requires Composite Index: orders [phoneNormalized: ASC, createdAt: DESC]
                     const findLatestOrder = async () => {
                         const snapshot = await ordersRef
                             .where('phoneNormalized', '==', phoneNormalized)
-                            .where('status', '==', 'COD')
-                            .orderBy('createdAt', 'desc')
-                            .limit(1)
                             .get();
 
                         if (snapshot.empty) return null;
-                        return snapshot.docs[0];
+                        
+                        // Sort in memory to bypass index requirement
+                        const docs = snapshot.docs.sort((a, b) => {
+                            const timeA = a.data().createdAt?.seconds || 0;
+                            const timeB = b.data().createdAt?.seconds || 0;
+                            return timeB - timeA;
+                        });
+                        
+                        return docs[0];
                     };
 
                     // Check Payloads
@@ -297,9 +308,10 @@ module.exports = async (req, res) => {
                                 return;
                             }
 
-                            // Update Status
+                            // Update Status: Mark as approved immediately to show in Verified tab
                             t.update(orderRef, {
-                                verificationStatus: 'verified_pending_address',
+                                verificationStatus: 'approved',
+                                cod_status: 'confirmed',
                                 updatedAt: admin.firestore.Timestamp.now()
                             });
 
