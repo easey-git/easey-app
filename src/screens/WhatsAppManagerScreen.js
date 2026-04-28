@@ -208,7 +208,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         }
     };
 
-    const sendQuickTemplate = async (templateName, components = []) => {
+    const sendQuickTemplate = async (templateName, components = [], languageCode = "en_US") => {
         if (!selectedCustomer) return;
         
         try {
@@ -219,6 +219,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     to: selectedCustomer.phone,
                     type: 'template',
                     templateName,
+                    languageCode,
                     components
                 })
             });
@@ -694,7 +695,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                         { type: 'text', text: String(selectedCustomer?.totalPrice || '0') },
                                         { type: 'text', text: 'https://easey.in/cart' }
                                     ]}
-                                ])}
+                                ], "en")}
                             >
                                 Recovery
                             </Button>

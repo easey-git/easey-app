@@ -324,7 +324,7 @@ module.exports = async (req, res) => {
 
                         if (messagePayload) {
                             if (messagePayload.type === 'template') {
-                                await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
+                                await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components, "en_US");
                             } else {
                                 // Send simple text feedback for duplicates
                                 const token = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -377,7 +377,7 @@ module.exports = async (req, res) => {
                         });
 
                         if (messagePayload) {
-                            await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components);
+                            await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components, "en_US");
                         }
                     }
 
@@ -391,7 +391,7 @@ module.exports = async (req, res) => {
                             });
                             await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.UPDATE_ADDRESS, [
                                 { type: 'body', parameters: [{ type: 'text', text: orderDoc.data().customerName || 'Customer' }] }
-                            ]);
+                            ], "en_US");
                         }
                     }
 
@@ -411,7 +411,7 @@ module.exports = async (req, res) => {
                                         { type: 'text', text: String(orderDoc.data().orderNumber || '') }
                                     ]
                                 }
-                            ]);
+                            ], "en_US");
                         }
                     }
                 }
