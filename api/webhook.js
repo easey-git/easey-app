@@ -207,10 +207,19 @@ module.exports = async (req, res) => {
 
             if (value?.messages?.[0]) {
                 const message = value.messages[0];
-                const senderPhone = message.from; // This is usually normalized by WhatsApp (e.g., 919876543210)
+                const senderPhone = message.from;
                 const phoneNormalized = normalizePhone(senderPhone);
                 const msgId = message.id;
                 const type = message.type;
+
+                // --- GUARD RAIL 1: Idempotency (Prevent Duplicate Processing) ---
+                const msgLogRef = db.collection('processed_webhooks').doc(msgId);
+                const msgLog = await msgLogRef.get();
+                if (msgLog.exists) {
+                    console.info(`[Guard Rail] Already processed message ${msgId}. Skipping.`);
+                    return res.status(200).send('ALREADY_PROCESSED');
+                }
+                await msgLogRef.set({ processedAt: admin.firestore.Timestamp.now() });
 
                 let body = '';
                 let payload = '';
@@ -284,9 +293,10 @@ module.exports = async (req, res) => {
 
                     // SPECIAL CASE: Listening for Address Update (Text Response)
                     if (type === 'text' && orderData?.whatsapp_flow === 'AWAITING_ADDRESS') {
+                        // --- GUARD RAIL 2: Flow Lockdown ---
                         await latestOrderDoc.ref.update({
                             updatedAddress: body,
-                            whatsapp_flow: null, // Clear the flow
+                            whatsapp_flow: admin.firestore.FieldValue.delete(), // Physically remove field
                             verificationStatus: 'address_updated',
                             updatedAt: admin.firestore.Timestamp.now()
                         });
@@ -321,6 +331,12 @@ module.exports = async (req, res) => {
 
                     // CASE 1: Confirm Order (Step 1)
                     if (isConfirmYes) {
+                        // --- GUARD RAIL 3: Status Guard ---
+                        if (orderData?.verificationStatus === 'cancelled') {
+                            console.log(`[Guard Rail] Order ${orderData.orderNumber} is cancelled. Ignoring confirmation.`);
+                            return res.status(200).send('ORDER_CANCELLED');
+                        }
+
                         let messagePayload = null;
 
                         await db.runTransaction(async (t) => {
