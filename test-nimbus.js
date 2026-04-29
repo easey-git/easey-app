@@ -2,12 +2,12 @@ const crypto = require('crypto');
 
 // --- Configuration ---
 // Make sure this matches the secret you put in Vercel and NimbusPost
-const NIMBUS_SECRET = 'easey_ndr_secure_2026'; 
+const NIMBUS_SECRET = 'easey_ndr_secure_2026';
 const WEBHOOK_URL = 'https://easey-app.vercel.app/api/shipping/nimbus-webhook';
 
 // Put a real AWB number here that exists in your Firestore orders!
 // If you don't have one, the script will still run, but you'll get an "Order not found" response.
-const TEST_AWB = 'TEST_AWB_123'; 
+const TEST_AWB = '40441733756784';
 
 // --- The Payload NimbusPost sends ---
 const payload = {
@@ -27,7 +27,7 @@ const signature = hmac.update(payloadString).digest('base64');
 // --- Send the Test Request ---
 async function testWebhook() {
     console.log(`Sending test NDR for AWB: ${TEST_AWB}...`);
-    
+
     try {
         const response = await fetch(WEBHOOK_URL, {
             method: 'POST',
@@ -42,7 +42,7 @@ async function testWebhook() {
         console.log('\n--- Webhook Response ---');
         console.log(`Status Code: ${response.status}`);
         console.log('Data:', data);
-        
+
         if (response.status === 200 && data.status === 'success') {
             console.log('\n✅ SUCCESS! The webhook works and WhatsApp should be sent.');
         } else if (data.status === 'not_found') {
@@ -50,7 +50,7 @@ async function testWebhook() {
         } else {
             console.log('\n❌ FAILED: Something went wrong.');
         }
-        
+
     } catch (error) {
         console.error('Error sending request:', error);
     }

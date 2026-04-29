@@ -30,9 +30,9 @@ async function getNimbusToken() {
         });
 
         const data = await response.json();
-        if (!response.ok) throw new Error(data.message || 'NimbusPost Login Failed');
+        if (!data.status) throw new Error(data.message || 'NimbusPost Login Failed');
         
-        return data.data; // This is usually the token
+        return data.data; // The token string
     } catch (error) {
         console.error('NimbusPost Auth Error:', error);
         throw error;
@@ -96,7 +96,8 @@ async function updateNDRAction(awb, action, actionData = {}) {
 async function getShipmentDetails(awb) {
     try {
         const token = await getNimbusToken();
-        const response = await fetch(`${NIMBUS_API_BASE}/shipments/view/${awb}`, {
+        // Standard NimbusPost tracking/view endpoint
+        const response = await fetch(`${NIMBUS_API_BASE}/shipments/track/${awb}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -105,16 +106,20 @@ async function getShipmentDetails(awb) {
         });
 
         const data = await response.json();
+        
         if (!data.status || !data.data) {
-            console.error('NimbusPost View Shipment Error:', JSON.stringify(data));
+            console.error('NimbusPost Track Shipment Error:', JSON.stringify(data));
             return null;
         }
 
+        // NimbusPost tracking response usually contains history and shipment info
+        // We look for consignee details in the data object
+        const info = data.data;
         return {
-            customerName: data.data.consignee_name || 'Customer',
-            phone: data.data.consignee_phone,
-            orderNumber: data.data.order_number || data.data.order_id,
-            awb: data.data.awb_number
+            customerName: info.consignee_name || info.customer_name || 'Customer',
+            phone: info.consignee_phone || info.customer_phone || info.phone,
+            orderNumber: info.order_number || info.order_id,
+            awb: info.awb_number || awb
         };
     } catch (error) {
         console.error('NimbusPost View Exception:', error);
