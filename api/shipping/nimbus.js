@@ -89,4 +89,41 @@ async function updateNDRAction(awb, action, actionData = {}) {
     }
 }
 
-module.exports = { updateNDRAction };
+/**
+ * Fetches shipment details (name, phone, etc.) from NimbusPost by AWB.
+ * @param {string} awb - The AWB number.
+ */
+async function getShipmentDetails(awb) {
+    try {
+        const token = await getNimbusToken();
+        const response = await fetch(`${NIMBUS_API_BASE}/shipments/view/${awb}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+        if (!data.status || !data.data) {
+            console.error('NimbusPost View Shipment Error:', JSON.stringify(data));
+            return null;
+        }
+
+        return {
+            customerName: data.data.consignee_name || 'Customer',
+            phone: data.data.consignee_phone,
+            orderNumber: data.data.order_number || data.data.order_id,
+            awb: data.data.awb_number
+        };
+    } catch (error) {
+        console.error('NimbusPost View Exception:', error);
+        return null;
+    }
+}
+
+module.exports = { 
+    getNimbusToken, 
+    updateNDRAction, 
+    getShipmentDetails 
+};

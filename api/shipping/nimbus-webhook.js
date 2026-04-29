@@ -110,19 +110,18 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
     }
 }
 
+const { getShipmentDetails } = require('./nimbus');
+
 module.exports = async (req, res) => {
     await runMiddleware(req, res, cors);
 
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-    // Verify Signature
     if (!verifySignature(req)) {
         console.error('[NimbusPost Webhook] Invalid Signature');
         return res.status(401).json({ error: 'Unauthorized' });
     }
-
-    console.log('[NimbusPost Webhook] Received:', JSON.stringify(req.body));
 
     try {
         const payload = req.body;
@@ -130,55 +129,56 @@ module.exports = async (req, res) => {
         const awb = payload.awb_number;
         const reason = payload.message;
 
-        // Check if status is NDR related
         if (status !== 'ndr' && !status.includes('ndr') && !reason.toLowerCase().includes('ndr')) {
             return res.status(200).json({ status: 'ignored', message: 'Not an NDR event' });
         }
 
         if (!awb) return res.status(400).json({ error: 'Missing AWB' });
 
-        // Search for the order using AWB
+        // 1. Fetch Shipment Details from NimbusPost (to get Phone & Order Number)
+        const shipment = await getShipmentDetails(awb);
+        if (!shipment || !shipment.phone) {
+            console.error(`[NimbusPost Webhook] Could not fetch details from Nimbus for AWB: ${awb}`);
+            return res.status(200).json({ status: 'error', message: 'Could not fetch customer details from Nimbus' });
+        }
+
+        const phone = normalizePhone(shipment.phone);
+        const customerName = shipment.customerName;
+        const orderNumber = shipment.orderNumber;
+
+        // 2. Try to find the order in Firestore (by Order Number or AWB)
         let orderSnap = await db.collection('orders').where('awb', '==', String(awb)).limit(1).get();
         if (orderSnap.empty) {
-            orderSnap = await db.collection('orders').where('shipping_awb', '==', String(awb)).limit(1).get();
+            orderSnap = await db.collection('orders').where('orderNumber', '==', String(orderNumber)).limit(1).get();
         }
 
-        if (orderSnap.empty) {
-            console.warn(`[NimbusPost Webhook] Order not found for AWB: ${awb}`);
-            return res.status(200).json({ status: 'not_found', message: 'Order not found for this AWB' });
+        if (!orderSnap.empty) {
+            const orderDoc = orderSnap.docs[0];
+            // Update order with AWB if it was missing, and set NDR status
+            await orderDoc.ref.update({
+                awb: awb, // Sync AWB back to Firestore
+                shipping_status: 'NDR',
+                ndr_reason: reason,
+                updatedAt: admin.firestore.Timestamp.now()
+            });
+
+            // Send Notification to Admins
+            try {
+                await db.collection('notifications').add({
+                    title: '🚚 Delivery Failed (NDR)',
+                    body: `NDR Alert for Order #${orderNumber}: ${reason}`,
+                    type: 'NDR_ALERT',
+                    orderId: orderDoc.id,
+                    timestamp: admin.firestore.Timestamp.now(),
+                    read: false,
+                    targetRoles: ['admin', 'manager']
+                });
+            } catch (e) {}
         }
 
-        const orderDoc = orderSnap.docs[0];
-        const orderData = orderDoc.data();
-
-        // Update order status
-        await orderDoc.ref.update({
-            shipping_status: 'NDR',
-            ndr_reason: reason,
-            updatedAt: admin.firestore.Timestamp.now()
-        });
-
-        const phone = orderData.phoneNormalized || orderData.phone;
-        const orderNumber = orderData.orderNumber;
-
+        // 3. Send WhatsApp to Customer (using data from NimbusPost)
         if (phone) {
             await sendNDRWhatsApp(phone, orderNumber, awb, reason);
-        }
-
-        // 3. Send Notification to Admins
-        try {
-            const notificationBody = `NDR Alert for Order #${orderNumber}: ${reason}`;
-            await db.collection('notifications').add({
-                title: '🚚 Delivery Failed (NDR)',
-                body: notificationBody,
-                type: 'NDR_ALERT',
-                orderId: orderDoc.id,
-                timestamp: admin.firestore.Timestamp.now(),
-                read: false,
-                targetRoles: ['admin', 'manager']
-            });
-        } catch (error) {
-            console.error('Notification Error:', error);
         }
 
         return res.status(200).json({ status: 'success', message: 'NDR processed' });
