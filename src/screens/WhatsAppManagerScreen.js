@@ -567,11 +567,13 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     const renderCODVerification = () => {
-        // Filter Logic
-        const pendingOrders = codOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
-        const verifiedOrders = codOrders.filter(o => o.verificationStatus === 'approved');
-        const alertOrders = codOrders.filter(o => ['address_change_requested', 'address_updated'].includes(o.verificationStatus));
-        const cancelledOrders = codOrders.filter(o => o.verificationStatus === 'cancelled');
+        // Filter Logic (Exclude NDR orders from COD Verification view)
+        const activeCodOrders = codOrders.filter(o => o.shipping_status !== 'NDR');
+        
+        const pendingOrders = activeCodOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
+        const verifiedOrders = activeCodOrders.filter(o => o.verificationStatus === 'approved');
+        const alertOrders = activeCodOrders.filter(o => ['address_change_requested', 'address_updated'].includes(o.verificationStatus));
+        const cancelledOrders = activeCodOrders.filter(o => o.verificationStatus === 'cancelled');
 
         let displayedOrders = [];
         if (codTab === 'pending') displayedOrders = pendingOrders;
@@ -594,10 +596,12 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     const renderHeader = React.useCallback(() => {
-        const pendingOrders = codOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
-        const verifiedOrders = codOrders.filter(o => o.verificationStatus === 'approved');
-        const alertOrders = codOrders.filter(o => ['address_change_requested', 'address_updated'].includes(o.verificationStatus));
-        const cancelledOrders = codOrders.filter(o => o.verificationStatus === 'cancelled');
+        const activeCodOrders = codOrders.filter(o => o.shipping_status !== 'NDR');
+
+        const pendingOrders = activeCodOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
+        const verifiedOrders = activeCodOrders.filter(o => o.verificationStatus === 'approved');
+        const alertOrders = activeCodOrders.filter(o => ['address_change_requested', 'address_updated'].includes(o.verificationStatus));
+        const cancelledOrders = activeCodOrders.filter(o => o.verificationStatus === 'cancelled');
 
         return (
             <View>
