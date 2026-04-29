@@ -683,11 +683,17 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     return (
         <CRMLayout title="WhatsApp Manager" navigation={navigation} scrollable={false} fullWidth={true}>
-            <View style={[styles.segmentContainer, { paddingHorizontal: 16 }]}>
+            <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
+                style={{ maxHeight: 60 }}
+            >
                 <SegmentedButtons
                     value={tab}
                     onValueChange={setTab}
                     density="medium"
+                    style={{ minWidth: isDesktop ? '100%' : 500 }}
                     buttons={[
                         { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
                         { value: 'cod', label: 'COD Verify', icon: 'checkbox-marked-circle-outline' },
@@ -695,7 +701,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         { value: 'abandoned', label: 'Recovery', icon: 'cart-arrow-down' },
                     ]}
                 />
-            </View>
+            </ScrollView>
 
             {tab === 'overview' && renderOverview()}
             {tab === 'cod' && renderCODVerification()}
