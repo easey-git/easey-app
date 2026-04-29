@@ -6,7 +6,7 @@ import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit, a
 import { db } from '../config/firebase';
 import { CRMLayout } from '../components/CRMLayout';
 import { useResponsive } from '../hooks/useResponsive';
-import { GiftedChat, Bubble, Send, InputToolbar } from 'react-native-gifted-chat';
+import { GiftedChat, Bubble, Send, InputToolbar, Composer } from 'react-native-gifted-chat';
 
 import { useAuth } from '../context/AuthContext';
 import { AccessDenied } from '../components/AccessDenied';
@@ -616,16 +616,15 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                                 <Composer
                                                     {...props}
                                                     textInputProps={{
-                                                        onKeyDown: (e) => {
-                                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                        ...props.textInputProps,
+                                                        onKeyPress: (e) => {
+                                                            if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
                                                                 e.preventDefault();
                                                                 if (props.text && props.text.trim().length > 0) {
                                                                     props.onSend({ text: props.text.trim() }, true);
                                                                 }
                                                             }
-                                                        },
-                                                        blurOnSubmit: false,
-                                                        enablesReturnKeyAutomatically: true,
+                                                        }
                                                     }}
                                                 />
                                             )}
