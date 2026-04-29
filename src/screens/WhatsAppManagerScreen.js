@@ -166,7 +166,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     user: {
                         _id: data.direction === 'outbound' ? 1 : 2,
                         name: data.direction === 'outbound' ? 'Admin' : (selectedCustomer.customerName || 'Customer'),
-                        avatar: data.direction === 'outbound' ? null : 'https://placeimg.com/140/140/any',
+                        avatar: data.direction === 'outbound' ? null : `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCustomer.customerName || 'C')}&background=random`,
                     },
                     received: data.status === 'delivered' || data.status === 'read',
                     sent: data.status === 'sent' || data.status === 'delivered' || data.status === 'read',
@@ -177,6 +177,13 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 };
             });
             setChatHistory(messages);
+            setChatLoading(false);
+        }, (error) => {
+            if (error.code === 'failed-precondition') {
+                console.warn('[Firestore] Chat index is still building...');
+            } else {
+                console.error('[Firestore] Chat listener error:', error);
+            }
             setChatLoading(false);
         });
 
