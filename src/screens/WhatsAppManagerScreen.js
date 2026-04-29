@@ -638,9 +638,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                                 />
                                             )}
                                             renderSend={props => (
-                                                <Send {...props}>
-                                                    <View style={{ marginRight: 10, marginBottom: 5 }}>
-                                                        <IconButton icon="send" iconColor={theme.colors.primary} />
+                                                <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center' }}>
+                                                    <View style={{ marginRight: 10 }}>
+                                                        <Icon source="send" color={theme.colors.primary} size={24} />
                                                     </View>
                                                 </Send>
                                             )}
