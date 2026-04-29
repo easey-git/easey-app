@@ -135,32 +135,42 @@ module.exports = async (req, res) => {
 
         if (!awb) return res.status(400).json({ error: 'Missing AWB' });
 
-        // 1. Fetch Shipment Details from NimbusPost (to get Phone & Order Number)
+        // 1. Fetch Shipment Details from NimbusPost (to get the Link)
         const shipment = await getShipmentDetails(awb);
-        if (!shipment || !shipment.phone) {
-            console.error(`[NimbusPost Webhook] Could not fetch details from Nimbus for AWB: ${awb}`);
-            return res.status(200).json({ status: 'error', message: 'Could not fetch customer details from Nimbus' });
+        if (!shipment || !shipment.orderNumber) {
+            console.error(`[NimbusPost Webhook] Could not find any order reference in Nimbus for AWB: ${awb}`);
+            return res.status(200).json({ status: 'error', message: 'Order reference not found in Nimbus' });
         }
 
-        const phone = normalizePhone(shipment.phone);
-        const customerName = shipment.customerName;
         const orderNumber = shipment.orderNumber;
+        console.log(`[NimbusPost Webhook] Linked AWB ${awb} to Order Number: ${orderNumber}`);
 
-        // 2. Try to find the order in Firestore (by Order Number or AWB)
-        let orderSnap = await db.collection('orders').where('awb', '==', String(awb)).limit(1).get();
+        // 2. Find the order in Firestore using the Order Number we just got
+        let orderSnap = await db.collection('orders').where('orderNumber', '==', String(orderNumber)).limit(1).get();
+        
+        // Fallback for different order number formats (with or without #)
         if (orderSnap.empty) {
-            orderSnap = await db.collection('orders').where('orderNumber', '==', String(orderNumber)).limit(1).get();
+            const altOrderNumber = orderNumber.startsWith('#') ? orderNumber.substring(1) : `#${orderNumber}`;
+            orderSnap = await db.collection('orders').where('orderNumber', '==', String(altOrderNumber)).limit(1).get();
         }
 
-        if (!orderSnap.empty) {
-            const orderDoc = orderSnap.docs[0];
-            // Update order with AWB if it was missing, and set NDR status
-            await orderDoc.ref.update({
-                awb: awb, // Sync AWB back to Firestore
-                shipping_status: 'NDR',
-                ndr_reason: reason,
-                updatedAt: admin.firestore.Timestamp.now()
-            });
+        if (orderSnap.empty) {
+            console.error(`[NimbusPost Webhook] Order ${orderNumber} not found in Firestore.`);
+            return res.status(200).json({ status: 'error', message: `Order ${orderNumber} not found in database` });
+        }
+
+        const orderDoc = orderSnap.docs[0];
+        const orderData = orderDoc.data();
+        const phone = normalizePhone(orderData.phone || orderData.phoneNormalized);
+        const customerName = orderData.customerName || 'Customer';
+
+        // Update order with AWB if it was missing, and set NDR status
+        await orderDoc.ref.update({
+            awb: awb, // Sync AWB back to Firestore
+            shipping_status: 'NDR',
+            ndr_reason: reason,
+            updatedAt: admin.firestore.Timestamp.now()
+        });
 
             // Send Notification to Admins
             try {
