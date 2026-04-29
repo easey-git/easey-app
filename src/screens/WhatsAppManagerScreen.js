@@ -580,7 +580,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                         <Surface style={styles.windowAlert} elevation={0}>
                                             <Icon source="alert-circle-outline" size={18} color={theme.colors.onErrorContainer} />
                                             <Text style={styles.windowAlertText}>
-                                                Service window closed. Use a template to reply.
+                                                24h Window Closed. Waiting for customer activity to re-open.
                                             </Text>
                                         </Surface>
                                     )}
@@ -638,57 +638,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             );
                         })()}
                     </View>
-                    
-                    {/* Integrated Quick Action Footer */}
-                    <Surface style={styles.modalFooter} elevation={2}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}>
-                            <Button 
-                                mode="outlined" 
-                                compact 
-                                icon="check-circle"
-                                style={styles.quickActionButton}
-                                labelStyle={{ fontSize: 11 }}
-                                onPress={() => sendQuickTemplate('cod_auto_confirmation', [
-                                    { type: 'body', parameters: [
-                                        { type: 'text', text: selectedCustomer?.customerName || 'Customer' },
-                                        { type: 'text', text: selectedCustomer?.orderNumber || 'Order' },
-                                        { type: 'text', text: selectedCustomer?.items?.[0]?.name || 'Item' },
-                                        { type: 'text', text: String(selectedCustomer?.totalPrice || '0') }
-                                    ]}
-                                ])}
-                            >
-                                Confirm COD
-                            </Button>
-                            <Button 
-                                mode="outlined" 
-                                compact 
-                                icon="map-marker"
-                                style={styles.quickActionButton}
-                                labelStyle={{ fontSize: 11 }}
-                                onPress={() => sendQuickTemplate('update_address', [
-                                    { type: 'body', parameters: [{ type: 'text', text: selectedCustomer?.customerName || 'Customer' }] }
-                                ], "en")}
-                            >
-                                Req Address
-                            </Button>
-                            <Button 
-                                mode="outlined" 
-                                compact 
-                                icon="cart-arrow-down"
-                                style={styles.quickActionButton}
-                                labelStyle={{ fontSize: 11 }}
-                                onPress={() => sendQuickTemplate('cart_recovery', [
-                                    { type: 'body', parameters: [
-                                        { type: 'text', text: selectedCustomer?.customerName || 'Customer' },
-                                        { type: 'text', text: String(selectedCustomer?.totalPrice || '0') },
-                                        { type: 'text', text: 'https://easey.in/cart' }
-                                    ]}
-                                ], "en")}
-                            >
-                                Recovery
-                            </Button>
-                        </ScrollView>
-                    </Surface>
                 </Dialog>
             </Portal>
         </CRMLayout>
