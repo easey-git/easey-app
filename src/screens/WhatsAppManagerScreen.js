@@ -28,6 +28,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [abandonedCarts, setAbandonedCarts] = useState([]);
     const [recentActivity, setRecentActivity] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [sendingId, setSendingId] = useState(null);
     const [activityLimit, setActivityLimit] = useState(200);
     const [activitySearch, setActivitySearch] = useState('');
@@ -129,6 +130,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             ]);
 
             setLoading(false);
+            setLoadingMore(false);
         });
 
         return () => {
@@ -489,9 +491,14 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     ))}
                     <Button 
                         mode="contained-tonal" 
-                        onPress={() => setActivityLimit(prev => prev + 100)}
+                        onPress={() => {
+                            setLoadingMore(true);
+                            setActivityLimit(prev => prev + 100);
+                        }}
                         style={{ margin: 16, borderRadius: 12 }}
                         icon="plus"
+                        loading={loadingMore}
+                        disabled={loadingMore}
                     >
                         Load More Conversations
                     </Button>
