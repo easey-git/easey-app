@@ -55,18 +55,9 @@ module.exports = async (req, res) => {
 
     const phoneNormalized = normalizePhone(to);
 
-    // Industry Standard: Check if user has opted out before sending
-    const subscriptionCheck = await db.collection('orders')
-        .where('phoneNormalized', '==', phoneNormalized)
-        .where('isSubscribed', '==', false)
-        .limit(1)
-        .get();
+    // Manual admin messages bypass the opt-out check for support purposes
 
-    if (!subscriptionCheck.empty) {
-        return res.status(403).json({ error: 'Recipient has opted out of WhatsApp communications.' });
-    }
-
-    const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+    const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
 
     let body = {
         messaging_product: "whatsapp",
@@ -85,6 +76,8 @@ module.exports = async (req, res) => {
         body.text = { body: message };
     }
 
+    console.log(`[WhatsApp] Sending ${type} to ${phoneNormalized}...`);
+
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -99,7 +92,9 @@ module.exports = async (req, res) => {
 
         if (!response.ok) {
             console.error('WhatsApp API Error:', JSON.stringify(data));
-            return res.status(response.status).json({ error: data.error?.message || 'Failed to send message' });
+            // Return detailed error to the frontend
+            const errorMsg = data.error?.error_data?.details || data.error?.message || 'Failed to send';
+            return res.status(response.status).json({ error: errorMsg, code: data.error?.code });
         }
 
         const whatsappId = data.messages?.[0]?.id;

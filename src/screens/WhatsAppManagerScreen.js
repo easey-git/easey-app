@@ -194,12 +194,24 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         const msg = newMessages[0];
         if (!msg || !selectedCustomer) return;
 
+        const phone = selectedCustomer.phoneNormalized || selectedCustomer.phone;
+
+        // Optimistic update for instant feedback
+        const optimisticMsg = {
+            ...msg,
+            createdAt: new Date(),
+            user: { _id: 1 },
+            pending: true,
+            direction: 'outbound'
+        };
+        setChatHistory(prev => [optimisticMsg, ...prev]);
+
         try {
             const response = await fetch('/api/whatsapp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    to: selectedCustomer.phone,
+                    to: phone,
                     message: msg.text,
                     type: 'text'
                 })
@@ -207,11 +219,13 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                Alert.alert("Failed to send", errorData.error || "Unknown error");
+                throw new Error(errorData.error || "Failed to send");
             }
         } catch (error) {
             console.error("Error sending message:", error);
-            Alert.alert("Error", "Network error while sending message.");
+            showSnackbar(error.message || "Network error while sending message.");
+            // Remove the optimistic message on failure so the user knows it didn't go through
+            setChatHistory(prev => prev.filter(m => m._id !== msg._id));
         }
     };
 
