@@ -106,7 +106,6 @@ async function getShipmentDetails(awb) {
         });
 
         const data = await response.json();
-        console.log(`[NimbusPost Debug] AWB: ${awb}, Status: ${response.status}, Body: ${JSON.stringify(data)}`);
         
         if (!data.status || !data.data) {
             return null;

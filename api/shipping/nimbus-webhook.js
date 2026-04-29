@@ -91,13 +91,7 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
             body: JSON.stringify(body)
         });
         const data = await res.json();
-        console.log('[WhatsApp API Debug] Status:', res.status, 'Response:', JSON.stringify(data));
         
-        if (!res.ok) {
-            console.error('[WhatsApp API Error]', JSON.stringify(data));
-            return;
-        }
-
         await db.collection('whatsapp_messages').add({
             phone: phone,
             phoneNormalized: normalizePhone(phone),
@@ -149,7 +143,6 @@ module.exports = async (req, res) => {
         }
 
         const orderNumber = shipment.orderNumber;
-        console.log(`[NimbusPost Webhook] Linked AWB ${awb} to Order Number: ${orderNumber}`);
 
         // 2. Find the order in Firestore using the Order Number we just got
         // We check for String, Number, and with/without #
