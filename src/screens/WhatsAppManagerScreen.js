@@ -399,17 +399,15 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const renderCODVerification = () => {
         // Filter Logic
         const pendingOrders = codOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
+        const verifiedOrders = codOrders.filter(o => o.verificationStatus === 'approved');
+        const alertOrders = codOrders.filter(o => ['address_change_requested', 'address_updated'].includes(o.verificationStatus));
+        const cancelledOrders = codOrders.filter(o => o.verificationStatus === 'cancelled');
 
-        const updateOrders = codOrders.filter(o =>
-            o.verificationStatus &&
-            o.verificationStatus !== 'pending'
-        );
-
-        let displayedOrders = codTab === 'pending' ? pendingOrders : updateOrders;
-
-        if (codTab === 'updates' && filterStatus !== 'all') {
-            displayedOrders = displayedOrders.filter(o => o.verificationStatus === filterStatus);
-        }
+        let displayedOrders = [];
+        if (codTab === 'pending') displayedOrders = pendingOrders;
+        else if (codTab === 'verified') displayedOrders = verifiedOrders;
+        else if (codTab === 'alerts') displayedOrders = alertOrders;
+        else if (codTab === 'cancelled') displayedOrders = cancelledOrders;
 
         return (
             <FlatList
@@ -427,15 +425,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     const renderHeader = React.useCallback(() => {
         const pendingOrders = codOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
-        const updateOrders = codOrders.filter(o => o.verificationStatus && o.verificationStatus !== 'pending');
-
-        const filterOptions = [
-            { label: 'All', value: 'all' },
-            { label: 'Approved', value: 'approved' },
-            { label: 'Cancelled', value: 'cancelled' },
-            { label: 'Address Change', value: 'address_change_requested' },
-            { label: 'Verified (Pending Addr)', value: 'verified_pending_address' },
-        ];
+        const verifiedOrders = codOrders.filter(o => o.verificationStatus === 'approved');
+        const alertOrders = codOrders.filter(o => ['address_change_requested', 'address_updated'].includes(o.verificationStatus));
+        const cancelledOrders = codOrders.filter(o => o.verificationStatus === 'cancelled');
 
         return (
             <View>
@@ -445,39 +437,25 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         onValueChange={setCodTab}
                         buttons={[
                             { value: 'pending', label: `Pending (${pendingOrders.length})` },
-                            { value: 'updates', label: `Updates (${updateOrders.length})` },
+                            { value: 'verified', label: `Verified (${verifiedOrders.length})` },
+                            { value: 'alerts', label: `Alerts (${alertOrders.length})` },
+                            { value: 'cancelled', label: `Cancelled (${cancelledOrders.length})` },
                         ]}
                     />
                 </View>
 
-                {codTab === 'updates' && (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, flexDirection: 'row' }} contentContainerStyle={{ gap: 8 }}>
-                        {filterOptions.map((option) => (
-                            <Chip
-                                key={option.value}
-                                selected={filterStatus === option.value}
-                                onPress={() => setFilterStatus(option.value)}
-                                showSelectedOverlay
-                                mode="outlined"
-                                style={{ backgroundColor: filterStatus === option.value ? theme.colors.secondaryContainer : 'transparent', marginRight: 8 }}
-                            >
-                                {option.label}
-                            </Chip>
-                        ))}
-                    </ScrollView>
-                )}
-
                 <Surface style={[styles.infoBanner, { backgroundColor: theme.colors.primaryContainer }]}>
                     <Icon source="information" size={20} color={theme.colors.onPrimaryContainer} />
                     <Text style={{ flex: 1, marginLeft: 8, color: theme.colors.onPrimaryContainer }}>
-                        {codTab === 'pending'
-                            ? "Orders waiting for customer response."
-                            : "Orders with customer activity or manual updates."}
+                        {codTab === 'pending' && "Orders waiting for customer response."}
+                        {codTab === 'verified' && "Orders ready for shipping."}
+                        {codTab === 'alerts' && "Orders needing address review."}
+                        {codTab === 'cancelled' && "Cancelled orders."}
                     </Text>
                 </Surface>
             </View>
         );
-    }, [codTab, codOrders, filterStatus, theme]);
+    }, [codTab, codOrders, theme]);
 
     const renderItem = React.useCallback(({ item }) => (
         <CODOrderItem
