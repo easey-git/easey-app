@@ -33,7 +33,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     // Message Viewer State
     const [chatDialogVisible, setChatDialogVisible] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
-    const [chatHistory, setChatHistory] = useState([]);
+    const [chatHistory, setChatHistory] = useState(null); // Use null to detect initial load
     const [chatLoading, setChatLoading] = useState(false);
 
     const [messageStats, setMessageStats] = useState([
@@ -345,22 +345,32 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 <View style={{ width: '100%', alignItems: 'center' }}>
                     <BarChart
                         data={messageStats}
-                        width={screenWidth - (isDesktop ? 340 : 80)} // Dynamic width based on sidebar
+                        width={screenWidth - (isDesktop ? 340 : 80)}
                         height={240}
-                        barWidth={32}
-                        spacing={40}
-                        initialSpacing={30}
+                        barWidth={35}
+                        spacing={30}
+                        initialSpacing={20}
                         roundedTop
+                        roundedBottom
+                        hideRules
+                        xAxisThickness={0}
                         yAxisThickness={0}
-                        xAxisThickness={1}
-                        xAxisColor={theme.colors.outlineVariant}
-                        yAxisColor={theme.colors.outlineVariant}
                         yAxisTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
                         xAxisLabelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                        labelTextStyle={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}
-                        rulesColor={theme.colors.outlineVariant}
-                        hideRules
-                        noOfSections={5}
+                        noOfSections={3}
+                        maxValue={Math.max(...messageStats.map(s => s.value), 10)}
+                        showValuesAsTopLabel
+                        topLabelTextStyle={{ 
+                            color: '#fff', 
+                            fontSize: 10, 
+                            fontWeight: 'bold',
+                            textAlign: 'center',
+                            width: 35
+                        }}
+                        topLabelContainerStyle={{
+                            marginBottom: -22,
+                            zIndex: 10
+                        }}
                     />
                 </View>
             </Surface>
@@ -562,21 +572,23 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         </View>
                         
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                            {(() => {
-                                const lastInbound = chatHistory.find(m => m.direction === 'inbound');
-                                const isWindowOpen = lastInbound && (new Date() - new Date(lastInbound.createdAt)) < 24 * 60 * 60 * 1000;
-                                return (
-                                    <Badge 
-                                        style={{ 
-                                            backgroundColor: isWindowOpen ? '#4ade80' : theme.colors.error, 
-                                            color: 'white',
-                                            paddingHorizontal: 8
-                                        }}
-                                    >
-                                        {isWindowOpen ? '24h Window Open' : 'Window Closed'}
-                                    </Badge>
-                                );
-                            })()}
+                                    {(() => {
+                                        if (!chatHistory) return <Badge style={{ backgroundColor: theme.colors.surfaceVariant }}>Checking...</Badge>;
+
+                                        const lastInbound = chatHistory.find(m => m.direction === 'inbound');
+                                        const isWindowOpen = lastInbound && (new Date() - new Date(lastInbound.createdAt)) < 24 * 60 * 60 * 1000;
+                                        return (
+                                            <Badge 
+                                                style={{ 
+                                                    backgroundColor: isWindowOpen ? '#4ade80' : theme.colors.error, 
+                                                    color: 'white',
+                                                    paddingHorizontal: 8
+                                                }}
+                                            >
+                                                {isWindowOpen ? '24h Window Open' : 'Window Closed'}
+                                            </Badge>
+                                        );
+                                    })()}
                             <IconButton 
                                 icon="close" 
                                 size={24} 
@@ -590,6 +602,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
                     <View style={{ flex: 1, position: 'relative' }}>
                         {(() => {
+                            if (!chatHistory) return <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator /></View>;
+
                             const lastInbound = chatHistory.find(m => m.direction === 'inbound');
                             const isWindowOpen = lastInbound && (new Date() - new Date(lastInbound.createdAt)) < 24 * 60 * 60 * 1000;
                             
@@ -606,7 +620,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     
                                     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
                                         <GiftedChat
-                                            messages={chatHistory}
+                                            messages={chatHistory || []}
                                             onSend={messages => onSend(messages)}
                                             user={{ _id: 1 }}
                                             renderUsernameOnMessage={true}
