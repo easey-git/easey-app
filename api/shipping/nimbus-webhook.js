@@ -91,7 +91,13 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
             body: JSON.stringify(body)
         });
         const data = await res.json();
+        console.log('[WhatsApp API Debug] Status:', res.status, 'Response:', JSON.stringify(data));
         
+        if (!res.ok) {
+            console.error('[WhatsApp API Error]', JSON.stringify(data));
+            return;
+        }
+
         await db.collection('whatsapp_messages').add({
             phone: phone,
             phoneNormalized: normalizePhone(phone),
@@ -101,7 +107,7 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
             body: `NDR Alert: ${reason} (AWB: ${awb})`,
             timestamp: admin.firestore.Timestamp.now(),
             expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
-            whatsappId: data.messages?.[0]?.id,
+            whatsappId: data.messages?.[0]?.id || null,
             metadata: { awb, orderNumber, source: 'nimbuspost' }
         });
 
