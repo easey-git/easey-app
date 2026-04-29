@@ -192,7 +192,6 @@ module.exports = async (req, res) => {
                     targetRoles: ['admin', 'manager']
                 });
             } catch (e) {}
-        }
 
         // 3. Send WhatsApp to Customer (using data from NimbusPost)
         if (phone) {
