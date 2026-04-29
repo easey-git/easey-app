@@ -1,5 +1,6 @@
 const admin = require("firebase-admin");
 const cors = require('cors')({ origin: true }); // Standard CORS
+const { updateNDRAction } = require('./shipping/nimbus');
 
 // Helper to run middleware
 const runMiddleware = (req, res, fn) => {
@@ -39,7 +40,9 @@ const CONSTANTS = {
         CONFIRM_YES: ['CONFIRM_COD_YES', 'Confirm Order'],
         CONFIRM_NO: ['CONFIRM_COD_NO', 'Cancel', 'cancel'],
         ADDRESS_CORRECT: ['ADDRESS_CORRECT', 'Confirm Address', 'Yes, Correct', 'Correct'],
-        ADDRESS_EDIT: ['ADDRESS_EDIT', 'Make Changes', 'Edit Address']
+        ADDRESS_EDIT: ['ADDRESS_EDIT', 'Make Changes', 'Edit Address'],
+        NDR_REATTEMPT: ['NDR_REATTEMPT', 'Re-attempt Delivery', 'Try again'],
+        NDR_CANCEL: ['NDR_CANCEL', 'Cancel Shipment', 'Return to origin']
     },
     DEFAULT_COUNTRY_CODE: '91'
 };
@@ -481,6 +484,40 @@ module.exports = async (req, res) => {
                                     ]
                                 }
                             ], "en_US");
+                        }
+                    }
+
+                    // CASE 5: NDR Re-attempt
+                    else if (CONSTANTS.PAYLOADS.NDR_REATTEMPT.includes(payload) || CONSTANTS.PAYLOADS.NDR_REATTEMPT.includes(body)) {
+                        const orderDoc = await findLatestOrder();
+                        const orderData = orderDoc?.data();
+                        
+                        if (orderData?.awb || orderData?.shipping_awb) {
+                            const awb = orderData.awb || orderData.shipping_awb;
+                            const result = await updateNDRAction(awb, 'REATTEMPT', 'Customer requested re-attempt via WhatsApp');
+                            
+                            if (result.success) {
+                                await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [
+                                    { type: 'body', parameters: [{ type: 'text', text: 're-attempted' }] }
+                                ], "en_US");
+                            }
+                        }
+                    }
+
+                    // CASE 6: NDR Cancel (Return to Origin)
+                    else if (CONSTANTS.PAYLOADS.NDR_CANCEL.includes(payload) || CONSTANTS.PAYLOADS.NDR_CANCEL.includes(body)) {
+                        const orderDoc = await findLatestOrder();
+                        const orderData = orderDoc?.data();
+
+                        if (orderData?.awb || orderData?.shipping_awb) {
+                            const awb = orderData.awb || orderData.shipping_awb;
+                            const result = await updateNDRAction(awb, 'RTO', 'Customer requested cancellation via WhatsApp');
+
+                            if (result.success) {
+                                await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [
+                                    { type: 'body', parameters: [{ type: 'text', text: 'cancelled and returned' }] }
+                                ], "en_US");
+                            }
                         }
                     }
                 }
