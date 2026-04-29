@@ -601,10 +601,15 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
         return (
             <View>
-                <View style={{ marginBottom: 16 }}>
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    contentContainerStyle={{ paddingBottom: 8 }}
+                >
                     <SegmentedButtons
                         value={codTab}
                         onValueChange={setCodTab}
+                        style={{ minWidth: isDesktop ? '100%' : 600 }}
                         buttons={[
                             { value: 'pending', label: `Pending (${pendingOrders.length})` },
                             { value: 'verified', label: `Verified (${verifiedOrders.length})` },
@@ -612,7 +617,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             { value: 'cancelled', label: `Cancelled (${cancelledOrders.length})` },
                         ]}
                     />
-                </View>
+                </ScrollView>
 
                 <Surface style={[styles.infoBanner, { backgroundColor: theme.colors.primaryContainer }]}>
                     <Icon source="information" size={20} color={theme.colors.onPrimaryContainer} />
@@ -683,30 +688,38 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     return (
         <CRMLayout title="WhatsApp Manager" navigation={navigation} scrollable={false} fullWidth={true}>
-            <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
-                style={{ maxHeight: 60 }}
-            >
-                <SegmentedButtons
-                    value={tab}
-                    onValueChange={setTab}
-                    density="medium"
-                    style={{ minWidth: isDesktop ? '100%' : 500 }}
-                    buttons={[
-                        { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
-                        { value: 'cod', label: 'COD Verify', icon: 'checkbox-marked-circle-outline' },
-                        { value: 'ndr', label: 'NDR', icon: 'truck-alert-outline' },
-                        { value: 'abandoned', label: 'Recovery', icon: 'cart-arrow-down' },
-                    ]}
-                />
-            </ScrollView>
+            <View style={{ backgroundColor: theme.colors.surface, elevation: 2, zIndex: 10 }}>
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    contentContainerStyle={{ 
+                        paddingHorizontal: 16, 
+                        paddingVertical: 12,
+                        minWidth: '100%',
+                        justifyContent: 'center' 
+                    }}
+                >
+                    <SegmentedButtons
+                        value={tab}
+                        onValueChange={setTab}
+                        density="medium"
+                        style={{ minWidth: isDesktop ? '100%' : 800 }} // Boosted width for long labels
+                        buttons={[
+                            { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
+                            { value: 'cod', label: 'COD Verify', icon: 'checkbox-marked-circle-outline' },
+                            { value: 'ndr', label: 'NDR Alerts', icon: 'truck-alert-outline' },
+                            { value: 'abandoned', label: 'Recovery Center', icon: 'cart-arrow-down' },
+                        ]}
+                    />
+                </ScrollView>
+            </View>
 
-            {tab === 'overview' && renderOverview()}
-            {tab === 'cod' && renderCODVerification()}
-            {tab === 'ndr' && renderNDR()}
-            {tab === 'abandoned' && renderAbandoned()}
+            <View style={{ flex: 1 }}>
+                {tab === 'overview' && renderOverview()}
+                {tab === 'cod' && renderCODVerification()}
+                {tab === 'ndr' && renderNDR()}
+                {tab === 'abandoned' && renderAbandoned()}
+            </View>
 
             {/* Chat Dialog */}
             <Portal>
