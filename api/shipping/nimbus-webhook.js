@@ -66,7 +66,7 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
         to: phone,
         type: "template",
         template: {
-            name: "shipping_ndr_alert",
+            name: "alert_shipping_ndr",
             language: { code: "en_US" },
             components: [
                 {
@@ -97,7 +97,7 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
             phoneNormalized: normalizePhone(phone),
             direction: 'outbound',
             type: 'template',
-            templateName: 'shipping_ndr_alert',
+            templateName: 'alert_shipping_ndr',
             body: `NDR Alert: ${reason} (AWB: ${awb})`,
             timestamp: admin.firestore.Timestamp.now(),
             expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
