@@ -190,6 +190,10 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         return () => unsubChat();
     }, [selectedCustomer]);
 
+    const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+        ? 'https://easey-app.vercel.app' 
+        : '';
+
     const onSend = async (newMessages = []) => {
         const msg = newMessages[0];
         if (!msg || !selectedCustomer) return;
@@ -199,6 +203,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         // Optimistic update for instant feedback
         const optimisticMsg = {
             ...msg,
+            _id: Math.random().toString(),
             createdAt: new Date(),
             user: { _id: 1 },
             pending: true,
@@ -207,7 +212,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         setChatHistory(prev => [optimisticMsg, ...prev]);
 
         try {
-            const response = await fetch('/api/whatsapp', {
+            const response = await fetch(`${API_BASE}/api/whatsapp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -224,8 +229,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         } catch (error) {
             console.error("Error sending message:", error);
             showSnackbar(error.message || "Network error while sending message.");
-            // Remove the optimistic message on failure so the user knows it didn't go through
-            setChatHistory(prev => prev.filter(m => m._id !== msg._id));
+            // Remove the optimistic message on failure
+            setChatHistory(prev => prev.filter(m => m._id !== optimisticMsg._id));
         }
     };
 
@@ -607,6 +612,23 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             renderUsernameOnMessage={true}
                                             showUserAvatar={false}
                                             alwaysShowSend={isWindowOpen}
+                                            renderComposer={props => (
+                                                <Composer
+                                                    {...props}
+                                                    textInputProps={{
+                                                        onKeyDown: (e) => {
+                                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                                e.preventDefault();
+                                                                if (props.text && props.text.trim().length > 0) {
+                                                                    props.onSend({ text: props.text.trim() }, true);
+                                                                }
+                                                            }
+                                                        },
+                                                        blurOnSubmit: false,
+                                                        enablesReturnKeyAutomatically: true,
+                                                    }}
+                                                />
+                                            )}
                                             renderInputToolbar={props => isWindowOpen ? (
                                                 <InputToolbar 
                                                     {...props} 
