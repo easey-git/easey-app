@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip, TextInput } from 'react-native-paper';
+import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip, TextInput, Snackbar } from 'react-native-paper';
 import { BarChart } from 'react-native-gifted-charts';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -42,6 +42,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         { value: 0, label: 'Read', frontColor: '#4ade80' },
         { value: 0, label: 'Replied', frontColor: '#f59e0b' },
     ]);
+
+    // Snackbar State
+    const [snackbar, setSnackbar] = useState({ visible: false, message: '' });
+    const showSnackbar = (message) => setSnackbar({ visible: true, message });
+    const hideSnackbar = () => setSnackbar({ visible: false, message: '' });
 
     useEffect(() => {
         setLoading(true);
@@ -492,12 +497,18 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             theme={theme}
             onOpenChat={openChat}
             onOpenMenu={setMenuVisible}
+            showSnackbar={showSnackbar}
         />
-    ), [theme, openChat, setMenuVisible]);
+    ), [theme, openChat, setMenuVisible, showSnackbar]);
 
     const renderAbandonedItem = React.useCallback(({ item }) => (
-        <AbandonedCartItem item={item} theme={theme} onOpenChat={openChat} />
-    ), [theme, openChat]);
+        <AbandonedCartItem 
+            item={item} 
+            theme={theme} 
+            onOpenChat={openChat} 
+            showSnackbar={showSnackbar}
+        />
+    ), [theme, openChat, showSnackbar]);
 
     const renderAbandoned = () => (
         <FlatList
@@ -701,11 +712,23 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     </View>
                 </Dialog>
             </Portal>
+            <Snackbar
+                visible={snackbar.visible}
+                onDismiss={hideSnackbar}
+                duration={2000}
+                style={{ backgroundColor: theme.colors.inverseSurface }}
+                action={{
+                    label: 'OK',
+                    onPress: hideSnackbar,
+                }}
+            >
+                {snackbar.message}
+            </Snackbar>
         </CRMLayout>
     );
 };
 
-const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu }) => {
+const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu, showSnackbar }) => {
     const getStatusColor = (status) => {
         switch (status) {
             case 'approved': return '#4ade80'; // Green
@@ -723,13 +746,35 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu }) => {
         return status.replace(/_/g, ' ').toUpperCase();
     };
 
+    const copyToClipboard = (text) => {
+        if (Platform.OS === 'web') {
+            navigator.clipboard.writeText(text);
+        } else {
+            // For mobile, you might use Clipboard from react-native or expo-clipboard
+            // For now, assuming web-first dashboard
+            navigator.clipboard?.writeText(text);
+        }
+        showSnackbar("Copied to clipboard!");
+    };
+
     return (
         <Surface style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={{ flex: 1 }}>
                     <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order #{order.orderNumber}</Text>
-                    <Text variant="bodyMedium">{order.customerName}</Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1} adjustsFontSizeToFit>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text variant="bodyMedium">{order.customerName}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>{order.phone}</Text>
+                        <IconButton 
+                            icon="content-copy" 
+                            size={16} 
+                            style={{ margin: 0, padding: 0 }} 
+                            onPress={() => copyToClipboard(order.phone)} 
+                        />
+                    </View>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
                         ₹{order.totalPrice} • {order.city}
                     </Text>
                     <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
@@ -742,12 +787,23 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu }) => {
             </View>
 
             {order.updatedAddress && (
-                <Surface style={{ marginTop: 12, padding: 8, borderRadius: 8, backgroundColor: theme.dark ? '#1e293b' : '#f0f9ff', borderLeftWidth: 4, borderLeftColor: '#3b82f6' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                        <Icon source="map-marker-check" size={16} color="#3b82f6" />
-                        <Text variant="labelSmall" style={{ color: '#3b82f6', fontWeight: 'bold', marginLeft: 4 }}>NEW ADDRESS RECEIVED:</Text>
+                <Surface style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: theme.dark ? '#1e293b' : '#f0f9ff', borderLeftWidth: 4, borderLeftColor: '#3b82f6' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                <Icon source="map-marker-check" size={16} color="#3b82f6" />
+                                <Text variant="labelSmall" style={{ color: '#3b82f6', fontWeight: 'bold', marginLeft: 4 }}>NEW ADDRESS RECEIVED:</Text>
+                            </View>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurface }}>{order.updatedAddress}</Text>
+                        </View>
+                        <IconButton 
+                            icon="content-copy" 
+                            size={18} 
+                            onPress={() => copyToClipboard(order.updatedAddress)}
+                            iconColor="#3b82f6"
+                            style={{ margin: 0 }}
+                        />
                     </View>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurface }}>{order.updatedAddress}</Text>
                 </Surface>
             )}
 
@@ -774,38 +830,58 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu }) => {
     );
 });
 
-const AbandonedCartItem = React.memo(({ item, theme, onOpenChat }) => (
-    <Surface style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <View>
-                <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{item.customerName}</Text>
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+const AbandonedCartItem = React.memo(({ item, theme, onOpenChat, showSnackbar }) => {
+    const copyToClipboard = (text) => {
+        if (Platform.OS === 'web') {
+            navigator.clipboard.writeText(text);
+        } else {
+            navigator.clipboard?.writeText(text);
+        }
+        if (showSnackbar) showSnackbar("Copied to clipboard!");
+    };
+
+    return (
+        <Surface style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{item.customerName}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>{item.phone}</Text>
+                        <IconButton 
+                            icon="content-copy" 
+                            size={14} 
+                            style={{ margin: 0, padding: 0 }} 
+                            onPress={() => copyToClipboard(item.phone)} 
+                        />
+                    </View>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                        {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </Text>
+                </View>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }} numberOfLines={1}>
+                    ₹{item.totalPrice}
                 </Text>
             </View>
-            <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }} numberOfLines={1} adjustsFontSizeToFit>
-                ₹{item.totalPrice}
-            </Text>
-        </View>
 
-        <View style={{ marginVertical: 8 }}>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
-                {item.items ? item.items.map(i => i.name).join(', ') : 'Items unknown'}
-            </Text>
-        </View>
+            <View style={{ marginVertical: 8 }}>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
+                    {item.items ? item.items.map(i => i.name).join(', ') : 'Items unknown'}
+                </Text>
+            </View>
 
-        <View style={styles.cardActions}>
-            <Button
-                mode="text"
-                icon="message-text-outline"
-                compact
-                onPress={() => onOpenChat(item)}
-            >
-                Chat
-            </Button>
-        </View>
-    </Surface>
-));
+            <View style={styles.cardActions}>
+                <Button
+                    mode="text"
+                    icon="message-text-outline"
+                    compact
+                    onPress={() => onOpenChat(item)}
+                >
+                    Chat
+                </Button>
+            </View>
+        </Surface>
+    );
+});
 
 const styles = StyleSheet.create({
     segmentContainer: { paddingVertical: 16 },
