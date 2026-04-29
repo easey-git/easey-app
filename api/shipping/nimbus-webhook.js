@@ -1,5 +1,6 @@
 const admin = require("firebase-admin");
 const cors = require('cors')({ origin: true });
+const crypto = require('crypto');
 
 // Helper to run middleware
 const runMiddleware = (req, res, fn) => {
@@ -24,6 +25,22 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 /**
+ * Verifies the NimbusPost webhook signature.
+ */
+const verifySignature = (req) => {
+    const secret = process.env.NIMBUS_SECRET;
+    if (!secret) return true; // Skip if no secret set
+
+    const signature = req.headers['x-hmac-sha256'];
+    if (!signature) return false;
+
+    const hmac = crypto.createHmac('sha256', secret);
+    const digest = hmac.update(JSON.stringify(req.body)).digest('base64');
+
+    return signature === digest;
+};
+
+/**
  * Normalizes phone number to E.164 format.
  */
 const normalizePhone = (phone) => {
@@ -44,8 +61,6 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
 
     const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
     
-    // Template: shipping_ndr_alert
-    // Parameters: 1: Name, 2: Order#, 3: Reason
     const body = {
         messaging_product: "whatsapp",
         to: phone,
@@ -57,7 +72,7 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
                 {
                     type: "body",
                     parameters: [
-                        { type: "text", text: "Customer" }, // Fallback name
+                        { type: "text", text: "Customer" },
                         { type: "text", text: String(orderNumber) },
                         { type: "text", text: reason || "Unavailable" }
                     ]
@@ -77,7 +92,6 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
         });
         const data = await res.json();
         
-        // Log to Firestore
         await db.collection('whatsapp_messages').add({
             phone: phone,
             phoneNormalized: normalizePhone(phone),
@@ -102,46 +116,50 @@ module.exports = async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
+    // Verify Signature
+    if (!verifySignature(req)) {
+        console.error('[NimbusPost Webhook] Invalid Signature');
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     console.log('[NimbusPost Webhook] Received:', JSON.stringify(req.body));
 
     try {
         const payload = req.body;
-        const event = payload.status || payload.event;
-        const awb = payload.awb || payload.data?.awb;
-        const orderId = payload.order_id || payload.data?.order_id;
-        const reason = payload.reason || payload.remarks || payload.data?.reason;
+        const status = (payload.status || "").toLowerCase();
+        const awb = payload.awb_number;
+        const reason = payload.message;
 
-        // We only care about NDR events
-        if (event !== 'NDR' && !String(event).toLowerCase().includes('ndr')) {
+        // Check if status is NDR related
+        if (status !== 'ndr' && !status.includes('ndr') && !reason.toLowerCase().includes('ndr')) {
             return res.status(200).json({ status: 'ignored', message: 'Not an NDR event' });
         }
 
         if (!awb) return res.status(400).json({ error: 'Missing AWB' });
 
-        // 1. Find the order in Firestore
-        let orderData = null;
-        let orderSnap = await db.collection('orders').doc(String(orderId)).get();
-        
-        if (!orderSnap.exists) {
-            // Try searching by orderNumber if orderId doesn't match doc ID
-            const querySnap = await db.collection('orders').where('orderNumber', '==', String(orderId)).limit(1).get();
-            if (!querySnap.empty) {
-                orderSnap = querySnap.docs[0];
-            }
+        // Search for the order using AWB
+        let orderSnap = await db.collection('orders').where('awb', '==', String(awb)).limit(1).get();
+        if (orderSnap.empty) {
+            orderSnap = await db.collection('orders').where('shipping_awb', '==', String(awb)).limit(1).get();
         }
 
-        if (orderSnap.exists) {
-            orderData = orderSnap.data();
-            // Update order status
-            await orderSnap.ref.update({
-                shipping_status: 'NDR',
-                ndr_reason: reason,
-                updatedAt: admin.firestore.Timestamp.now()
-            });
+        if (orderSnap.empty) {
+            console.warn(`[NimbusPost Webhook] Order not found for AWB: ${awb}`);
+            return res.status(200).json({ status: 'not_found', message: 'Order not found for this AWB' });
         }
 
-        const phone = orderData?.phoneNormalized || payload.phone || payload.data?.phone;
-        const orderNumber = orderData?.orderNumber || orderId;
+        const orderDoc = orderSnap.docs[0];
+        const orderData = orderDoc.data();
+
+        // Update order status
+        await orderDoc.ref.update({
+            shipping_status: 'NDR',
+            ndr_reason: reason,
+            updatedAt: admin.firestore.Timestamp.now()
+        });
+
+        const phone = orderData.phoneNormalized || orderData.phone;
+        const orderNumber = orderData.orderNumber;
 
         if (phone) {
             await sendNDRWhatsApp(phone, orderNumber, awb, reason);

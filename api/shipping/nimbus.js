@@ -42,20 +42,29 @@ async function getNimbusToken() {
 /**
  * Updates the NDR status for a shipment.
  * @param {string} awb - The AWB number.
- * @param {string} action - 're-attempt' | 'return' | 'fake_attempt' etc.
- * @param {string} remarks - Customer feedback or new address.
+ * @param {string} action - 're-attempt' | 'change_address' | 'change_phone'
+ * @param {object} actionData - Data required for the action (e.g., re_attempt_date)
  */
-async function updateNDRAction(awb, action, remarks = "") {
+async function updateNDRAction(awb, action, actionData = {}) {
     try {
         const token = await getNimbusToken();
         
-        const body = {
-            awb: awb,
-            action: action, // e.g., 'REATTEMPT'
-            comments: remarks
-        };
+        // If action is re-attempt, ensure we have a date (default to tomorrow)
+        if (action === 're-attempt' && !actionData.re_attempt_date) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            actionData.re_attempt_date = tomorrow.toISOString().split('T')[0];
+        }
 
-        const response = await fetch(`${NIMBUS_API_BASE}/shipments/ndr/update`, {
+        const body = [
+            {
+                awb: awb,
+                action: action,
+                action_data: actionData
+            }
+        ];
+
+        const response = await fetch(`${NIMBUS_API_BASE}/ndr/action`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -65,12 +74,15 @@ async function updateNDRAction(awb, action, remarks = "") {
         });
 
         const data = await response.json();
-        if (!response.ok) {
+        // The response is an array of statuses
+        const status = data[0];
+
+        if (!status || !status.status) {
             console.error('NimbusPost NDR Update Error:', JSON.stringify(data));
-            return { success: false, error: data.message };
+            return { success: false, error: status?.message || 'Failed to update NDR' };
         }
 
-        return { success: true, data: data.data };
+        return { success: true, message: status.message };
     } catch (error) {
         console.error('NimbusPost NDR Exception:', error);
         return { success: false, error: error.message };
