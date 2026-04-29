@@ -106,9 +106,9 @@ async function getShipmentDetails(awb) {
         });
 
         const data = await response.json();
+        console.log(`[NimbusPost Debug] AWB: ${awb}, Status: ${response.status}, Body: ${JSON.stringify(data)}`);
         
         if (!data.status || !data.data) {
-            console.error('NimbusPost Track Shipment Error:', JSON.stringify(data));
             return null;
         }
 
