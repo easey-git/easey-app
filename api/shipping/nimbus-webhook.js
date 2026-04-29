@@ -67,7 +67,7 @@ async function sendNDRWhatsApp(phone, orderNumber, awb, reason) {
         type: "template",
         template: {
             name: "alert_shipping_ndr",
-            language: { code: "en_US" },
+            language: { code: "en" },
             components: [
                 {
                     type: "body",
