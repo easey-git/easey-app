@@ -645,15 +645,27 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                                 <Bubble
                                                     {...props}
                                                     wrapperStyle={{
-                                                        right: { backgroundColor: theme.colors.primary },
-                                                        left: { backgroundColor: theme.colors.elevation.level2 }
+                                                        left: {
+                                                            backgroundColor: theme.dark ? theme.colors.surfaceVariant : '#f0f0f0',
+                                                            borderRadius: 18,
+                                                        },
+                                                        right: {
+                                                            backgroundColor: theme.colors.primary,
+                                                            borderRadius: 18,
+                                                        }
+                                                    }}
+                                                    textStyle={{
+                                                        left: { color: theme.dark ? '#ffffff' : '#000000' },
+                                                        right: { color: '#ffffff' }
                                                     }}
                                                     renderTicks={(msg) => {
                                                         if (msg.user._id !== 1) return null;
-                                                        const color = msg.status === 'read' ? '#3b82f6' : '#fff';
-                                                        const icon = (msg.status === 'delivered' || msg.status === 'read') ? 'check-all' : 'check';
+                                                        const isRead = msg.status === 'read';
+                                                        const isDelivered = msg.status === 'delivered' || isRead;
+                                                        const color = isRead ? '#3b82f6' : '#fff';
+                                                        const icon = isDelivered ? 'check-all' : 'check';
                                                         return (
-                                                            <View style={{ marginRight: 5 }}>
+                                                            <View style={{ marginRight: 5, marginBottom: 2 }}>
                                                                 <Icon source={icon} size={14} color={color} />
                                                             </View>
                                                         );
