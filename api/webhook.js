@@ -108,6 +108,8 @@ const sendWhatsAppMessage = async (to, templateName, components, languageCode = 
         console.info(`WhatsApp template '${templateName}' sent to ${to}`);
 
         // Log to Firestore (Fire & Forget)
+        const expireAt = new Date();
+        expireAt.setDate(expireAt.getDate() + 30);
         db.collection('whatsapp_messages').add({
             phone: to,
             phoneNormalized: normalizePhone(to), // Store normalized for querying
@@ -116,6 +118,7 @@ const sendWhatsAppMessage = async (to, templateName, components, languageCode = 
             body: `Auto-Template: ${templateName}`,
             templateName: templateName,
             timestamp: admin.firestore.Timestamp.now(),
+            expireAt: admin.firestore.Timestamp.fromDate(expireAt),
             whatsappId: data.messages?.[0]?.id
         }).catch(err => console.error("Error logging outbound msg:", err));
 

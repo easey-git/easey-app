@@ -54,12 +54,12 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     useEffect(() => {
         setLoading(true);
 
-        // 1. Fetch COD Orders
+        // 1. Fetch COD Orders (Sorted by latest activity)
         const qOrders = query(
             collection(db, "orders"),
             where("status", "in", ["COD", "CANCELLED"]),
-            orderBy("createdAt", "desc"),
-            limit(50)
+            orderBy("updatedAt", "desc"),
+            limit(100)
         );
 
         const unsubOrders = onSnapshot(qOrders, (snapshot) => {
@@ -68,7 +68,15 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 ...doc.data(),
                 verificationStatus: doc.data().verificationStatus || 'pending'
             }));
-            setCodOrders(orders);
+            
+            // Industrial-grade sort: Always use the latest available timestamp
+            const sortedOrders = orders.sort((a, b) => {
+                const timeA = a.updatedAt?.toDate ? a.updatedAt.toDate() : (a.createdAt?.toDate ? a.createdAt.toDate() : 0);
+                const timeB = b.updatedAt?.toDate ? b.updatedAt.toDate() : (b.createdAt?.toDate ? b.createdAt.toDate() : 0);
+                return timeB - timeA;
+            });
+
+            setCodOrders(sortedOrders);
         });
 
         // 2. Fetch Abandoned Carts
@@ -90,7 +98,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     carts.push({ id: doc.id, ...data });
                 }
             });
-            setAbandonedCarts(carts);
+            setAbandonedCarts(carts.sort((a, b) => {
+                const timeA = a.updatedAt?.toDate ? a.updatedAt.toDate() : (a.createdAt?.toDate ? a.createdAt.toDate() : 0);
+                const timeB = b.updatedAt?.toDate ? b.updatedAt.toDate() : (b.createdAt?.toDate ? b.createdAt.toDate() : 0);
+                return timeB - timeA;
+            }));
         });
 
         // 3. Fetch Recent Activity & Stats (Dynamic Limit)
@@ -341,9 +353,35 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         };
     }, [abandonedCarts, codOrders, loading]);
 
+    const dynamicStyles = {
+        statsGrid: { 
+            flexDirection: isDesktop ? 'row' : 'column', 
+            gap: 16, 
+            marginBottom: 16 
+        },
+        actionCard: {
+            padding: isDesktop ? 24 : 16,
+            borderRadius: 24,
+            marginBottom: 16,
+            backgroundColor: theme.colors.surface,
+        },
+        modalCard: {
+            maxWidth: 800,
+            width: isDesktop ? '95%' : '100%',
+            height: isDesktop ? '85%' : '100%',
+            maxHeight: '100%',
+            margin: 0,
+            alignSelf: 'center',
+            borderRadius: isDesktop ? 24 : 0,
+            overflow: 'hidden',
+            padding: 0,
+            backgroundColor: theme.colors.surface,
+        }
+    };
+
     const renderOverview = () => (
         <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-            <View style={styles.statsGrid}>
+            <View style={dynamicStyles.statsGrid}>
                 <Surface style={[styles.statCard, { backgroundColor: theme.dark ? theme.colors.elevation.level2 : '#f8fafc' }]} elevation={2}>
                     <Avatar.Icon size={44} icon="whatsapp" style={{ backgroundColor: '#25D366' }} />
                     <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12, color: theme.colors.onSurface }}>
@@ -671,7 +709,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 <Dialog 
                     visible={chatDialogVisible} 
                     onDismiss={() => setChatDialogVisible(false)} 
-                    style={styles.modalCard}
+                    style={dynamicStyles.modalCard}
                 >
                     {/* Header: More compact and includes Close button */}
                     <View style={styles.modalHeader}>
@@ -827,6 +865,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 };
 
 const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu, showSnackbar }) => {
+    const { isDesktop } = useResponsive();
     const getStatusColor = (status) => {
         switch (status) {
             case 'approved': return '#4ade80'; // Green
@@ -856,7 +895,16 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu, showSna
     };
 
     return (
-        <Surface style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
+        <Surface 
+            style={[
+                styles.actionCard, 
+                { 
+                    backgroundColor: theme.colors.surface,
+                    padding: isDesktop ? 24 : 16 
+                }
+            ]} 
+            elevation={1}
+        >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={{ flex: 1 }}>
                     <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order #{order.orderNumber}</Text>
@@ -929,6 +977,7 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu, showSna
 });
 
 const AbandonedCartItem = React.memo(({ item, theme, onOpenChat, showSnackbar }) => {
+    const { isDesktop } = useResponsive();
     const copyToClipboard = (text) => {
         if (Platform.OS === 'web') {
             navigator.clipboard.writeText(text);
@@ -939,7 +988,16 @@ const AbandonedCartItem = React.memo(({ item, theme, onOpenChat, showSnackbar })
     };
 
     return (
-        <Surface style={[styles.actionCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
+        <Surface 
+            style={[
+                styles.actionCard, 
+                { 
+                    backgroundColor: theme.colors.surface,
+                    padding: isDesktop ? 24 : 16 
+                }
+            ]} 
+            elevation={1}
+        >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View style={{ flex: 1 }}>
                     <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{item.customerName}</Text>

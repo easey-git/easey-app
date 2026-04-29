@@ -107,6 +107,7 @@ module.exports = async (req, res) => {
             type,
             body: type === 'template' ? `Template: ${templateName}` : message,
             timestamp: admin.firestore.Timestamp.now(),
+            expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
             whatsappId,
             status: 'sent'
         };
