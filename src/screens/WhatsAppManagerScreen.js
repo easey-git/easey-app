@@ -154,19 +154,25 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     // Fetch Chat History
     useEffect(() => {
-        if (!selectedCustomer || !selectedCustomer.phone) return;
+        if (!selectedCustomer) return;
+        
+        // Reset chat history when switching customers to avoid "Checking..." hang
+        setChatHistory(null);
+        
+        if (!selectedCustomer.phone && !selectedCustomer.phoneNormalized) {
+            setChatHistory([]); // No phone, no chat
+            return;
+        }
 
         setChatLoading(true);
 
-        // Use normalized phone if available, otherwise calculate it matching backend logic
-        let phoneDigits = selectedCustomer.phoneNormalized;
-
-        if (!phoneDigits && selectedCustomer.phone) {
-            let p = selectedCustomer.phone.replace(/\D/g, '');
-            if (p.length === 10) {
-                p = '91' + p;
+        // Robust phone normalization for varied sources (Shopify vs Firestore)
+        let phoneDigits = selectedCustomer.phoneNormalized || selectedCustomer.phone;
+        if (phoneDigits) {
+            phoneDigits = phoneDigits.toString().replace(/\D/g, '');
+            if (phoneDigits.length === 10) {
+                phoneDigits = '91' + phoneDigits;
             }
-            phoneDigits = p;
         }
 
         const qChat = query(
