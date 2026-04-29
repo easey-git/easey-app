@@ -421,12 +421,10 @@ module.exports = async (req, res) => {
                             const freshSnap = await t.get(orderRef);
                             const data = freshSnap.data();
 
-                            if (data.verificationStatus === 'approved') return;
-
                             t.update(orderRef, {
                                 verificationStatus: 'approved',
-                                // Also update core status to confirmed if needed, but keeping verificationStatus separate is safer
-                                cod_status: 'confirmed', // Keep redundant field in sync
+                                // Also update core status to confirmed if needed
+                                cod_status: 'confirmed', 
                                 updatedAt: admin.firestore.Timestamp.now()
                             });
 
