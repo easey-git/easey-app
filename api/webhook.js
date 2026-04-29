@@ -279,6 +279,40 @@ module.exports = async (req, res) => {
                         return docs[0];
                     };
 
+                    const latestOrderDoc = await findLatestOrder();
+                    const orderData = latestOrderDoc?.data();
+
+                    // SPECIAL CASE: Listening for Address Update (Text Response)
+                    if (type === 'text' && orderData?.whatsapp_flow === 'AWAITING_ADDRESS') {
+                        await latestOrderDoc.ref.update({
+                            updatedAddress: body,
+                            whatsapp_flow: null, // Clear the flow
+                            verificationStatus: 'address_updated',
+                            updatedAt: admin.firestore.Timestamp.now()
+                        });
+
+                        // Notify Dashboard via FCM
+                        await sendFCMNotifications(
+                            'Address Updated! 📍',
+                            `New address for #${orderData.orderNumber}: ${body}`,
+                            { orderId: latestOrderDoc.id, type: 'address_update' }
+                        );
+
+                        // Send "Thank You / Under Review" Template
+                        // Template: address_updated_thanks (Expected params: 1:Name, 2:Order#)
+                        await sendWhatsAppMessage(senderPhone, 'address_updated_thanks', [
+                            { 
+                                type: 'body', 
+                                parameters: [
+                                    { type: 'text', text: orderData.customerName || 'Customer' },
+                                    { type: 'text', text: String(orderData.orderNumber || '') }
+                                ] 
+                            }
+                        ], "en");
+
+                        return res.status(200).send('ADDRESS_CAPTURED');
+                    }
+
                     // Check Payloads
                     const isConfirmYes = CONSTANTS.PAYLOADS.CONFIRM_YES.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_YES.includes(body);
                     const isAddressCorrect = CONSTANTS.PAYLOADS.ADDRESS_CORRECT.includes(payload) || CONSTANTS.PAYLOADS.ADDRESS_CORRECT.includes(body);
@@ -394,18 +428,18 @@ module.exports = async (req, res) => {
                             await sendWhatsAppMessage(messagePayload.to, messagePayload.template, messagePayload.components, "en_US");
                         }
                     }
-
                     // CASE 3: Make Changes (Step 2)
                     else if (isAddressEdit) {
                         const orderDoc = await findLatestOrder();
                         if (orderDoc) {
                             await ordersRef.doc(orderDoc.id).update({
                                 verificationStatus: 'address_change_requested',
+                                whatsapp_flow: 'AWAITING_ADDRESS', // Set the state
                                 updatedAt: admin.firestore.Timestamp.now()
                             });
                             await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.UPDATE_ADDRESS, [
                                 { type: 'body', parameters: [{ type: 'text', text: orderDoc.data().customerName || 'Customer' }] }
-                            ], "en_US");
+                            ], "en");
                         }
                     }
 

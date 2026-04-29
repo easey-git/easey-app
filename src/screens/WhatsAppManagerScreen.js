@@ -679,7 +679,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 labelStyle={{ fontSize: 11 }}
                                 onPress={() => sendQuickTemplate('update_address', [
                                     { type: 'body', parameters: [{ type: 'text', text: selectedCustomer?.customerName || 'Customer' }] }
-                                ])}
+                                ], "en")}
                             >
                                 Req Address
                             </Button>
@@ -713,6 +713,7 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu }) => {
             case 'approved': return '#4ade80'; // Green
             case 'cancelled': return theme.colors.error; // Red
             case 'address_change_requested': return '#f59e0b'; // Orange
+            case 'address_updated': return '#8b5cf6'; // Purple
             case 'verified_pending_address': return '#3b82f6'; // Blue
             case 'reschedule_requested': return '#8b5cf6'; // Purple
             default: return theme.colors.outline;
@@ -741,6 +742,16 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu }) => {
                     {getStatusLabel(order.verificationStatus)}
                 </Badge>
             </View>
+
+            {order.updatedAddress && (
+                <Surface style={{ marginTop: 12, padding: 8, borderRadius: 8, backgroundColor: theme.dark ? '#1e293b' : '#f0f9ff', borderLeftWidth: 4, borderLeftColor: '#3b82f6' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Icon source="map-marker-check" size={16} color="#3b82f6" />
+                        <Text variant="labelSmall" style={{ color: '#3b82f6', fontWeight: 'bold', marginLeft: 4 }}>NEW ADDRESS RECEIVED:</Text>
+                    </View>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurface }}>{order.updatedAddress}</Text>
+                </Surface>
+            )}
 
             <View style={styles.cardActions}>
                 <Button
