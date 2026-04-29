@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip, TextInput, Snackbar } from 'react-native-paper';
+import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip, TextInput, Snackbar, TouchableRipple } from 'react-native-paper';
 import { BarChart } from 'react-native-gifted-charts';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -101,8 +101,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         const unsubActivity = onSnapshot(qActivity, (snapshot) => {
             const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // Update Recent Activity List (Top 5)
-            setRecentActivity(messages.slice(0, 5));
+            // Update Recent Activity List (Top 20 for scrolling)
+            setRecentActivity(messages.slice(0, 20));
 
             // Calculate Stats
             let sent = 0;
@@ -326,20 +326,32 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         setChatDialogVisible(true);
     };
 
+    // Memoized Stats for Overview to prevent flickering
+    const stats = React.useMemo(() => {
+        const pendingCOD = codOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending').length;
+        const verifiedToday = codOrders.filter(o => o.verificationStatus === 'approved').length;
+        
+        return {
+            activeTargets: pendingCOD + abandonedCarts.length,
+            verifiedOrders: verifiedToday,
+            isDataReady: !loading
+        };
+    }, [abandonedCarts, codOrders, loading]);
+
     const renderOverview = () => (
-        <ScrollView style={styles.tabContent}>
+        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
             <View style={styles.statsGrid}>
                 <Surface style={[styles.statCard, { backgroundColor: theme.dark ? theme.colors.elevation.level2 : '#f8fafc' }]} elevation={2}>
                     <Avatar.Icon size={44} icon="whatsapp" style={{ backgroundColor: '#25D366' }} />
                     <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12, color: theme.colors.onSurface }}>
-                        {codOrders.length + abandonedCarts.length}
+                        {stats.isDataReady ? stats.activeTargets : '...'}
                     </Text>
                     <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Active Targets</Text>
                 </Surface>
                 <Surface style={[styles.statCard, { backgroundColor: theme.dark ? theme.colors.elevation.level2 : '#f0fdf4' }]} elevation={2}>
                     <Avatar.Icon size={44} icon="cash-check" style={{ backgroundColor: '#4ade80' }} color="white" />
                     <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12, color: theme.colors.onSurface }}>
-                        {codOrders.filter(o => o.verificationStatus === 'approved').length}
+                        {stats.isDataReady ? stats.verifiedOrders : '...'}
                     </Text>
                     <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Verified Orders</Text>
                 </Surface>
@@ -385,24 +397,44 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 <View style={styles.cardHeader}>
                     <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Recent Activity</Text>
                 </View>
-                {recentActivity.map((msg) => (
-                    <View key={msg.id} style={styles.listItem}>
-                        <Avatar.Icon
-                            size={36}
-                            icon={msg.direction === 'outbound' ? 'arrow-top-right' : 'arrow-bottom-left'}
-                            style={{ backgroundColor: msg.direction === 'outbound' ? theme.colors.primaryContainer : theme.colors.secondaryContainer }}
-                            color={msg.direction === 'outbound' ? theme.colors.primary : theme.colors.secondary}
-                        />
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                            <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>{msg.phone}</Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
-                                {msg.body || (msg.type === 'template' ? `Template: ${msg.templateName}` : 'Message')}
-                            </Text>
-                        </View>
-                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                            {msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                        </Text>
-                    </View>
+                {recentActivity.map((msg, index) => (
+                    <React.Fragment key={msg.id}>
+                        <TouchableRipple
+                            onPress={() => {
+                                const customer = codOrders.find(o => o.phone === msg.phone || o.phoneNormalized === msg.phoneNormalized) ||
+                                               abandonedCarts.find(c => c.phone === msg.phone || c.phoneNormalized === msg.phoneNormalized);
+                                openChat(customer || { phone: msg.phone, customerName: msg.phone });
+                            }}
+                            rippleColor="rgba(0, 0, 0, .05)"
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
+                                <Avatar.Icon
+                                    size={44}
+                                    icon={msg.direction === 'outbound' ? 'arrow-top-right' : 'arrow-bottom-left'}
+                                    style={{ backgroundColor: msg.direction === 'outbound' ? theme.colors.primaryContainer : theme.colors.secondaryContainer }}
+                                    color={msg.direction === 'outbound' ? theme.colors.primary : theme.colors.secondary}
+                                />
+                                <View style={{ flex: 1, marginLeft: 16 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Text variant="bodyLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>
+                                            {(() => {
+                                                const customer = codOrders.find(o => o.phone === msg.phone || o.phoneNormalized === msg.phoneNormalized) ||
+                                                               abandonedCarts.find(c => c.phone === msg.phone || c.phoneNormalized === msg.phoneNormalized);
+                                                return customer ? customer.customerName : msg.phone;
+                                            })()}
+                                        </Text>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, opacity: 0.8 }}>
+                                            {msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                        </Text>
+                                    </View>
+                                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2, marginRight: 20 }} numberOfLines={1}>
+                                        {msg.body || (msg.type === 'template' ? `Template: ${msg.templateName}` : 'Message')}
+                                    </Text>
+                                </View>
+                            </View>
+                        </TouchableRipple>
+                        {index < recentActivity.length - 1 && <Divider style={{ marginHorizontal: 16, opacity: 0.3 }} />}
+                    </React.Fragment>
                 ))}
                 {recentActivity.length === 0 && (
                     <Text style={{ textAlign: 'center', padding: 16, color: theme.colors.onSurfaceVariant }}>No recent activity.</Text>
