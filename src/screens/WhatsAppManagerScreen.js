@@ -507,13 +507,16 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     <Dialog.Title>Update Status</Dialog.Title>
                     <Dialog.Content>
                         <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'approved')}>
-                            Mark as Approved
+                            Mark as Verified
+                        </Button>
+                        <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'address_updated')}>
+                            Mark as Address Updated
+                        </Button>
+                        <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'address_change_requested')}>
+                            Mark as Change Requested
                         </Button>
                         <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'cancelled')} textColor={theme.colors.error}>
                             Mark as Cancelled
-                        </Button>
-                        <Button mode="outlined" style={{ marginBottom: 8 }} onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'address_change_requested')}>
-                            Address Change Requested
                         </Button>
                         <Button mode="outlined" onPress={() => menuVisible && handleManualStatusUpdate(menuVisible, 'pending')}>
                             Reset to Pending
