@@ -255,6 +255,9 @@ module.exports = async (req, res) => {
                 }
 
                 // Log Inbound Message with Idempotency (use msgId as doc ID)
+                const expireAt = new Date();
+                expireAt.setDate(expireAt.getDate() + 30);
+
                 await db.collection('whatsapp_messages').doc(msgId).set({
                     id: msgId,
                     phone: senderPhone,
@@ -265,7 +268,8 @@ module.exports = async (req, res) => {
                     payload,
                     isOptOut,
                     raw: JSON.stringify(message),
-                    timestamp: admin.firestore.Timestamp.now()
+                    timestamp: admin.firestore.Timestamp.now(),
+                    expireAt: admin.firestore.Timestamp.fromDate(expireAt) // Auto-delete in 30 days
                 }, { merge: true });
 
                 // ---------------------------------------------------------
