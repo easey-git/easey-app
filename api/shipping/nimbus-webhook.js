@@ -146,9 +146,17 @@ module.exports = async (req, res) => {
         console.log(`[NimbusPost Webhook] Linked AWB ${awb} to Order Number: ${orderNumber}`);
 
         // 2. Find the order in Firestore using the Order Number we just got
+        // We check for String, Number, and with/without #
         let orderSnap = await db.collection('orders').where('orderNumber', '==', String(orderNumber)).limit(1).get();
         
-        // Fallback for different order number formats (with or without #)
+        if (orderSnap.empty) {
+            // Try as a pure number if it looks like one
+            const numericOrder = parseInt(orderNumber.replace(/\D/g, ''));
+            if (!isNaN(numericOrder)) {
+                orderSnap = await db.collection('orders').where('orderNumber', '==', numericOrder).limit(1).get();
+            }
+        }
+        
         if (orderSnap.empty) {
             const altOrderNumber = orderNumber.startsWith('#') ? orderNumber.substring(1) : `#${orderNumber}`;
             orderSnap = await db.collection('orders').where('orderNumber', '==', String(altOrderNumber)).limit(1).get();
