@@ -29,11 +29,13 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [recentActivity, setRecentActivity] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sendingId, setSendingId] = useState(null);
+    const [activityLimit, setActivityLimit] = useState(200);
+    const [activitySearch, setActivitySearch] = useState('');
 
     // Message Viewer State
     const [chatDialogVisible, setChatDialogVisible] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
-    const [chatHistory, setChatHistory] = useState(null); // Use null to detect initial load
+    const [chatHistory, setChatHistory] = useState(null);
     const [chatLoading, setChatLoading] = useState(false);
 
     const [messageStats, setMessageStats] = useState([
@@ -90,19 +92,18 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             setAbandonedCarts(carts);
         });
 
-        // 3. Fetch Recent Activity & Stats (Last 24 Hours)
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        // 3. Fetch Recent Activity & Stats (Dynamic Limit)
         const qActivity = query(
             collection(db, "whatsapp_messages"),
-            where("timestamp", ">=", twentyFourHoursAgo),
-            orderBy("timestamp", "desc")
+            orderBy("timestamp", "desc"),
+            limit(activityLimit)
         );
 
         const unsubActivity = onSnapshot(qActivity, (snapshot) => {
             const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // Update Recent Activity List (Top 20 for scrolling)
-            setRecentActivity(messages.slice(0, 20));
+            // Update Recent Activity List (All fetched messages for grouping)
+            setRecentActivity(messages);
 
             // Calculate Stats
             let sent = 0;
@@ -135,7 +136,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             unsubCarts();
             unsubActivity();
         };
-    }, []);
+    }, [activityLimit]);
 
     // Fetch Chat History
     useEffect(() => {
@@ -394,10 +395,60 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
             {/* Recent Activity Section */}
             <Surface style={[styles.listCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
-                <View style={styles.cardHeader}>
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Recent Activity</Text>
-                </View>
-                {recentActivity.map((msg, index) => (
+                {(() => {
+                    // 1. Group by unique phone number (Latest message first)
+                    const uniqueConversations = [];
+                    const seenPhones = new Set();
+
+                    recentActivity.forEach(msg => {
+                        if (!seenPhones.has(msg.phone)) {
+                            seenPhones.add(msg.phone);
+                            uniqueConversations.push(msg);
+                        }
+                    });
+
+                    // 2. Filter by search query
+                    const filtered = uniqueConversations.filter(msg => {
+                        const customer = codOrders.find(o => o.phone === msg.phone || o.phoneNormalized === msg.phoneNormalized) ||
+                                       abandonedCarts.find(c => c.phone === msg.phone || c.phoneNormalized === msg.phoneNormalized);
+                        const name = customer ? customer.customerName.toLowerCase() : '';
+                        const phone = msg.phone.toLowerCase();
+                        const query = activitySearch.toLowerCase();
+                        return name.includes(query) || phone.includes(query);
+                    });
+
+                    // Sub-header with correct counts
+                    const renderActivityHeader = () => (
+                        <View style={[styles.cardHeader, { flexDirection: 'column', alignItems: 'flex-start', gap: 12 }]}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>Conversations</Text>
+                                <Badge style={{ backgroundColor: theme.colors.primaryContainer, color: theme.colors.primary }}>{uniqueConversations.length} Customers</Badge>
+                            </View>
+                            <TextInput
+                                placeholder="Search by name or phone..."
+                                value={activitySearch}
+                                onChangeText={setActivitySearch}
+                                mode="outlined"
+                                style={{ width: '100%', height: 40, backgroundColor: theme.colors.surface }}
+                                left={<TextInput.Icon icon="magnify" />}
+                                dense
+                            />
+                        </View>
+                    );
+
+                    if (filtered.length === 0) {
+                        return (
+                            <View>
+                                {renderActivityHeader()}
+                                <Text style={{ textAlign: 'center', padding: 32, color: theme.colors.onSurfaceVariant }}>No conversations found.</Text>
+                            </View>
+                        );
+                    }
+
+                    return (
+                        <View>
+                            {renderActivityHeader()}
+                            {filtered.map((msg, index) => (
                     <React.Fragment key={msg.id}>
                         <TouchableRipple
                             onPress={() => {
@@ -433,12 +484,20 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 </View>
                             </View>
                         </TouchableRipple>
-                        {index < recentActivity.length - 1 && <Divider style={{ marginHorizontal: 16, opacity: 0.3 }} />}
+                        {index < filtered.length - 1 && <Divider style={{ marginHorizontal: 16, opacity: 0.3 }} />}
                     </React.Fragment>
-                ))}
-                {recentActivity.length === 0 && (
-                    <Text style={{ textAlign: 'center', padding: 16, color: theme.colors.onSurfaceVariant }}>No recent activity.</Text>
-                )}
+                    ))}
+                    <Button 
+                        mode="contained-tonal" 
+                        onPress={() => setActivityLimit(prev => prev + 100)}
+                        style={{ margin: 16, borderRadius: 12 }}
+                        icon="plus"
+                    >
+                        Load More Conversations
+                    </Button>
+                </View>
+                )
+            })()}
             </Surface>
         </ScrollView>
     );
