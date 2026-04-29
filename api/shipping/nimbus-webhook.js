@@ -165,6 +165,22 @@ module.exports = async (req, res) => {
             await sendNDRWhatsApp(phone, orderNumber, awb, reason);
         }
 
+        // 3. Send Notification to Admins
+        try {
+            const notificationBody = `NDR Alert for Order #${orderNumber}: ${reason}`;
+            await db.collection('notifications').add({
+                title: '🚚 Delivery Failed (NDR)',
+                body: notificationBody,
+                type: 'NDR_ALERT',
+                orderId: orderDoc.id,
+                timestamp: admin.firestore.Timestamp.now(),
+                read: false,
+                targetRoles: ['admin', 'manager']
+            });
+        } catch (error) {
+            console.error('Notification Error:', error);
+        }
+
         return res.status(200).json({ status: 'success', message: 'NDR processed' });
 
     } catch (error) {
