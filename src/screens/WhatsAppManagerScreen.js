@@ -386,7 +386,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const renderOverview = () => (
         <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
             <View style={dynamicStyles.statsGrid}>
-                <Surface style={[styles.statCard, { backgroundColor: theme.dark ? theme.colors.elevation.level2 : '#f8fafc' }]} elevation={2}>
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level2 }]} elevation={2}>
                     <Avatar.Icon size={44} icon="whatsapp" style={{ backgroundColor: '#25D366' }} />
                     <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12, color: theme.colors.onSurface }}>
                         {stats.isDataReady ? stats.activeTargets : '...'}
@@ -817,7 +817,7 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu, showSna
 
 
             {order.updatedAddress && (
-                <Surface style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: theme.dark ? '#1e293b' : '#f0f9ff', borderLeftWidth: 4, borderLeftColor: '#3b82f6' }}>
+                <Surface style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: '#1e293b', borderLeftWidth: 4, borderLeftColor: '#3b82f6' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>

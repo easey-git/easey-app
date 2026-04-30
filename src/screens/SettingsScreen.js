@@ -12,7 +12,6 @@ const SettingsScreen = ({ navigation }) => {
     const { user, logout, isAdmin } = useAuth();
     const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
-    const [themeLoading, setThemeLoading] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -22,8 +21,6 @@ const SettingsScreen = ({ navigation }) => {
     }, []);
 
     const {
-        isThemeDark,
-        toggleTheme,
         notificationsEnabled,
         toggleNotifications,
         biometricsEnabled,
@@ -48,37 +45,7 @@ const SettingsScreen = ({ navigation }) => {
                     </View>
                 </Surface>
 
-                <List.Section title="Appearance">
-                    <List.Item
-                        title="Dark Mode"
-                        description="Toggle application theme"
-                        left={props => <List.Icon {...props} icon="theme-light-dark" />}
-                        right={() => (
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                {themeLoading && <ActivityIndicator animating={true} size="small" style={{ marginRight: 12 }} />}
-                                <Switch
-                                    value={isThemeDark}
-                                    disabled={themeLoading}
-                                    onValueChange={async () => {
-                                        setThemeLoading(true);
-                                        // Add a small delay for better visual feedback
-                                        const minLoadTime = new Promise(resolve => setTimeout(resolve, 600));
-
-                                        try {
-                                            await toggleTheme();
-                                            await minLoadTime;
-                                        } catch (error) {
-                                            console.error("Theme toggle failed:", error);
-                                        } finally {
-                                            setThemeLoading(false);
-                                        }
-                                    }}
-                                />
-                            </View>
-                        )}
-                        style={styles.listItem}
-                    />
-                </List.Section>
+                {/* Appearance Section Removed - Dark Mode is now the only theme */}
 
                 <Divider />
 

@@ -54,22 +54,12 @@ const { LightTheme, DarkTheme } = adaptNavigationTheme({
   reactNavigationDark: NavigationDarkTheme,
 });
 
-const CombinedDarkTheme = {
+const AppTheme = {
   ...MD3DarkTheme,
   colors: {
     ...MD3DarkTheme.colors,
     ...DarkTheme.colors,
     ...theme.colors, // Custom overrides
-  },
-};
-
-const CombinedLightTheme = {
-  ...MD3LightTheme,
-  colors: {
-    ...MD3LightTheme.colors,
-    ...LightTheme.colors,
-    primary: theme.colors.primary, // Keep brand primary
-    secondary: theme.colors.secondary,
   },
 };
 
@@ -81,7 +71,7 @@ function AppStack() {
   const { isDesktop } = useResponsive();
   const { isSidebarPinned } = useDrawer();
 
-  const activeTheme = isThemeDark ? CombinedDarkTheme : CombinedLightTheme;
+  const activeTheme = AppTheme;
 
   // Handle Lock State
   useEffect(() => {
@@ -168,7 +158,7 @@ function AppStack() {
   if (user && biometricsEnabled && isLocked) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: activeTheme.colors.background }}>
-        <StatusBar barStyle={isThemeDark ? "light-content" : "dark-content"} backgroundColor={activeTheme.colors.background} />
+        <StatusBar barStyle="light-content" backgroundColor={activeTheme.colors.background} />
         <Surface style={{ padding: 32, borderRadius: 16, alignItems: 'center', elevation: 4 }} elevation={4}>
           <Text variant="headlineMedium" style={{ marginBottom: 16, fontWeight: 'bold' }}>Locked</Text>
           <Text variant="bodyMedium" style={{ marginBottom: 24, textAlign: 'center' }}>Please authenticate to continue</Text>
@@ -188,7 +178,7 @@ function AppStack() {
 
   return (
     <View style={{ flex: 1, backgroundColor: activeTheme.colors.background, position: 'relative' }}>
-      <StatusBar barStyle={isThemeDark ? "light-content" : "dark-content"} backgroundColor={activeTheme.colors.background} />
+      <StatusBar barStyle="light-content" backgroundColor={activeTheme.colors.background} />
       {user && isDesktop && <Sidebar floating />}
       <Stack.Navigator
         screenOptions={{
@@ -287,7 +277,7 @@ function Main() {
     return <ActivityIndicator size="large" style={{ flex: 1, justifyContent: 'center' }} />;
   }
 
-  const activeTheme = isThemeDark ? CombinedDarkTheme : CombinedLightTheme;
+  const activeTheme = AppTheme;
 
   return (
     <NavigationContainer theme={activeTheme}>

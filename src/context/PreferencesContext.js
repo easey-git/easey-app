@@ -11,7 +11,7 @@ export const PreferencesContext = createContext({
 });
 
 export const PreferencesProvider = ({ children }) => {
-    const [isThemeDark, setIsThemeDark] = useState(true);
+    const [isThemeDark] = useState(true); // Always dark
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [biometricsEnabled, setBiometricsEnabled] = useState(false);
     const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -20,11 +20,9 @@ export const PreferencesProvider = ({ children }) => {
         // Load preferences on mount
         const loadPreferences = async () => {
             try {
-                const theme = await AsyncStorage.getItem('isThemeDark');
                 const notifs = await AsyncStorage.getItem('notificationsEnabled');
                 const bio = await AsyncStorage.getItem('biometricsEnabled');
 
-                if (theme !== null) setIsThemeDark(theme === 'true');
                 if (notifs !== null) setNotificationsEnabled(notifs === 'true');
                 if (bio !== null) setBiometricsEnabled(bio === 'true');
             } catch (e) {
@@ -37,13 +35,7 @@ export const PreferencesProvider = ({ children }) => {
     }, []);
 
     const toggleTheme = async () => {
-        try {
-            const newVal = !isThemeDark;
-            setIsThemeDark(newVal);
-            await AsyncStorage.setItem('isThemeDark', String(newVal));
-        } catch (e) {
-            console.error("Failed to save theme", e);
-        }
+        // No-op: Light mode is removed
     };
 
     const toggleNotifications = async () => {

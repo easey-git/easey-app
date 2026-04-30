@@ -175,8 +175,7 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
                         styles.composer, 
                         { 
                             color: theme.colors.onSurface,
-                            backgroundColor: theme.dark ? theme.colors.elevation.level3 : '#f1f5f9' 
-                        }
+                            backgroundColor: theme.colors.elevation.level3                        }
                     ]} 
                     placeholder="Type a message..." 
                 />
@@ -186,7 +185,7 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
                     {...props}
                     wrapperStyle={{
                         left: { 
-                            backgroundColor: theme.dark ? '#202C33' : '#ffffff', 
+                            backgroundColor: '#202C33', 
                             borderRadius: 12,
                             padding: 2,
                             shadowColor: '#000',
@@ -196,7 +195,7 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
                             elevation: 1,
                         },
                         right: { 
-                            backgroundColor: theme.dark ? '#005C4B' : '#DCF8C6', 
+                            backgroundColor: '#005C4B', 
                             borderRadius: 12,
                             padding: 2,
                             shadowColor: '#000',
@@ -208,7 +207,7 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
                     }}
                     textStyle={{ 
                         left: { color: theme.colors.onSurface, fontSize: 15 }, 
-                        right: { color: theme.dark ? '#E9EDEF' : '#000000', fontSize: 15 } 
+                        right: { color: '#E9EDEF', fontSize: 15 } 
                     }}
                 />
             )}
@@ -239,7 +238,7 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
             fullWidth={true}
             showHeader={false}
         >
-            <View style={[styles.container, { backgroundColor: theme.dark ? '#0B141A' : '#E5DDD5' }]}>
+            <View style={[styles.container, { backgroundColor: '#0B141A' }]}>
                 {renderHeader()}
                 
                 <View style={styles.chatContentContainer}>
