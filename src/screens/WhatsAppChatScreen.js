@@ -6,11 +6,14 @@ import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/f
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { db } from '../config/firebase';
+import { CRMLayout } from '../components/CRMLayout';
+import { useResponsive } from '../hooks/useResponsive';
 
 const WhatsAppChatScreen = ({ route, navigation }) => {
     const { customer } = route.params;
     const theme = useTheme();
     const insets = useSafeAreaInsets();
+    const { isDesktop } = useResponsive();
     const [chatHistory, setChatHistory] = useState(null);
     const [chatLoading, setChatLoading] = useState(true);
 
@@ -96,76 +99,90 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
         (new Date() - new Date(chatHistory.find(m => m.direction === 'inbound').createdAt)) < 24 * 60 * 60 * 1000;
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
-            <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]} elevation={1}>
-                <View style={styles.headerLeft}>
-                    <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
-                    <Avatar.Image size={36} source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(customer.customerName || 'C')}&background=random` }} />
-                    <View style={styles.headerInfo}>
-                        <Text variant="titleMedium" style={styles.headerTitle} numberOfLines={1}>{customer.customerName || 'Customer'}</Text>
-                        <Text variant="bodySmall" style={styles.headerSubtitle}>{customer.phone}</Text>
+        <CRMLayout 
+            title={customer.customerName || 'Chat'} 
+            navigation={navigation} 
+            scrollable={false} 
+            fullWidth={true}
+            showHeader={false}
+        >
+            <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+                <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]} elevation={1}>
+                    <View style={styles.headerLeft}>
+                        <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
+                        <Avatar.Image size={36} source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(customer.customerName || 'C')}&background=random` }} />
+                        <View style={styles.headerInfo}>
+                            <Text variant="titleMedium" style={styles.headerTitle} numberOfLines={1}>{customer.customerName || 'Customer'}</Text>
+                            <Text variant="bodySmall" style={styles.headerSubtitle}>{customer.phone}</Text>
+                        </View>
                     </View>
-                </View>
-                <View style={styles.headerRight}>
-                    <Badge style={{ backgroundColor: isWindowOpen ? '#4ade80' : '#94a3b8', color: 'white', marginRight: 8 }}>
-                        {isWindowOpen ? 'Online' : 'Offline'}
-                    </Badge>
-                </View>
-            </Surface>
+                    <View style={styles.headerRight}>
+                        <Badge style={{ backgroundColor: isWindowOpen ? '#4ade80' : '#94a3b8', color: 'white', marginRight: 8 }}>
+                            {isWindowOpen ? 'Online' : 'Offline'}
+                        </Badge>
+                    </View>
+                </Surface>
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-                {chatLoading ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" />
-                    </View>
-                ) : (
-                    <GiftedChat
-                        messages={chatHistory}
-                        onSend={messages => onSend(messages)}
-                        user={{ _id: 1 }}
-                        renderUsernameOnMessage={false}
-                        alwaysShowSend={true}
-                        scrollToBottom
-                        isKeyboardInternallyHandled={false}
-                        bottomOffset={insets.bottom}
-                        renderInputToolbar={props => {
-                            if (!isWindowOpen) {
-                                return (
-                                    <Surface style={[styles.footerLocked, { paddingBottom: insets.bottom + 8 }]} elevation={2}>
-                                        <Icon source="lock" size={16} color={theme.colors.onSurfaceVariant} />
-                                        <Text style={styles.lockedText}>24h Window Closed. Template only.</Text>
-                                        <Button mode="contained" compact style={styles.templateButton}>Send Template</Button>
-                                    </Surface>
-                                );
-                            }
-                            return (
-                                <InputToolbar {...props} containerStyle={[styles.inputToolbar, { marginBottom: insets.bottom }]} primaryStyle={{ alignItems: 'center' }} />
-                            );
-                        }}
-                        renderComposer={props => (
-                            <Composer {...props} textInputStyle={[styles.composer, { color: theme.colors.onSurface }]} placeholder="Type a message..." />
-                        )}
-                        renderBubble={props => (
-                            <Bubble
-                                {...props}
-                                wrapperStyle={{
-                                    left: { backgroundColor: theme.dark ? '#334155' : '#ffffff', borderRadius: 12 },
-                                    right: { backgroundColor: theme.colors.primary, borderRadius: 12 }
+                <View style={styles.chatWrapper}>
+                    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+                        {chatLoading ? (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator size="large" />
+                            </View>
+                        ) : (
+                            <GiftedChat
+                                messages={chatHistory}
+                                onSend={messages => onSend(messages)}
+                                user={{ _id: 1 }}
+                                renderUsernameOnMessage={false}
+                                alwaysShowSend={true}
+                                scrollToBottom
+                                isKeyboardInternallyHandled={false}
+                                bottomOffset={isDesktop ? 0 : insets.bottom}
+                                renderInputToolbar={props => {
+                                    if (!isWindowOpen) {
+                                        return (
+                                            <Surface style={[styles.footerLocked, { paddingBottom: insets.bottom + 8 }]} elevation={2}>
+                                                <Icon source="lock" size={16} color={theme.colors.onSurfaceVariant} />
+                                                <Text style={styles.lockedText}>24h Window Closed. Template only.</Text>
+                                                <Button mode="contained" compact style={styles.templateButton}>Send Template</Button>
+                                            </Surface>
+                                        );
+                                    }
+                                    return (
+                                        <InputToolbar 
+                                            {...props} 
+                                            containerStyle={[styles.inputToolbar, { marginBottom: isDesktop ? 16 : insets.bottom }]} 
+                                            primaryStyle={{ alignItems: 'center' }} 
+                                        />
+                                    );
                                 }}
-                                textStyle={{ left: { color: theme.colors.onSurface }, right: { color: '#ffffff' } }}
+                                renderComposer={props => (
+                                    <Composer {...props} textInputStyle={[styles.composer, { color: theme.colors.onSurface }]} placeholder="Type a message..." />
+                                )}
+                                renderBubble={props => (
+                                    <Bubble
+                                        {...props}
+                                        wrapperStyle={{
+                                            left: { backgroundColor: theme.dark ? '#334155' : '#ffffff', borderRadius: 12 },
+                                            right: { backgroundColor: theme.colors.primary, borderRadius: 12 }
+                                        }}
+                                        textStyle={{ left: { color: theme.colors.onSurface }, right: { color: '#ffffff' } }}
+                                    />
+                                )}
+                                renderSend={props => (
+                                    <Send {...props} containerStyle={styles.sendContainer}>
+                                        <View style={styles.sendIconBg}>
+                                            <Icon source="send" color={theme.colors.primary} size={20} />
+                                        </View>
+                                    </Send>
+                                )}
                             />
                         )}
-                        renderSend={props => (
-                            <Send {...props} containerStyle={styles.sendContainer}>
-                                <View style={styles.sendIconBg}>
-                                    <Icon source="send" color={theme.colors.primary} size={20} />
-                                </View>
-                            </Send>
-                        )}
-                    />
-                )}
-            </KeyboardAvoidingView>
-        </View>
+                    </KeyboardAvoidingView>
+                </View>
+            </View>
+        </CRMLayout>
     );
 };
 
@@ -177,6 +194,7 @@ const styles = StyleSheet.create({
     headerInfo: { marginLeft: 8, flex: 1 },
     headerTitle: { fontWeight: 'bold', fontSize: 16 },
     headerSubtitle: { opacity: 0.6, fontSize: 11 },
+    chatWrapper: { flex: 1, width: '100%' },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     inputToolbar: { borderTopWidth: 0, backgroundColor: 'transparent', marginHorizontal: 8 },
     composer: { backgroundColor: '#ffffff', borderRadius: 24, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, marginTop: 4, marginBottom: 4, borderWidth: 1, borderColor: '#e2e8f0', fontSize: 15, lineHeight: 20 },
