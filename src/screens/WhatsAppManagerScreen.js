@@ -30,7 +30,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [sendingId, setSendingId] = useState(null);
-    const [activityLimit, setActivityLimit] = useState(200);
+    const [activityLimit, setActivityLimit] = useState(10);
     const [activitySearch, setActivitySearch] = useState('');
 
     // Message Viewer State
@@ -216,9 +216,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         return () => unsubChat();
     }, [selectedCustomer]);
 
-    const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+    const API_BASE = (typeof window !== 'undefined' && window.location?.hostname === 'localhost')
         ? 'https://easey-app.vercel.app' 
-        : '';
+        : 'https://easey-app.vercel.app';
 
     const onSend = async (newMessages = []) => {
         const msg = newMessages[0];
@@ -264,7 +264,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         if (!selectedCustomer) return;
         
         try {
-            const response = await fetch('/api/whatsapp', {
+            const response = await fetch(`${API_BASE}/api/whatsapp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -308,7 +308,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         setSendingId(order.id);
         try {
             // Backend handles normalization (e.g. adding 91 prefix)
-            const response = await fetch('/api/whatsapp', {
+            const response = await fetch(`${API_BASE}/api/whatsapp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -343,8 +343,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     const openChat = (customer) => {
-        setSelectedCustomer(customer);
-        setChatDialogVisible(true);
+        navigation.navigate('WhatsAppChat', { customer });
     };
 
     // Memoized Stats for Overview to prevent flickering
@@ -375,7 +374,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             maxWidth: 800,
             width: isDesktop ? '95%' : '100%',
             height: isDesktop ? '85%' : '100%',
-            maxHeight: '100%',
             margin: 0,
             alignSelf: 'center',
             borderRadius: isDesktop ? 24 : 0,
@@ -533,19 +531,25 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         {index < filtered.length - 1 && <Divider style={{ marginHorizontal: 16, opacity: 0.3 }} />}
                     </React.Fragment>
                     ))}
-                    <Button 
-                        mode="contained-tonal" 
-                        onPress={() => {
-                            setLoadingMore(true);
-                            setActivityLimit(prev => prev + 100);
-                        }}
-                        style={{ margin: 16, borderRadius: 12 }}
-                        icon="plus"
-                        loading={loadingMore}
-                        disabled={loadingMore}
-                    >
-                        Load More Conversations
-                    </Button>
+                    {loadingMore ? (
+                        <ActivityIndicator 
+                            animating={true} 
+                            color={theme.colors.primary} 
+                            style={{ marginVertical: 20 }} 
+                        />
+                    ) : (
+                        <Button 
+                            mode="contained-tonal" 
+                            onPress={() => {
+                                setLoadingMore(true);
+                                setActivityLimit(prev => prev + 20);
+                            }}
+                            style={{ margin: 16, borderRadius: 12 }}
+                            icon="plus"
+                        >
+                            Load More Conversations
+                        </Button>
+                    )}
                 </View>
                 )
             })()}
@@ -758,150 +762,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 </Dialog>
             </Portal>
 
-            {/* Chat Dialog */}
-            <Portal>
-                <Dialog 
-                    visible={chatDialogVisible} 
-                    onDismiss={() => setChatDialogVisible(false)} 
-                    style={dynamicStyles.modalCard}
-                >
-                    {/* Header: More compact and includes Close button */}
-                    <View style={styles.modalHeader}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.headerTitle}>{selectedCustomer?.customerName || 'Customer'}</Text>
-                            <Text variant="bodySmall" style={{ opacity: 0.6 }}>{selectedCustomer?.phone}</Text>
-                        </View>
-                        
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                    {(() => {
-                                        if (!chatHistory) return <Badge style={{ backgroundColor: theme.colors.surfaceVariant }}>Checking...</Badge>;
-
-                                        const lastInbound = chatHistory.find(m => m.direction === 'inbound');
-                                        const isWindowOpen = lastInbound && (new Date() - new Date(lastInbound.createdAt)) < 24 * 60 * 60 * 1000;
-                                        return (
-                                            <Badge 
-                                                style={{ 
-                                                    backgroundColor: isWindowOpen ? '#4ade80' : theme.colors.error, 
-                                                    color: 'white',
-                                                    paddingHorizontal: 8
-                                                }}
-                                            >
-                                                {isWindowOpen ? '24h Window Open' : 'Window Closed'}
-                                            </Badge>
-                                        );
-                                    })()}
-                            <IconButton 
-                                icon="close" 
-                                size={24} 
-                                onPress={() => setChatDialogVisible(false)} 
-                                style={{ margin: 0 }}
-                            />
-                        </View>
-                    </View>
-
-                    <Divider />
-
-                    <View style={{ flex: 1, position: 'relative' }}>
-                        {(() => {
-                            if (!chatHistory) return <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator /></View>;
-
-                            const lastInbound = chatHistory.find(m => m.direction === 'inbound');
-                            const isWindowOpen = lastInbound && (new Date() - new Date(lastInbound.createdAt)) < 24 * 60 * 60 * 1000;
-                            
-                            return (
-                                <View style={{ flex: 1 }}>
-                                    {!isWindowOpen && (
-                                        <Surface style={styles.windowAlert} elevation={0}>
-                                            <Icon source="alert-circle-outline" size={18} color={theme.colors.onErrorContainer} />
-                                            <Text style={styles.windowAlertText}>
-                                                24h Window Closed. Waiting for customer activity to re-open.
-                                            </Text>
-                                        </Surface>
-                                    )}
-                                    
-                                    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-                                        <GiftedChat
-                                            messages={chatHistory || []}
-                                            onSend={messages => onSend(messages)}
-                                            user={{ _id: 1 }}
-                                            renderUsernameOnMessage={true}
-                                            showUserAvatar={false}
-                                            alwaysShowSend={isWindowOpen}
-                                            renderComposer={props => (
-                                                <Composer
-                                                    {...props}
-                                                    textInputProps={{
-                                                        ...props.textInputProps,
-                                                        onKeyPress: (e) => {
-                                                            if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
-                                                                e.preventDefault();
-                                                                if (props.text && props.text.trim().length > 0) {
-                                                                    props.onSend({ text: props.text.trim() }, true);
-                                                                }
-                                                            }
-                                                        }
-                                                    }}
-                                                />
-                                            )}
-                                            renderInputToolbar={props => isWindowOpen ? (
-                                                <InputToolbar 
-                                                    {...props} 
-                                                    containerStyle={{ 
-                                                        borderTopWidth: 1, 
-                                                        borderTopColor: theme.colors.outlineVariant,
-                                                        backgroundColor: theme.colors.surface
-                                                    }} 
-                                                />
-                                            ) : null}
-                                            scrollToBottom
-                                            textInputStyle={{ color: theme.colors.onSurface }}
-                                            renderLoading={() => <ActivityIndicator style={{ marginTop: 20 }} />}
-                                            renderBubble={props => (
-                                                <Bubble
-                                                    {...props}
-                                                    wrapperStyle={{
-                                                        left: {
-                                                            backgroundColor: theme.dark ? theme.colors.surfaceVariant : '#f0f0f0',
-                                                            borderRadius: 18,
-                                                        },
-                                                        right: {
-                                                            backgroundColor: theme.colors.primary,
-                                                            borderRadius: 18,
-                                                        }
-                                                    }}
-                                                    textStyle={{
-                                                        left: { color: theme.dark ? '#ffffff' : '#000000' },
-                                                        right: { color: '#ffffff' }
-                                                    }}
-                                                    renderTicks={(msg) => {
-                                                        if (msg.user._id !== 1) return null;
-                                                        const isRead = msg.status === 'read';
-                                                        const isDelivered = msg.status === 'delivered' || isRead;
-                                                        const color = isRead ? '#3b82f6' : '#fff';
-                                                        const icon = isDelivered ? 'check-all' : 'check';
-                                                        return (
-                                                            <View style={{ marginRight: 5, marginBottom: 2 }}>
-                                                                <Icon source={icon} size={14} color={color} />
-                                                            </View>
-                                                        );
-                                                    }}
-                                                />
-                                            )}
-                                            renderSend={props => (
-                                                <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center' }}>
-                                                    <View style={{ marginRight: 10 }}>
-                                                        <Icon source="send" color={theme.colors.primary} size={24} />
-                                                    </View>
-                                                </Send>
-                                            )}
-                                        />
-                                    </View>
-                                </View>
-                            );
-                        })()}
-                    </View>
-                </Dialog>
-            </Portal>
             <Snackbar
                 visible={snackbar.visible}
                 onDismiss={hideSnackbar}
@@ -1154,13 +1014,13 @@ const styles = StyleSheet.create({
     },
     modalCard: {
         maxWidth: 800,
-        width: '95%',
-        height: '85%',
-        maxHeight: '85%',
+        width: '100%', // Full width on mobile
+        height: '100%', // Full height on mobile
+        margin: 0,
         alignSelf: 'center',
-        borderRadius: 24,
+        borderRadius: 0, // Square on mobile for full screen feel
         overflow: 'hidden',
-        padding: 0, // CRITICAL: Remove Dialog internal padding
+        padding: 0,
     },
     modalHeader: {
         flexDirection: 'row',

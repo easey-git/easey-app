@@ -1,4 +1,5 @@
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import './src/ignoreWarnings';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
@@ -16,6 +17,7 @@ import WhatsAppManagerScreen from './src/screens/WhatsAppManagerScreen';
 import MetaScreen from './src/screens/MetaScreen';
 import NotesScreen from './src/screens/NotesScreen';
 import WalletScreen from './src/screens/WalletScreen';
+import WhatsAppChatScreen from './src/screens/WhatsAppChatScreen';
 
 import { PayUScreen } from './src/screens/PayUScreen';
 
@@ -246,6 +248,11 @@ function AppStack() {
               component={PayUScreen}
               options={{ title: 'PayU Dash' }}
             />
+            <Stack.Screen
+              name="WhatsAppChat"
+              component={WhatsAppChatScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
 
 
 
@@ -298,7 +305,9 @@ export default function App() {
         <SoundProvider>
           <DrawerProvider>
             <SafeAreaProvider>
-              <Main />
+              <KeyboardProvider>
+                <Main />
+              </KeyboardProvider>
             </SafeAreaProvider>
           </DrawerProvider>
         </SoundProvider>
