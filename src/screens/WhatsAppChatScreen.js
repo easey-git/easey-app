@@ -19,6 +19,11 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
 
     const API_BASE = 'https://easey-app.vercel.app';
 
+    const getAvatarUrl = (name) => {
+        const cleanName = (name || 'C').replace(/[^\w\s]/gi, '').trim();
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=random`;
+    };
+
     useEffect(() => {
         if (!customer) return;
 
@@ -47,7 +52,7 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
                     user: {
                         _id: data.direction === 'outbound' ? 1 : 2,
                         name: data.direction === 'outbound' ? 'Admin' : (customer.customerName || 'Customer'),
-                        avatar: data.direction === 'outbound' ? null : `https://ui-avatars.com/api/?name=${encodeURIComponent(customer.customerName || 'C')}&background=random`,
+                        avatar: data.direction === 'outbound' ? null : getAvatarUrl(customer.customerName),
                     },
                     received: data.status === 'delivered' || data.status === 'read',
                     sent: data.status === 'sent' || data.status === 'delivered' || data.status === 'read',
@@ -103,7 +108,7 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
             <View style={styles.headerLeft}>
                 <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
                 <View style={styles.avatarContainer}>
-                    <Avatar.Image size={40} source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(customer.customerName || 'C')}&background=random` }} />
+                    <Avatar.Image size={40} source={{ uri: getAvatarUrl(customer.customerName) }} />
                     <View style={[styles.onlineStatus, { backgroundColor: isWindowOpen ? '#4ade80' : '#94a3b8' }]} />
                 </View>
                 <View style={styles.headerInfo}>
