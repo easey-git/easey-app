@@ -393,13 +393,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     </Text>
                     <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Active Targets</Text>
                 </Surface>
-                <Surface style={[styles.statCard, { backgroundColor: theme.dark ? theme.colors.elevation.level2 : '#fef2f2' }]} elevation={2}>
-                    <Avatar.Icon size={44} icon="truck-alert" style={{ backgroundColor: theme.colors.error }} color="white" />
-                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12, color: theme.colors.onSurface }}>
-                        {stats.isDataReady ? codOrders.filter(o => o.shipping_status === 'NDR').length : '...'}
-                    </Text>
-                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>NDR Alerts</Text>
-                </Surface>
             </View>
 
             <Surface style={[styles.chartCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
@@ -577,8 +570,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     const renderCODVerification = () => {
-        // Filter Logic (Exclude NDR orders from COD Verification view)
-        const activeCodOrders = codOrders.filter(o => o.shipping_status !== 'NDR');
+        // Filter Logic
+        const activeCodOrders = codOrders;
         
         const pendingOrders = activeCodOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
         const verifiedOrders = activeCodOrders.filter(o => o.verificationStatus === 'approved');
@@ -606,7 +599,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     const renderHeader = React.useCallback(() => {
-        const activeCodOrders = codOrders.filter(o => o.shipping_status !== 'NDR');
+        const activeCodOrders = codOrders;
 
         const pendingOrders = activeCodOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
         const verifiedOrders = activeCodOrders.filter(o => o.verificationStatus === 'approved');
@@ -677,28 +670,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         />
     );
 
-    const renderNDR = () => {
-        const ndrOrders = codOrders.filter(o => o.shipping_status === 'NDR');
-        return (
-            <FlatList
-                data={ndrOrders}
-                renderItem={renderItem}
-                keyExtractor={item => item.id}
-                contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
-                ListHeaderComponent={() => (
-                    <Surface style={[styles.infoBanner, { backgroundColor: theme.colors.errorContainer, marginBottom: 16 }]}>
-                        <Icon source="truck-alert" size={20} color={theme.colors.onErrorContainer} />
-                        <Text style={{ flex: 1, marginLeft: 8, color: theme.colors.onErrorContainer }}>
-                            Orders with failed delivery attempts. Respond to re-attempt or cancel.
-                        </Text>
-                    </Surface>
-                )}
-                ListEmptyComponent={() => (
-                    <Text style={{ textAlign: 'center', marginTop: 20, color: theme.colors.onSurfaceVariant }}>No NDR alerts found.</Text>
-                )}
-            />
-        );
-    };
 
     return (
         <CRMLayout title="WhatsApp Manager" navigation={navigation} scrollable={false} fullWidth={true}>
@@ -721,7 +692,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         buttons={[
                             { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
                             { value: 'cod', label: 'COD Verify', icon: 'checkbox-marked-circle-outline' },
-                            { value: 'ndr', label: 'NDR Alerts', icon: 'truck-alert-outline' },
                             { value: 'abandoned', label: 'Recovery Center', icon: 'cart-arrow-down' },
                         ]}
                     />
@@ -731,7 +701,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             <View style={{ flex: 1 }}>
                 {tab === 'overview' && renderOverview()}
                 {tab === 'cod' && renderCODVerification()}
-                {tab === 'ndr' && renderNDR()}
                 {tab === 'abandoned' && renderAbandoned()}
             </View>
 
@@ -788,7 +757,6 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu, showSna
             case 'address_updated': return '#8b5cf6'; // Purple
             case 'verified_pending_address': return '#3b82f6'; // Blue
             case 'reschedule_requested': return '#8b5cf6'; // Purple
-            case 'NDR': return theme.colors.error;
             default: return theme.colors.outline;
         }
     };
@@ -842,27 +810,11 @@ const CODOrderItem = React.memo(({ order, theme, onOpenChat, onOpenMenu, showSna
                         {order.updatedAt?.toDate ? order.updatedAt.toDate().toLocaleString() : ''}
                     </Text>
                 </View>
-                <Badge style={{ backgroundColor: order.shipping_status === 'NDR' ? theme.colors.error : getStatusColor(order.verificationStatus), alignSelf: 'flex-start', marginLeft: 8 }}>
-                    {order.shipping_status === 'NDR' ? 'NDR ALERT' : getStatusLabel(order.verificationStatus)}
+                <Badge style={{ backgroundColor: getStatusColor(order.verificationStatus), alignSelf: 'flex-start', marginLeft: 8 }}>
+                    {getStatusLabel(order.verificationStatus)}
                 </Badge>
             </View>
 
-            {order.shipping_status === 'NDR' && (
-                <Surface style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: theme.dark ? '#450a0a' : '#fef2f2', borderLeftWidth: 4, borderLeftColor: theme.colors.error }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                        <Icon source="alert-circle" size={16} color={theme.colors.error} />
-                        <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold', marginLeft: 4 }}>DELIVERY FAILURE REASON:</Text>
-                    </View>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurface }}>{order.ndr_reason || 'Reason not specified'}</Text>
-                    
-                    {order.shipping_action_requested && (
-                        <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.1)' }}>
-                            <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>CUSTOMER ACTION REQUESTED:</Text>
-                            <Text variant="bodyMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{order.shipping_action_requested === 'REATTEMPT' ? 'RE-ATTEMPT DELIVERY' : 'CANCEL SHIPMENT'}</Text>
-                        </View>
-                    )}
-                </Surface>
-            )}
 
             {order.updatedAddress && (
                 <Surface style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: theme.dark ? '#1e293b' : '#f0f9ff', borderLeftWidth: 4, borderLeftColor: '#3b82f6' }}>

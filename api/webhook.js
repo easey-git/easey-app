@@ -1,6 +1,5 @@
 const admin = require("firebase-admin");
 const cors = require('cors')({ origin: true }); // Standard CORS
-const { updateNDRAction } = require('./shipping/nimbus');
 
 // Helper to run middleware
 const runMiddleware = (req, res, fn) => {
@@ -41,8 +40,6 @@ const CONSTANTS = {
         CONFIRM_NO: ['CONFIRM_COD_NO', 'Cancel', 'cancel'],
         ADDRESS_CORRECT: ['ADDRESS_CORRECT', 'Confirm Address', 'Yes, Correct', 'Correct'],
         ADDRESS_EDIT: ['ADDRESS_EDIT', 'Make Changes', 'Edit Address'],
-        NDR_REATTEMPT: ['NDR_REATTEMPT', 'Re-attempt Delivery', 'Try again'],
-        NDR_CANCEL: ['NDR_CANCEL', 'Cancel Shipment', 'Return to origin']
     },
     DEFAULT_COUNTRY_CODE: '91'
 };
@@ -487,41 +484,6 @@ module.exports = async (req, res) => {
                         }
                     }
 
-                    // CASE 5: NDR Re-attempt
-                    else if (CONSTANTS.PAYLOADS.NDR_REATTEMPT.includes(payload) || CONSTANTS.PAYLOADS.NDR_REATTEMPT.includes(body)) {
-                        const orderDoc = await findLatestOrder();
-                        const orderData = orderDoc?.data();
-                        
-                        const awb = orderData?.awb || orderData?.shipping_awb;
-                        if (awb) {
-                            const result = await updateNDRAction(awb, 're-attempt');
-                            
-                            if (result.success) {
-                                await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [
-                                    { type: 'body', parameters: [{ type: 'text', text: 're-attempted for tomorrow' }] }
-                                ], "en_US");
-                            }
-                        }
-                    }
-
-                    // CASE 6: NDR Cancel (Note: NimbusPost docs don't show RTO in action list, using as placeholder or handling via change_address)
-                    else if (CONSTANTS.PAYLOADS.NDR_CANCEL.includes(payload) || CONSTANTS.PAYLOADS.NDR_CANCEL.includes(body)) {
-                        const orderDoc = await findLatestOrder();
-                        const orderData = orderDoc?.data();
-
-                        const awb = orderData?.awb || orderData?.shipping_awb;
-                        if (awb) {
-                            // If NimbusPost doesn't support 'RTO' via API, this would be a manual flag for admin
-                            await ordersRef.doc(orderDoc.id).update({
-                                shipping_action_requested: 'RTO',
-                                updatedAt: admin.firestore.Timestamp.now()
-                            });
-
-                            await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [
-                                { type: 'body', parameters: [{ type: 'text', text: 'marked for return' }] }
-                            ], "en_US");
-                        }
-                    }
                 }
 
                 return res.status(200).send('EVENT_RECEIVED');
