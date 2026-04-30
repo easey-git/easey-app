@@ -99,7 +99,7 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
         (new Date() - new Date(chatHistory.find(m => m.direction === 'inbound').createdAt)) < 24 * 60 * 60 * 1000;
 
     const renderHeader = () => (
-        <Surface style={[styles.header, { backgroundColor: theme.colors.surface, paddingTop: Platform.OS === 'ios' ? 0 : 0 }]} elevation={2}>
+        <Surface style={[styles.header, { backgroundColor: theme.colors.surface, paddingTop: 0 }]} elevation={2}>
             <View style={styles.headerLeft}>
                 <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
                 <View style={styles.avatarContainer}>
@@ -119,6 +119,113 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
         </Surface>
     );
 
+    const chatComponent = (
+        <GiftedChat
+            messages={chatHistory}
+            onSend={messages => onSend(messages)}
+            user={{ _id: 1 }}
+            renderUsernameOnMessage={false}
+            alwaysShowSend={true}
+            scrollToBottom
+            isKeyboardInternallyHandled={false}
+            renderActions={() => null}
+            bottomOffset={0}
+            messagesContainerStyle={{
+                backgroundColor: 'transparent'
+            }}
+            renderInputToolbar={props => {
+                if (!isWindowOpen) {
+                    return (
+                        <Surface style={[styles.footerLocked, { paddingBottom: 16 }]} elevation={3}>
+                            <View style={styles.lockedBanner}>
+                                <Icon source="lock" size={14} color={theme.colors.onSurfaceVariant} />
+                                <Text style={styles.lockedText}>24h Window Closed. Only templates allowed.</Text>
+                            </View>
+                            <Button mode="contained" style={styles.templateButton} icon="email-newsletter" buttonColor={theme.colors.primary}>
+                                Send Template
+                            </Button>
+                        </Surface>
+                    );
+                }
+                return (
+                    <InputToolbar 
+                        {...props} 
+                        containerStyle={[
+                            styles.inputToolbar, 
+                            { 
+                                backgroundColor: theme.colors.surface,
+                                borderTopWidth: 0.5,
+                                borderTopColor: theme.colors.outlineVariant,
+                                marginBottom: 0,
+                            }
+                        ]} 
+                        primaryStyle={{ alignItems: 'center' }} 
+                    />
+                );
+            }}
+            renderComposer={props => (
+                <Composer 
+                    {...props} 
+                    textInputStyle={[
+                        styles.composer, 
+                        { 
+                            color: theme.colors.onSurface,
+                            backgroundColor: theme.dark ? theme.colors.elevation.level3 : '#f1f5f9' 
+                        }
+                    ]} 
+                    placeholder="Type a message..." 
+                />
+            )}
+            renderBubble={props => (
+                <Bubble
+                    {...props}
+                    wrapperStyle={{
+                        left: { 
+                            backgroundColor: theme.dark ? '#202C33' : '#ffffff', 
+                            borderRadius: 12,
+                            padding: 2,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 1,
+                            elevation: 1,
+                        },
+                        right: { 
+                            backgroundColor: theme.dark ? '#005C4B' : '#DCF8C6', 
+                            borderRadius: 12,
+                            padding: 2,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 1,
+                            elevation: 1,
+                        }
+                    }}
+                    textStyle={{ 
+                        left: { color: theme.colors.onSurface, fontSize: 15 }, 
+                        right: { color: theme.dark ? '#E9EDEF' : '#000000', fontSize: 15 } 
+                    }}
+                />
+            )}
+            renderSend={props => (
+                <Send {...props} containerStyle={styles.sendContainer}>
+                    <View style={[styles.sendIconBg, { backgroundColor: theme.colors.primary }]}>
+                        <Icon source="send" color="#ffffff" size={18} />
+                    </View>
+                </Send>
+            )}
+            renderTicks={message => {
+                if (message.user._id !== 1) return null;
+                const isRead = message.status === 'read';
+                return (
+                    <View style={{ marginRight: 4 }}>
+                        <Icon source="check-all" size={14} color={isRead ? '#53bdeb' : '#8696A0'} />
+                    </View>
+                );
+            }}
+        />
+    );
+
     return (
         <CRMLayout 
             title={customer.customerName || 'Chat'} 
@@ -129,121 +236,22 @@ const WhatsAppChatScreen = ({ route, navigation }) => {
         >
             <View style={[styles.container, { backgroundColor: theme.dark ? '#0B141A' : '#E5DDD5' }]}>
                 {renderHeader()}
-                <KeyboardAvoidingView 
-                    style={{ flex: 1 }} 
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-                >
-                    <View style={styles.chatContentContainer}>
-                        {chatLoading ? (
-                            <View style={styles.loadingContainer}>
-                                <ActivityIndicator size="large" color={theme.colors.primary} />
-                            </View>
-                        ) : (
-                            <GiftedChat
-                                messages={chatHistory}
-                                onSend={messages => onSend(messages)}
-                                user={{ _id: 1 }}
-                                renderUsernameOnMessage={false}
-                                alwaysShowSend={true}
-                                scrollToBottom
-                                isKeyboardInternallyHandled={false}
-                                renderActions={() => null}
-                                bottomOffset={isDesktop ? 0 : 0}
-                                renderInputToolbar={props => {
-                                    if (!isWindowOpen) {
-                                        return (
-                                            <Surface style={[styles.footerLocked, { paddingBottom: insets.bottom + 16 }]} elevation={3}>
-                                                <View style={styles.lockedBanner}>
-                                                    <Icon source="lock" size={14} color={theme.colors.onSurfaceVariant} />
-                                                    <Text style={styles.lockedText}>24h Window Closed. Only templates allowed.</Text>
-                                                </View>
-                                                <Button mode="contained" style={styles.templateButton} icon="email-newsletter" buttonColor={theme.colors.primary}>
-                                                    Send Template
-                                                </Button>
-                                            </Surface>
-                                        );
-                                    }
-                                    return (
-                                        <InputToolbar 
-                                            {...props} 
-                                            containerStyle={[
-                                                styles.inputToolbar, 
-                                                { 
-                                                    backgroundColor: theme.colors.surface,
-                                                    borderTopWidth: 0.5,
-                                                    borderTopColor: theme.colors.outlineVariant,
-                                                    marginBottom: isDesktop ? 0 : 0,
-                                                }
-                                            ]} 
-                                            primaryStyle={{ alignItems: 'center' }} 
-                                        />
-                                    );
-                                }}
-                                renderComposer={props => (
-                                    <Composer 
-                                        {...props} 
-                                        textInputStyle={[
-                                            styles.composer, 
-                                            { 
-                                                color: theme.colors.onSurface,
-                                                backgroundColor: theme.dark ? theme.colors.elevation.level3 : '#f1f5f9' 
-                                            }
-                                        ]} 
-                                        placeholder="Type a message..." 
-                                    />
-                                )}
-                                renderBubble={props => (
-                                    <Bubble
-                                        {...props}
-                                        wrapperStyle={{
-                                            left: { 
-                                                backgroundColor: theme.dark ? '#202C33' : '#ffffff', 
-                                                borderRadius: 12,
-                                                padding: 2,
-                                                shadowColor: '#000',
-                                                shadowOffset: { width: 0, height: 1 },
-                                                shadowOpacity: 0.1,
-                                                shadowRadius: 1,
-                                                elevation: 1,
-                                            },
-                                            right: { 
-                                                backgroundColor: theme.dark ? '#005C4B' : '#DCF8C6', 
-                                                borderRadius: 12,
-                                                padding: 2,
-                                                shadowColor: '#000',
-                                                shadowOffset: { width: 0, height: 1 },
-                                                shadowOpacity: 0.1,
-                                                shadowRadius: 1,
-                                                elevation: 1,
-                                            }
-                                        }}
-                                        textStyle={{ 
-                                            left: { color: theme.colors.onSurface, fontSize: 15 }, 
-                                            right: { color: theme.dark ? '#E9EDEF' : '#000000', fontSize: 15 } 
-                                        }}
-                                    />
-                                )}
-                                renderSend={props => (
-                                    <Send {...props} containerStyle={styles.sendContainer}>
-                                        <View style={[styles.sendIconBg, { backgroundColor: theme.colors.primary }]}>
-                                            <Icon source="send" color="#ffffff" size={18} />
-                                        </View>
-                                    </Send>
-                                )}
-                                renderTicks={message => {
-                                    if (message.user._id !== 1) return null;
-                                    const isRead = message.status === 'read';
-                                    return (
-                                        <View style={{ marginRight: 4 }}>
-                                            <Icon source="check-all" size={14} color={isRead ? '#53bdeb' : '#8696A0'} />
-                                        </View>
-                                    );
-                                }}
-                            />
-                        )}
-                    </View>
-                </KeyboardAvoidingView>
+                
+                <View style={styles.chatContentContainer}>
+                    {chatLoading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color={theme.colors.primary} />
+                        </View>
+                    ) : (
+                        <KeyboardAvoidingView 
+                            style={{ flex: 1 }} 
+                            behavior="padding"
+                            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
+                        >
+                            {chatComponent}
+                        </KeyboardAvoidingView>
+                    )}
+                </View>
             </View>
         </CRMLayout>
     );

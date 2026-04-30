@@ -9,11 +9,12 @@ import { useDrawer } from '../context/DrawerContext';
 import { useAuth } from '../context/AuthContext';
 import { LAYOUT } from '../theme/layout';
 
-export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeader = true, scrollable = true, fullWidth = false, actions, floatingButton }) => {
+export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeader = true, scrollable = true, fullWidth = false, actions, floatingButton, edges = ['top', 'left', 'right', 'bottom'] }) => {
     const theme = useTheme();
     const { isDesktop } = useResponsive();
     const { openDrawer, isSidebarPinned } = useDrawer();
     const { user } = useAuth();
+    const { isAdmin } = useAuth();
 
     const containerProps = fullWidth ? {
         maxWidth: '100%',
@@ -23,7 +24,7 @@ export const CRMLayout = ({ children, title = "Dashboard", navigation, showHeade
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right', 'bottom']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={edges}>
             {/* Sidebar is rendered globally (desktop) or via MobileDrawer (mobile) */}
 
             {/* Main Content Area */}
