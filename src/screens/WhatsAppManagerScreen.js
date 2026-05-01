@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip, TextInput, Snackbar, TouchableRipple } from 'react-native-paper';
+import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip, TextInput, Snackbar, TouchableRipple, List } from 'react-native-paper';
+import * as DocumentPicker from 'expo-document-picker';
+import { read, utils } from 'xlsx';
 import { BarChart } from 'react-native-gifted-charts';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CRMLayout } from '../components/CRMLayout';
 import { useResponsive } from '../hooks/useResponsive';
@@ -32,6 +34,14 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [sendingId, setSendingId] = useState(null);
     const [activityLimit, setActivityLimit] = useState(10);
     const [activitySearch, setActivitySearch] = useState('');
+    
+    // NDR Engine State
+    const [ndrRecords, setNdrRecords] = useState([]);
+    const [ndrLoading, setNdrLoading] = useState(false);
+    const [ndrStats, setNdrStats] = useState({ total: 0, matched: 0, pending: 0 });
+    const [ndrFilter, setNdrFilter] = useState('all'); // all | matched | unsent | sent
+    const [isBulkSending, setIsBulkSending] = useState(false);
+    const [bulkProgress, setBulkProgress] = useState(0);
 
     // Message Viewer State
     const [chatDialogVisible, setChatDialogVisible] = useState(false);
@@ -344,6 +354,354 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     const openChat = (customer) => {
         navigation.navigate('WhatsAppChat', { customer });
+    };
+
+    // NDR Engine Logic
+    const handleNDRUpload = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel'],
+            });
+
+            if (result.canceled) return;
+
+            setNdrLoading(true);
+            const file = result.assets[0];
+            
+            let content;
+            if (Platform.OS === 'web') {
+                const response = await fetch(file.uri);
+                const blob = await response.arrayBuffer();
+                const workbook = read(blob);
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                content = utils.sheet_to_json(sheet);
+            } else {
+                // Mobile implementation might differ depending on how Expo handles URIs
+                const response = await fetch(file.uri);
+                const blob = await response.arrayBuffer();
+                const workbook = read(blob);
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                content = utils.sheet_to_json(sheet);
+            }
+
+            if (!content || content.length === 0) {
+                throw new Error("CSV file is empty or invalid.");
+            }
+
+            const processed = content.map((row, index) => ({
+                id: `ndr-${index}`,
+                orderNumber: row['Order Number']?.toString() || '',
+                awb: row['AWB Number']?.toString() || '',
+                reason: row['Details'] || row['Reason'] || 'N/A',
+                status: row['Order Status'] || 'Exception',
+                customerName: '', // To be filled from Firestore
+                phone: '',        // To be filled from Firestore
+                isMatched: false,
+                isSent: false,
+                originalRow: row
+            }));
+
+            setNdrRecords(processed);
+            matchNDROrders(processed);
+        } catch (error) {
+            console.error("NDR Upload Error:", error);
+            showSnackbar("Failed to process CSV: " + error.message);
+        } finally {
+            setNdrLoading(false);
+        }
+    };
+
+    const matchNDROrders = async (records) => {
+        setNdrLoading(true);
+        const updatedRecords = [...records];
+        let matchedCount = 0;
+
+        try {
+            for (let i = 0; i < updatedRecords.length; i++) {
+                const rec = updatedRecords[i];
+                const cleanOrderNum = rec.orderNumber.replace('#', '').trim();
+                
+                // Query Firestore
+                const q = query(
+                    collection(db, "orders"),
+                    where("orderNumber", "==", cleanOrderNum),
+                    limit(1)
+                );
+                
+                // Using getDocs here since we don't need real-time for this
+                const querySnapshot = await getDocs(q);
+                
+                if (!querySnapshot.empty) {
+                    const orderData = querySnapshot.docs[0].data();
+                    
+                    // Check if NDR already sent for this order
+                    const qMsg = query(
+                        collection(db, "whatsapp_messages"),
+                        where("orderNumber", "==", cleanOrderNum),
+                        where("templateName", "==", "alert_shipping_ndr"),
+                        limit(1)
+                    );
+                    const msgSnapshot = await getDocs(qMsg);
+
+                    updatedRecords[i] = {
+                        ...rec,
+                        customerName: orderData.customerName || 'Customer',
+                        phone: orderData.phone || '',
+                        isMatched: true,
+                        isSent: !msgSnapshot.empty
+                    };
+                    matchedCount++;
+                }
+                
+                // Update state periodically to show progress
+                if (i % 5 === 0 || i === updatedRecords.length - 1) {
+                    setNdrRecords([...updatedRecords]);
+                    setNdrStats({
+                        total: records.length,
+                        matched: matchedCount,
+                        pending: records.length - matchedCount
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("Error matching orders:", error);
+        } finally {
+            setNdrLoading(false);
+        }
+    };
+
+    const sendNDRTemplate = async (record) => {
+        if (!record.phone) return { success: false, error: "No phone" };
+
+        try {
+            const response = await fetch(`${API_BASE}/api/whatsapp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: record.phone,
+                    templateName: 'alert_shipping_ndr',
+                    orderNumber: record.orderNumber.replace('#', '').trim(),
+                    languageCode: 'en_US',
+                    components: [
+                        {
+                            type: 'body',
+                            parameters: [
+                                { type: 'text', text: record.customerName || 'Customer' },
+                                { type: 'text', text: record.orderNumber || 'Order' },
+                                { type: 'text', text: record.reason || 'Delivery Exception' }
+                            ]
+                        }
+                    ]
+                })
+            });
+
+            if (response.ok) {
+                setNdrRecords(prev => prev.map(r => r.id === record.id ? { ...r, isSent: true } : r));
+                return { success: true };
+            } else {
+                const data = await response.json();
+                return { success: false, error: data.error };
+            }
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    };
+
+    const handleBulkSend = async () => {
+        const toSend = ndrRecords.filter(r => r.isMatched && !r.isSent);
+        if (toSend.length === 0) {
+            showSnackbar("No pending matched records to send.");
+            return;
+        }
+
+        Alert.alert(
+            "Bulk Send",
+            `Are you sure you want to send templates to ${toSend.length} customers?`,
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Shoot All", 
+                    onPress: async () => {
+                        setIsBulkSending(true);
+                        setBulkProgress(0);
+                        let sent = 0;
+
+                        for (let i = 0; i < toSend.length; i++) {
+                            const record = toSend[i];
+                            setSendingId(record.id);
+                            
+                            const result = await sendNDRTemplate(record);
+                            if (result.success) sent++;
+
+                            setBulkProgress((i + 1) / toSend.length);
+                            
+                            // Industry Standard: Safe delay to avoid Meta rate limits (600ms)
+                            await new Promise(resolve => setTimeout(resolve, 600));
+                        }
+
+                        setIsBulkSending(false);
+                        setSendingId(null);
+                        showSnackbar(`Bulk send complete: ${sent} messages sent successfully.`);
+                    }
+                }
+            ]
+        );
+    };
+
+    const renderNDREngine = () => {
+        const filteredRecords = ndrRecords.filter(r => {
+            if (ndrFilter === 'matched') return r.isMatched;
+            if (ndrFilter === 'unsent') return r.isMatched && !r.isSent;
+            if (ndrFilter === 'sent') return r.isSent;
+            return true;
+        });
+
+        return (
+            <View style={{ flex: 1 }}>
+                <Surface style={[styles.ndrHeader, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 }}>
+                        <View>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>NDR Processing Hub</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Automated delivery follow-ups</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <Button 
+                                mode="outlined" 
+                                onPress={handleNDRUpload} 
+                                icon="upload"
+                                disabled={ndrLoading || isBulkSending}
+                            >
+                                Upload
+                            </Button>
+                            {ndrRecords.length > 0 && (
+                                <Button 
+                                    mode="contained" 
+                                    onPress={handleBulkSend} 
+                                    icon="rocket-launch"
+                                    loading={isBulkSending}
+                                    disabled={ndrLoading || isBulkSending || !ndrRecords.some(r => r.isMatched && !r.isSent)}
+                                >
+                                    Bulk Shoot
+                                </Button>
+                            )}
+                        </View>
+                    </View>
+
+                    {isBulkSending && (
+                        <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <Text variant="labelSmall">Sending Messages...</Text>
+                                <Text variant="labelSmall">{Math.round(bulkProgress * 100)}%</Text>
+                            </View>
+                            <View style={{ height: 4, backgroundColor: theme.colors.surfaceVariant, borderRadius: 2, overflow: 'hidden' }}>
+                                <View style={{ height: '100%', width: `${bulkProgress * 100}%`, backgroundColor: theme.colors.primary }} />
+                            </View>
+                        </View>
+                    )}
+
+                    {ndrRecords.length > 0 && (
+                        <View style={styles.ndrFilterRow}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                                <Chip 
+                                    selected={ndrFilter === 'all'} 
+                                    onPress={() => setNdrFilter('all')}
+                                    showSelectedOverlay
+                                >
+                                    All ({ndrRecords.length})
+                                </Chip>
+                                <Chip 
+                                    selected={ndrFilter === 'unsent'} 
+                                    onPress={() => setNdrFilter('unsent')}
+                                    showSelectedOverlay
+                                    icon="clock-outline"
+                                >
+                                    Pending ({ndrRecords.filter(r => r.isMatched && !r.isSent).length})
+                                </Chip>
+                                <Chip 
+                                    selected={ndrFilter === 'sent'} 
+                                    onPress={() => setNdrFilter('sent')}
+                                    showSelectedOverlay
+                                    icon="check-circle-outline"
+                                >
+                                    Sent ({ndrRecords.filter(r => r.isSent).length})
+                                </Chip>
+                                <Chip 
+                                    selected={ndrFilter === 'matched'} 
+                                    onPress={() => setNdrFilter('matched')}
+                                    showSelectedOverlay
+                                >
+                                    Matched ({ndrStats.matched})
+                                </Chip>
+                                <Button compact onPress={() => setNdrRecords([])} textColor={theme.colors.error}>Clear</Button>
+                            </ScrollView>
+                        </View>
+                    )}
+                </Surface>
+
+                <FlatList
+                    data={filteredRecords}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    renderItem={({ item }) => (
+                        <Surface style={[styles.ndrCard, { backgroundColor: theme.colors.surface, opacity: item.isSent ? 0.7 : 1 }]} elevation={1}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order {item.orderNumber}</Text>
+                                        {item.isSent ? (
+                                            <Badge style={{ backgroundColor: '#3b82f6', marginLeft: 8 }}>SENT</Badge>
+                                        ) : item.isMatched ? (
+                                            <Badge style={{ backgroundColor: '#4ade80', marginLeft: 8 }}>READY</Badge>
+                                        ) : (
+                                            <Badge style={{ backgroundColor: theme.colors.error, marginLeft: 8 }}>NOT FOUND</Badge>
+                                        )}
+                                    </View>
+                                    <Text variant="bodyMedium">{item.customerName || 'Customer not found'}</Text>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>AWB: {item.awb}</Text>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 4 }}>{item.reason}</Text>
+                                </View>
+                                <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{item.phone || '---'}</Text>
+                                    <View style={{ flexDirection: 'row', marginTop: 12 }}>
+                                        <IconButton 
+                                            icon="chat-outline" 
+                                            mode="contained-tonal"
+                                            size={20}
+                                            onPress={() => openChat({ phone: item.phone, customerName: item.customerName })}
+                                            disabled={!item.isMatched || isBulkSending}
+                                        />
+                                        <IconButton 
+                                            icon={item.isSent ? "check-all" : "send"} 
+                                            mode={item.isSent ? "outlined" : "contained"}
+                                            size={20}
+                                            onPress={async () => {
+                                                setSendingId(item.id);
+                                                await sendNDRTemplate(item);
+                                                setSendingId(null);
+                                            }}
+                                            loading={sendingId === item.id}
+                                            disabled={!item.isMatched || item.isSent || sendingId === item.id || isBulkSending}
+                                            containerColor={item.isSent ? 'transparent' : theme.colors.primary}
+                                        />
+                                    </View>
+                                </View>
+                            </View>
+                        </Surface>
+                    )}
+                    ListEmptyComponent={() => (
+                        <View style={{ alignItems: 'center', marginTop: 60, opacity: 0.5 }}>
+                            <Icon source={ndrRecords.length > 0 ? "filter-variant-remove" : "file-upload-outline"} size={80} color={theme.colors.onSurfaceVariant} />
+                            <Text variant="headlineSmall" style={{ marginTop: 16 }}>
+                                {ndrRecords.length > 0 ? "No results for this filter" : "No NDR Data"}
+                            </Text>
+                            <Text variant="bodyMedium">
+                                {ndrRecords.length > 0 ? "Try changing your filter settings" : "Upload a CSV file to begin processing"}
+                            </Text>
+                        </View>
+                    )}
+                />
+            </View>
+        );
     };
 
     // Memoized Stats for Overview to prevent flickering
@@ -693,6 +1051,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
                             { value: 'cod', label: 'COD Verify', icon: 'checkbox-marked-circle-outline' },
                             { value: 'abandoned', label: 'Recovery Center', icon: 'cart-arrow-down' },
+                            { value: 'ndr', label: 'NDR Engine', icon: 'truck-delivery-outline' },
                         ]}
                     />
                 </ScrollView>
@@ -702,6 +1061,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 {tab === 'overview' && renderOverview()}
                 {tab === 'cod' && renderCODVerification()}
                 {tab === 'abandoned' && renderAbandoned()}
+                {tab === 'ndr' && renderNDREngine()}
             </View>
 
             {/* Chat Dialog */}
@@ -1005,7 +1365,31 @@ const styles = StyleSheet.create({
     quickActionButton: {
         borderRadius: 20,
         borderColor: '#e2e8f0',
-    }
+    },
+    ndrHeader: {
+        padding: 8,
+        borderBottomWidth: 0.5,
+        borderBottomColor: 'rgba(0,0,0,0.1)',
+    },
+    ndrStatsRow: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        gap: 8,
+        alignItems: 'center',
+    },
+    ndrFilterRow: {
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+    },
+    ndrChip: {
+        height: 32,
+    },
+    ndrCard: {
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+    },
 });
 
 export default WhatsAppManagerScreen;

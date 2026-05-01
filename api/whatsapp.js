@@ -41,7 +41,7 @@ module.exports = async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-    const { to, message, type = 'text', templateName, languageCode = 'en_US', components } = req.body;
+    const { to, message, type = 'text', templateName, languageCode = 'en_US', components, orderNumber } = req.body;
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
@@ -113,6 +113,7 @@ module.exports = async (req, res) => {
         };
 
         if (type === 'template') logData.templateName = templateName;
+        if (orderNumber) logData.orderNumber = orderNumber;
 
         await db.collection('whatsapp_messages').add(logData);
 
