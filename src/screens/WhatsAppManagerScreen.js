@@ -679,29 +679,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 </Chip>
                                 <Button 
                                     compact 
-                                    onPress={() => {
-                                        const hasSent = ndrRecords.some(r => r.isSent);
-                                        if (hasSent) {
-                                            Alert.alert(
-                                                "Clear Records",
-                                                "Do you want to clear only unprocessed records or everything?",
-                                                [
-                                                    { text: "Cancel", style: "cancel" },
-                                                    { 
-                                                        text: "Unprocessed Only", 
-                                                        onPress: () => setNdrRecords(prev => prev.filter(r => r.isSent)) 
-                                                    },
-                                                    { 
-                                                        text: "Clear All", 
-                                                        style: "destructive",
-                                                        onPress: () => setNdrRecords([]) 
-                                                    }
-                                                ]
-                                            );
-                                        } else {
-                                            setNdrRecords([]);
-                                        }
-                                    }} 
+                                    onPress={() => setNdrRecords(prev => prev.filter(r => r.isSent))} 
                                     textColor={theme.colors.error}
                                 >
                                     Clear
@@ -761,8 +739,13 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             mode={item.isSent ? "outlined" : "contained"}
                                             onPress={async () => {
                                                 setSendingId(item.id);
-                                                await sendNDRTemplate(item);
+                                                const result = await sendNDRTemplate(item);
                                                 setSendingId(null);
+                                                if (!result.success) {
+                                                    showSnackbar(`Failed: ${result.error || "Unknown error"}`);
+                                                } else {
+                                                    showSnackbar(`Success: Sent to ${item.customerName}`);
+                                                }
                                             }}
                                             loading={sendingId === item.id}
                                             disabled={!item.isMatched || item.isSent || sendingId === item.id || isBulkSending}
