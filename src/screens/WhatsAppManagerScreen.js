@@ -429,39 +429,59 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         try {
             for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
                 const chunk = chunks[chunkIdx];
-                const cleanNums = chunk.map(r => r.orderNumber.replace('#', '').trim()).filter(n => n);
                 
-                if (cleanNums.length === 0) continue;
+                // Create a set of possible formats for the query (String, Number, with/without #)
+                const queryVariants = [];
+                chunk.forEach(r => {
+                    const raw = r.orderNumber.toString().trim();
+                    const clean = raw.replace('#', '').trim();
+                    
+                    queryVariants.push(raw); // Original (#3342)
+                    queryVariants.push(clean); // Clean String (3342)
+                    if (!isNaN(clean)) queryVariants.push(Number(clean)); // Numeric (3342)
+                });
+                
+                // Filter unique variants and limit to 30 for Firestore 'in' query
+                const uniqueVariants = [...new Set(queryVariants)].slice(0, 30);
+                
+                if (uniqueVariants.length === 0) continue;
 
-                // 1. Batch fetch orders
+                // 1. Batch fetch orders with variant support
                 const qOrders = query(
                     collection(db, "orders"),
-                    where("orderNumber", "in", cleanNums)
+                    where("orderNumber", "in", uniqueVariants)
                 );
                 const orderSnap = await getDocs(qOrders);
                 const orderMap = {};
                 orderSnap.forEach(doc => {
                     const data = doc.data();
-                    orderMap[data.orderNumber] = data;
+                    // Map by every possible variant for instant lookup
+                    orderMap[data.orderNumber?.toString()] = data;
+                    if (data.orderNumber?.toString().startsWith('#')) {
+                        orderMap[data.orderNumber.replace('#', '')] = data;
+                    }
                 });
 
-                // 2. Batch fetch sent messages for these orders
+                // 2. Batch fetch sent messages using the same variants
                 const qMsgs = query(
                     collection(db, "whatsapp_messages"),
-                    where("orderNumber", "in", cleanNums),
+                    where("orderNumber", "in", uniqueVariants),
                     where("templateName", "==", "alert_shipping_ndr")
                 );
                 const msgSnap = await getDocs(qMsgs);
                 const sentSet = new Set();
                 msgSnap.forEach(doc => {
-                    sentSet.add(doc.data().orderNumber);
+                    sentSet.add(doc.data().orderNumber?.toString());
                 });
 
                 // 3. Update records in this chunk
                 for (let i = 0; i < chunk.length; i++) {
                     const recIdx = (chunkIdx * CHUNK_SIZE) + i;
-                    const cleanNum = updatedRecords[recIdx].orderNumber.replace('#', '').trim();
-                    const orderData = orderMap[cleanNum];
+                    const rawNum = updatedRecords[recIdx].orderNumber.toString().trim();
+                    const cleanNum = rawNum.replace('#', '').trim();
+                    
+                    // Try to find the order using any of its variants
+                    const orderData = orderMap[rawNum] || orderMap[cleanNum] || orderMap[Number(cleanNum)];
 
                     if (orderData) {
                         updatedRecords[recIdx] = {
@@ -469,7 +489,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             customerName: orderData.customerName || 'Customer',
                             phone: orderData.phone || '',
                             isMatched: true,
-                            isSent: sentSet.has(cleanNum)
+                            isSent: sentSet.has(rawNum) || sentSet.has(cleanNum) || sentSet.has(Number(cleanNum).toString())
                         };
                         matchedCount++;
                     }
@@ -503,6 +523,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     to: record.phone,
+                    type: 'template',
                     templateName: 'alert_shipping_ndr',
                     orderNumber: record.orderNumber.replace('#', '').trim(),
                     languageCode: 'en_US',
