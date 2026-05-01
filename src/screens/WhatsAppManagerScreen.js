@@ -608,10 +608,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     });
 
                     return Array.from(masterMap.values()).sort((a, b) => {
-                        // Priority 1: Ready/Unsent at top
-                        if (!a.isSent && b.isSent) return -1;
-                        if (a.isSent && !b.isSent) return 1;
-                        // Priority 2: Newest first
                         return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
                     });
                 });
@@ -825,30 +821,17 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 >
                                     Sent ({ndrRecords.filter(r => r.isSent).length})
                                 </Chip>
-                                {historyLoading ? (
-                                    <ActivityIndicator size={20} style={{ marginLeft: 8 }} />
-                                ) : (
-                                    <IconButton 
-                                        icon="refresh"
-                                        onPress={() => loadNDRHistory(true)} 
-                                        iconColor={theme.colors.error}
-                                        size={20}
-                                        style={{ margin: 0 }}
-                                    />
-                                )}
+                                <IconButton 
+                                    icon="refresh"
+                                    onPress={() => loadNDRHistory(true)} 
+                                    iconColor={theme.colors.error}
+                                    size={20}
+                                    style={{ margin: 0 }}
+                                />
                             </ScrollView>
                         </View>
                     )}
                 </Surface>
-
-                {(ndrLoading || historyLoading) && (
-                    <View style={{ padding: 16, alignItems: 'center' }}>
-                        <ActivityIndicator animating={true} color={theme.colors.primary} />
-                        <Text variant="labelSmall" style={{ marginTop: 8, opacity: 0.7 }}>
-                            {ndrLoading ? 'Matching Orders...' : 'Syncing History...'}
-                        </Text>
-                    </View>
-                )}
 
                 <FlatList
                     data={filteredRecords}
