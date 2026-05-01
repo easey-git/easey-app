@@ -347,8 +347,15 @@ module.exports = async (req, res) => {
                                 ndr_status: 'reattempt_requested',
                                 updatedAt: admin.firestore.Timestamp.now()
                             });
-                            // Send ndr_action_confirmed template
-                            await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [], "en");
+                            // Send ndr_action_confirmed template (expects 1 param, likely Name)
+                            await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [
+                                {
+                                    type: 'body',
+                                    parameters: [
+                                        { type: 'text', text: orderDoc.data().customerName || 'Customer' }
+                                    ]
+                                }
+                            ], "en");
                         }
                     }
 
