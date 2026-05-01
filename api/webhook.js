@@ -39,7 +39,9 @@ const CONSTANTS = {
         CONFIRM_YES: ['CONFIRM_COD_YES', 'Confirm Order'],
         CONFIRM_NO: ['CONFIRM_COD_NO', 'Cancel', 'cancel'],
         ADDRESS_CORRECT: ['ADDRESS_CORRECT', 'Confirm Address', 'Yes, Correct', 'Correct'],
-        ADDRESS_EDIT: ['ADDRESS_EDIT', 'Make Changes', 'Edit Address'],
+        ADDRESS_EDIT: ['ADDRESS_EDIT', 'Make Changes', 'Edit Address', 'Update Address'],
+        NDR_REATTEMPT: ['REATTEMPT_DELIVERY', 'Re-attempt Delivery'],
+        NDR_CANCEL: ['CANCEL_SHIPMENT', 'Cancel Shipment'],
     },
     DEFAULT_COUNTRY_CODE: '91'
 };
@@ -334,10 +336,24 @@ module.exports = async (req, res) => {
                     const isConfirmYes = CONSTANTS.PAYLOADS.CONFIRM_YES.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_YES.includes(body);
                     const isAddressCorrect = CONSTANTS.PAYLOADS.ADDRESS_CORRECT.includes(payload) || CONSTANTS.PAYLOADS.ADDRESS_CORRECT.includes(body);
                     const isAddressEdit = CONSTANTS.PAYLOADS.ADDRESS_EDIT.includes(payload) || CONSTANTS.PAYLOADS.ADDRESS_EDIT.includes(body);
-                    const isCancel = CONSTANTS.PAYLOADS.CONFIRM_NO.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_NO.includes(body.toLowerCase());
+                    const isCancel = CONSTANTS.PAYLOADS.CONFIRM_NO.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_NO.includes(body.toLowerCase()) || CONSTANTS.PAYLOADS.NDR_CANCEL.includes(payload) || CONSTANTS.PAYLOADS.NDR_CANCEL.includes(body);
+                    const isNdrReattempt = CONSTANTS.PAYLOADS.NDR_REATTEMPT.includes(payload) || CONSTANTS.PAYLOADS.NDR_REATTEMPT.includes(body);
+
+                    // CASE 0: NDR Re-attempt Delivery
+                    if (isNdrReattempt) {
+                        const orderDoc = await findLatestOrder();
+                        if (orderDoc) {
+                            await orderDoc.ref.update({
+                                ndr_status: 'reattempt_requested',
+                                updatedAt: admin.firestore.Timestamp.now()
+                            });
+                            // Send ndr_action_confirmed template
+                            await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [], "en");
+                        }
+                    }
 
                     // CASE 1: Confirm Order (Step 1)
-                    if (isConfirmYes) {
+                    else if (isConfirmYes) {
                         // --- GUARD RAIL 3: Status Guard ---
                         if (orderData?.verificationStatus === 'cancelled') {
                             console.log(`[Guard Rail] Order ${orderData.orderNumber} is cancelled. Ignoring confirmation.`);
