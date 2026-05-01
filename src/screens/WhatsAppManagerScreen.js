@@ -388,23 +388,41 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
             // 2. Hydrate with Order Details
             const orderDataMap = {};
-            const CHUNK_SIZE = 30;
+            const CHUNK_SIZE = 10; // Smaller chunk because variants multiply the array size
             for (let i = 0; i < orderNums.length; i += CHUNK_SIZE) {
                 const chunk = orderNums.slice(i, i + CHUNK_SIZE);
-                const qOrders = query(collection(db, "orders"), where("orderNumber", "in", chunk));
+                
+                // Create variants (String, Number, with/without #) to ensure match
+                const queryVariants = [];
+                chunk.forEach(num => {
+                    const raw = num.toString().trim();
+                    const clean = raw.replace('#', '').trim();
+                    queryVariants.push(raw);
+                    queryVariants.push(clean);
+                    if (!isNaN(clean)) queryVariants.push(Number(clean));
+                });
+
+                const qOrders = query(collection(db, "orders"), where("orderNumber", "in", [...new Set(queryVariants)].slice(0, 30)));
                 const orderSnap = await getDocs(qOrders);
                 orderSnap.forEach(doc => {
                     const data = doc.data();
-                    orderDataMap[data.orderNumber] = data;
+                    const numKey = data.orderNumber?.toString().trim();
+                    if (numKey) {
+                        orderDataMap[numKey] = data;
+                        orderDataMap[numKey.replace('#', '')] = data;
+                    }
                 });
             }
 
             // 3. Map to NDR Records
             const historyRecords = historyMessages.map((msg, index) => {
-                const order = orderDataMap[msg.orderNumber];
+                const rawNum = msg.orderNumber?.toString().trim();
+                const cleanNum = rawNum?.replace('#', '');
+                const order = orderDataMap[rawNum] || orderDataMap[cleanNum];
+                
                 return {
                     id: `history-${index}`,
-                    orderNumber: msg.orderNumber,
+                    orderNumber: rawNum,
                     awb: order?.awb || 'Historical',
                     reason: 'Sent previously',
                     status: order?.status || 'Sent',
