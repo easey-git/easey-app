@@ -525,8 +525,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     to: record.phone,
                     type: 'template',
                     templateName: 'alert_shipping_ndr',
-                    orderNumber: record.orderNumber.replace('#', '').trim(),
-                    languageCode: 'en_US',
+                    orderNumber: record.orderNumber.toString().replace('#', '').trim(),
+                    languageCode: 'en',
                     components: [
                         {
                             type: 'body',
@@ -731,7 +731,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                         <IconButton 
                                             icon={item.isSent ? "check-all" : "send"} 
                                             mode={item.isSent ? "outlined" : "contained"}
-                                            size={20}
                                             onPress={async () => {
                                                 setSendingId(item.id);
                                                 await sendNDRTemplate(item);
@@ -739,7 +738,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             }}
                                             loading={sendingId === item.id}
                                             disabled={!item.isMatched || item.isSent || sendingId === item.id || isBulkSending}
+                                            iconColor={item.isSent ? theme.colors.primary : '#FFFFFF'}
                                             containerColor={item.isSent ? 'transparent' : theme.colors.primary}
+                                            size={20}
                                         />
                                     </View>
                                 </View>
