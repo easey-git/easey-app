@@ -43,7 +43,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [isBulkSending, setIsBulkSending] = useState(false);
     const [bulkProgress, setBulkProgress] = useState(0);
     const [historyLoading, setHistoryLoading] = useState(false);
-    const [selectedNdrIds, setSelectedNdrIds] = useState(new Set());
+    const [selectedNdrIds, setSelectedNdrIds] = useState([]);
 
     // Message Viewer State
     const [chatDialogVisible, setChatDialogVisible] = useState(false);
@@ -359,10 +359,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     // NDR Engine Logic
-    const loadNDRHistory = async () => {
-        if (ndrRecords.length > 0) return; // Don't overwrite if user just uploaded a CSV
+    const loadNDRHistory = async (force = false) => {
+        if (!force && ndrRecords.length > 0) return; 
         
         setHistoryLoading(true);
+        if (force) setNdrRecords([]); // Clear immediately for visual feedback
         try {
             // 1. Fetch recent NDR templates sent
             const q = query(
@@ -590,13 +591,36 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     }
                 }
 
-                // Smooth Progress Update
-                setNdrRecords([...updatedRecords]);
-                setNdrStats({
-                    total: records.length,
-                    matched: matchedCount,
-                    pending: records.length - matchedCount
+                // Unified Merge Strategy
+                setNdrRecords(prev => {
+                    const masterMap = new Map();
+                    // 1. Load current state into map
+                    prev.forEach(r => masterMap.set(r.orderNumber.toString().replace('#', '').trim(), r));
+                    
+                    // 2. Overwrite/Merge with new data
+                    updatedRecords.forEach(r => {
+                        const key = r.orderNumber.toString().replace('#', '').trim();
+                        const existing = masterMap.get(key);
+                        masterMap.set(key, {
+                            ...r,
+                            isSent: existing?.isSent || r.isSent // Preserve "Sent" status
+                        });
+                    });
+
+                    return Array.from(masterMap.values()).sort((a, b) => {
+                        // Priority 1: Ready/Unsent at top
+                        if (!a.isSent && b.isSent) return -1;
+                        if (a.isSent && !b.isSent) return 1;
+                        // Priority 2: Newest first
+                        return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
+                    });
                 });
+
+                setNdrStats(prev => ({
+                    total: records.length + (prev.total || 0),
+                    matched: matchedCount + (prev.matched || 0),
+                    pending: (records.length - matchedCount) + (prev.pending || 0)
+                }));
                 
                 // Small yield to keep UI responsive during large batches
                 await new Promise(resolve => setTimeout(resolve, 50));
@@ -701,25 +725,23 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     const toggleSelection = (id) => {
         setSelectedNdrIds(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
+            if (prev.includes(id)) return prev.filter(i => i !== id);
+            return [...prev, id];
         });
     };
 
     const toggleSelectAll = (records) => {
-        if (selectedNdrIds.size === records.length) {
-            setSelectedNdrIds(new Set());
+        const selectableIds = records.map(r => r.id);
+        if (selectedNdrIds.length === selectableIds.length && selectableIds.length > 0) {
+            setSelectedNdrIds([]);
         } else {
-            setSelectedNdrIds(new Set(records.map(r => r.id)));
+            setSelectedNdrIds(selectableIds);
         }
     };
 
     const renderNDREngine = () => {
         const filteredRecords = ndrRecords.filter(r => {
-            if (ndrFilter === 'matched') return r.isMatched;
-            if (ndrFilter === 'unsent') return r.isMatched && !r.isSent;
+            if (ndrFilter === 'matched') return r.isMatched && !r.isSent;
             if (ndrFilter === 'sent') return r.isSent;
             return true;
         });
@@ -735,15 +757,12 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             {ndrRecords.length > 0 && (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
-                                    <Checkbox.Item
-                                        status={selectedNdrIds.size > 0 && selectedNdrIds.size === ndrRecords.filter(r => r.isMatched && !r.isSent).length ? 'checked' : selectedNdrIds.size > 0 ? 'indeterminate' : 'unchecked'}
+                                    <Checkbox
+                                        status={selectedNdrIds.length > 0 && selectedNdrIds.length === ndrRecords.filter(r => r.isMatched && !r.isSent).length ? 'checked' : selectedNdrIds.length > 0 ? 'indeterminate' : 'unchecked'}
                                         onPress={() => toggleSelectAll(ndrRecords.filter(r => r.isMatched && !r.isSent))}
-                                        label="Select All"
-                                        labelStyle={{ fontSize: 12 }}
-                                        position="leading"
-                                        style={{ paddingHorizontal: 0 }}
                                         disabled={isBulkSending}
                                     />
+                                    <Text variant="labelSmall" style={{ marginLeft: -4 }}>Select All</Text>
                                 </View>
                             )}
                             <Button 
@@ -760,9 +779,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     onPress={handleBulkSend} 
                                     icon="rocket-launch"
                                     loading={isBulkSending}
-                                    disabled={ndrLoading || isBulkSending || (selectedNdrIds.size === 0 && !ndrRecords.some(r => r.isMatched && !r.isSent))}
+                                    disabled={ndrLoading || isBulkSending || (selectedNdrIds.length === 0 && !ndrRecords.some(r => r.isMatched && !r.isSent))}
                                 >
-                                    {selectedNdrIds.size > 0 ? `Shoot (${selectedNdrIds.size})` : 'Shoot All'}
+                                    {selectedNdrIds.length > 0 ? `Shoot (${selectedNdrIds.length})` : 'Shoot All'}
                                 </Button>
                             )}
                         </View>
@@ -791,50 +810,74 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     All ({ndrRecords.length})
                                 </Chip>
                                 <Chip 
-                                    selected={ndrFilter === 'unsent'} 
-                                    onPress={() => setNdrFilter('unsent')}
+                                    selected={ndrFilter === 'matched'} 
+                                    onPress={() => setNdrFilter('matched')}
                                     showSelectedOverlay
-                                    icon="clock-outline"
+                                    icon="link-variant"
                                 >
-                                    Pending ({ndrRecords.filter(r => r.isMatched && !r.isSent).length})
+                                    Ready ({ndrRecords.filter(r => r.isMatched && !r.isSent).length})
                                 </Chip>
                                 <Chip 
                                     selected={ndrFilter === 'sent'} 
                                     onPress={() => setNdrFilter('sent')}
                                     showSelectedOverlay
-                                    icon="check-circle-outline"
+                                    icon="check-all"
                                 >
                                     Sent ({ndrRecords.filter(r => r.isSent).length})
                                 </Chip>
-                                <Chip 
-                                    selected={ndrFilter === 'matched'} 
-                                    onPress={() => setNdrFilter('matched')}
-                                    showSelectedOverlay
-                                >
-                                    Matched ({ndrStats.matched})
-                                </Chip>
-                                <Button 
-                                    compact 
-                                    onPress={() => setNdrRecords(prev => prev.filter(r => r.isSent))} 
-                                    textColor={theme.colors.error}
-                                >
-                                    Clear
-                                </Button>
+                                {historyLoading ? (
+                                    <ActivityIndicator size={20} style={{ marginLeft: 8 }} />
+                                ) : (
+                                    <IconButton 
+                                        icon="refresh"
+                                        onPress={() => loadNDRHistory(true)} 
+                                        iconColor={theme.colors.error}
+                                        size={20}
+                                        style={{ margin: 0 }}
+                                    />
+                                )}
                             </ScrollView>
                         </View>
                     )}
                 </Surface>
 
+                {(ndrLoading || historyLoading) && (
+                    <View style={{ padding: 16, alignItems: 'center' }}>
+                        <ActivityIndicator animating={true} color={theme.colors.primary} />
+                        <Text variant="labelSmall" style={{ marginTop: 8, opacity: 0.7 }}>
+                            {ndrLoading ? 'Matching Orders...' : 'Syncing History...'}
+                        </Text>
+                    </View>
+                )}
+
                 <FlatList
                     data={filteredRecords}
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-                    renderItem={({ item }) => (
-                        <Surface style={[styles.ndrCard, { backgroundColor: theme.colors.surface, opacity: item.isSent ? 0.7 : 1 }]} elevation={1}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    renderItem={({ item }) => {
+                        const isSelected = selectedNdrIds.includes(item.id);
+                        return (
+                        <Surface 
+                            style={[
+                                styles.ndrCard, 
+                                { 
+                                    backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface, 
+                                    opacity: item.isSent ? 0.7 : 1,
+                                    borderWidth: isSelected ? 2 : 0,
+                                    borderColor: theme.colors.primary
+                                }
+                            ]} 
+                            elevation={isSelected ? 2 : 1}
+                        >
+                            <TouchableRipple
+                                onPress={() => toggleSelection(item.id)}
+                                disabled={item.isSent || !item.isMatched || isBulkSending}
+                                style={{ flex: 1 }}
+                            >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12 }}>
                                 <View style={{ marginRight: 8 }}>
                                     <Checkbox
-                                        status={selectedNdrIds.has(item.id) ? 'checked' : 'unchecked'}
+                                        status={isSelected ? 'checked' : 'unchecked'}
                                         onPress={() => toggleSelection(item.id)}
                                         disabled={item.isSent || !item.isMatched || isBulkSending}
                                     />
@@ -843,7 +886,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                         <View style={{ flex: 1 }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                                                <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order {item.orderNumber}</Text>
+                                                <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>#{item.orderNumber ? item.orderNumber.toString().replace('#', '') : 'N/A'}</Text>
                                         {item.isSent ? (
                                             <Badge style={{ backgroundColor: '#3b82f6', marginLeft: 8 }}>SENT</Badge>
                                         ) : item.isMatched ? (
@@ -903,8 +946,10 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     </View>
                                 </View>
                             </View>
+                            </TouchableRipple>
                         </Surface>
-                    )}
+                        );
+                    }}
                     ListEmptyComponent={() => (
                         <View style={{ alignItems: 'center', marginTop: 60, opacity: 0.5 }}>
                             <Icon source={ndrRecords.length > 0 ? "filter-variant-remove" : "file-upload-outline"} size={80} color={theme.colors.onSurfaceVariant} />
