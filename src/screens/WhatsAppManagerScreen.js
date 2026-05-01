@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, Linking, FlatList, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip, TextInput, Snackbar, TouchableRipple, List } from 'react-native-paper';
+import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, Badge, Portal, Dialog, ActivityIndicator, Divider, Icon, Chip, TextInput, Snackbar, TouchableRipple, List, Checkbox } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
 import { read, utils } from 'xlsx';
 import { BarChart } from 'react-native-gifted-charts';
@@ -43,6 +43,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [isBulkSending, setIsBulkSending] = useState(false);
     const [bulkProgress, setBulkProgress] = useState(0);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [selectedNdrIds, setSelectedNdrIds] = useState(new Set());
 
     // Message Viewer State
     const [chatDialogVisible, setChatDialogVisible] = useState(false);
@@ -629,19 +630,25 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     const handleBulkSend = async () => {
-        const toSend = ndrRecords.filter(r => r.isMatched && !r.isSent);
+        const toSend = ndrRecords.filter(r => 
+            r.isMatched && !r.isSent && 
+            (selectedNdrIds.size === 0 || selectedNdrIds.has(r.id))
+        );
+
         if (toSend.length === 0) {
             showSnackbar("No pending matched records to send.");
             return;
         }
 
+        const countText = selectedNdrIds.size > 0 ? `${toSend.length} selected` : `all ${toSend.length} matched`;
+
         Alert.alert(
             "Bulk Send",
-            `Are you sure you want to send templates to ${toSend.length} customers?`,
+            `Are you sure you want to shoot templates to ${countText} customers?`,
             [
                 { text: "Cancel", style: "cancel" },
                 { 
-                    text: "Shoot All", 
+                    text: "Shoot", 
                     onPress: async () => {
                         setIsBulkSending(true);
                         setBulkProgress(0);
@@ -652,11 +659,16 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             setSendingId(record.id);
                             
                             const result = await sendNDRTemplate(record);
-                            if (result.success) sent++;
+                            if (result.success) {
+                                sent++;
+                                setSelectedNdrIds(prev => {
+                                    const next = new Set(prev);
+                                    next.delete(record.id);
+                                    return next;
+                                });
+                            }
 
                             setBulkProgress((i + 1) / toSend.length);
-                            
-                            // Industry Standard: Safe delay to avoid Meta rate limits (600ms)
                             await new Promise(resolve => setTimeout(resolve, 600));
                         }
 
@@ -667,6 +679,23 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 }
             ]
         );
+    };
+
+    const toggleSelection = (id) => {
+        setSelectedNdrIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = (records) => {
+        if (selectedNdrIds.size === records.length) {
+            setSelectedNdrIds(new Set());
+        } else {
+            setSelectedNdrIds(new Set(records.map(r => r.id)));
+        }
     };
 
     const renderNDREngine = () => {
@@ -686,6 +715,19 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Automated delivery follow-ups</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
+                            {ndrRecords.length > 0 && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
+                                    <Checkbox.Item
+                                        status={selectedNdrIds.size > 0 && selectedNdrIds.size === ndrRecords.filter(r => r.isMatched && !r.isSent).length ? 'checked' : selectedNdrIds.size > 0 ? 'indeterminate' : 'unchecked'}
+                                        onPress={() => toggleSelectAll(ndrRecords.filter(r => r.isMatched && !r.isSent))}
+                                        label="Select All"
+                                        labelStyle={{ fontSize: 12 }}
+                                        position="leading"
+                                        style={{ paddingHorizontal: 0 }}
+                                        disabled={isBulkSending}
+                                    />
+                                </View>
+                            )}
                             <Button 
                                 mode="outlined" 
                                 onPress={handleNDRUpload} 
@@ -700,9 +742,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     onPress={handleBulkSend} 
                                     icon="rocket-launch"
                                     loading={isBulkSending}
-                                    disabled={ndrLoading || isBulkSending || !ndrRecords.some(r => r.isMatched && !r.isSent)}
+                                    disabled={ndrLoading || isBulkSending || (selectedNdrIds.size === 0 && !ndrRecords.some(r => r.isMatched && !r.isSent))}
                                 >
-                                    Bulk Shoot
+                                    {selectedNdrIds.size > 0 ? `Shoot (${selectedNdrIds.size})` : 'Shoot All'}
                                 </Button>
                             )}
                         </View>
@@ -771,10 +813,19 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
                     renderItem={({ item }) => (
                         <Surface style={[styles.ndrCard, { backgroundColor: theme.colors.surface, opacity: item.isSent ? 0.7 : 1 }]} elevation={1}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={{ marginRight: 8 }}>
+                                    <Checkbox
+                                        status={selectedNdrIds.has(item.id) ? 'checked' : 'unchecked'}
+                                        onPress={() => toggleSelection(item.id)}
+                                        disabled={item.isSent || !item.isMatched || isBulkSending}
+                                    />
+                                </View>
                                 <View style={{ flex: 1 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order {item.orderNumber}</Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                                <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order {item.orderNumber}</Text>
                                         {item.isSent ? (
                                             <Badge style={{ backgroundColor: '#3b82f6', marginLeft: 8 }}>SENT</Badge>
                                         ) : item.isMatched ? (
@@ -799,6 +850,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                         <Text variant="labelSmall" style={{ marginLeft: 12, color: theme.colors.secondary }}>Attempt: {item.attempts}</Text>
                                     </View>
                                     <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 6, fontWeight: '500' }}>Reason: {item.reason}</Text>
+                                        </View>
+                                    </View>
                                 </View>
                                 <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                                     <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{item.phone || '---'}</Text>
