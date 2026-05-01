@@ -677,7 +677,35 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 >
                                     Matched ({ndrStats.matched})
                                 </Chip>
-                                <Button compact onPress={() => setNdrRecords([])} textColor={theme.colors.error}>Clear</Button>
+                                <Button 
+                                    compact 
+                                    onPress={() => {
+                                        const hasSent = ndrRecords.some(r => r.isSent);
+                                        if (hasSent) {
+                                            Alert.alert(
+                                                "Clear Records",
+                                                "Do you want to clear only unprocessed records or everything?",
+                                                [
+                                                    { text: "Cancel", style: "cancel" },
+                                                    { 
+                                                        text: "Unprocessed Only", 
+                                                        onPress: () => setNdrRecords(prev => prev.filter(r => r.isSent)) 
+                                                    },
+                                                    { 
+                                                        text: "Clear All", 
+                                                        style: "destructive",
+                                                        onPress: () => setNdrRecords([]) 
+                                                    }
+                                                ]
+                                            );
+                                        } else {
+                                            setNdrRecords([]);
+                                        }
+                                    }} 
+                                    textColor={theme.colors.error}
+                                >
+                                    Clear
+                                </Button>
                             </ScrollView>
                         </View>
                     )}
