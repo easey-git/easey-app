@@ -42,6 +42,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [ndrFilter, setNdrFilter] = useState('all'); // all | matched | unsent | sent
     const [isBulkSending, setIsBulkSending] = useState(false);
     const [bulkProgress, setBulkProgress] = useState(0);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     // Message Viewer State
     const [chatDialogVisible, setChatDialogVisible] = useState(false);
@@ -357,6 +358,81 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     // NDR Engine Logic
+    const loadNDRHistory = async () => {
+        if (ndrRecords.length > 0) return; // Don't overwrite if user just uploaded a CSV
+        
+        setHistoryLoading(true);
+        try {
+            // 1. Fetch recent NDR templates sent
+            const q = query(
+                collection(db, "whatsapp_messages"),
+                where("templateName", "==", "alert_shipping_ndr"),
+                orderBy("timestamp", "desc"),
+                limit(50)
+            );
+            const snapshot = await getDocs(q);
+            
+            if (snapshot.empty) {
+                setHistoryLoading(false);
+                return;
+            }
+
+            const historyMessages = snapshot.docs.map(doc => doc.data());
+            const orderNums = [...new Set(historyMessages.map(m => m.orderNumber).filter(n => n))];
+            
+            if (orderNums.length === 0) {
+                setHistoryLoading(false);
+                return;
+            }
+
+            // 2. Hydrate with Order Details
+            const orderDataMap = {};
+            const CHUNK_SIZE = 30;
+            for (let i = 0; i < orderNums.length; i += CHUNK_SIZE) {
+                const chunk = orderNums.slice(i, i + CHUNK_SIZE);
+                const qOrders = query(collection(db, "orders"), where("orderNumber", "in", chunk));
+                const orderSnap = await getDocs(qOrders);
+                orderSnap.forEach(doc => {
+                    const data = doc.data();
+                    orderDataMap[data.orderNumber] = data;
+                });
+            }
+
+            // 3. Map to NDR Records
+            const historyRecords = historyMessages.map((msg, index) => {
+                const order = orderDataMap[msg.orderNumber];
+                return {
+                    id: `history-${index}`,
+                    orderNumber: msg.orderNumber,
+                    awb: order?.awb || 'Historical',
+                    reason: 'Sent previously',
+                    status: order?.status || 'Sent',
+                    attempts: order?.attempts || '-',
+                    carrier: order?.carrier || '-',
+                    location: `${order?.city || ''}, ${order?.state || ''}`.trim().replace(/^, |, $/g, ''),
+                    customerName: order?.customerName || 'Customer',
+                    phone: msg.phoneNormalized || msg.phone,
+                    isMatched: true,
+                    isSent: true,
+                    timestamp: msg.timestamp
+                };
+            });
+
+            setNdrRecords(historyRecords);
+            setNdrStats(prev => ({ ...prev, total: historyRecords.length, matched: historyRecords.length }));
+        } catch (error) {
+            console.error("Error loading NDR history:", error);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (tab === 'ndr') {
+            loadNDRHistory();
+        }
+    }, [tab]);
+
     const handleNDRUpload = async () => {
         try {
             const result = await DocumentPicker.getDocumentAsync({
