@@ -43,7 +43,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [isBulkSending, setIsBulkSending] = useState(false);
     const [bulkProgress, setBulkProgress] = useState(0);
     const [historyLoading, setHistoryLoading] = useState(false);
-    const [selectedNdrIds, setSelectedNdrIds] = useState([]);
 
     // Message Viewer State
     const [chatDialogVisible, setChatDialogVisible] = useState(false);
@@ -668,25 +667,20 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     const handleBulkSend = async () => {
-        const toSend = ndrRecords.filter(r => 
-            r.isMatched && !r.isSent && 
-            (selectedNdrIds.size === 0 || selectedNdrIds.has(r.id))
-        );
+        const toSend = ndrRecords.filter(r => r.isMatched && !r.isSent);
 
         if (toSend.length === 0) {
             showSnackbar("No pending matched records to send.");
             return;
         }
 
-        const countText = selectedNdrIds.size > 0 ? `${toSend.length} selected` : `all ${toSend.length} matched`;
-
         Alert.alert(
             "Bulk Send",
-            `Are you sure you want to shoot templates to ${countText} customers?`,
+            `Are you sure you want to shoot templates to all ${toSend.length} matched customers?`,
             [
                 { text: "Cancel", style: "cancel" },
                 { 
-                    text: "Shoot", 
+                    text: "Shoot All", 
                     onPress: async () => {
                         setIsBulkSending(true);
                         setBulkProgress(0);
@@ -697,14 +691,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             setSendingId(record.id);
                             
                             const result = await sendNDRTemplate(record);
-                            if (result.success) {
-                                sent++;
-                                setSelectedNdrIds(prev => {
-                                    const next = new Set(prev);
-                                    next.delete(record.id);
-                                    return next;
-                                });
-                            }
+                            if (result.success) sent++;
 
                             setBulkProgress((i + 1) / toSend.length);
                             await new Promise(resolve => setTimeout(resolve, 600));
@@ -719,22 +706,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         );
     };
 
-    const toggleSelection = (id) => {
-        setSelectedNdrIds(prev => {
-            if (prev.includes(id)) return prev.filter(i => i !== id);
-            return [...prev, id];
-        });
-    };
-
-    const toggleSelectAll = (records) => {
-        const selectableIds = records.map(r => r.id);
-        if (selectedNdrIds.length === selectableIds.length && selectableIds.length > 0) {
-            setSelectedNdrIds([]);
-        } else {
-            setSelectedNdrIds(selectableIds);
-        }
-    };
-
     const renderNDREngine = () => {
         const filteredRecords = ndrRecords.filter(r => {
             if (ndrFilter === 'matched') return r.isMatched && !r.isSent;
@@ -745,40 +716,37 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         return (
             <View style={{ flex: 1 }}>
                 <Surface style={[styles.ndrHeader, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 }}>
-                        <View>
-                            <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>NDR Processing Hub</Text>
+                    <View style={[styles.cardHeader, { flexDirection: isDesktop ? 'row' : 'column', alignItems: isDesktop ? 'center' : 'flex-start', gap: 12 }]}>
+                        <View style={{ flex: 1 }}>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>NDR Engine</Text>
                             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Automated delivery follow-ups</Text>
                         </View>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            {ndrRecords.length > 0 && (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
-                                    <Checkbox
-                                        status={selectedNdrIds.length > 0 && selectedNdrIds.length === ndrRecords.filter(r => r.isMatched && !r.isSent).length ? 'checked' : selectedNdrIds.length > 0 ? 'indeterminate' : 'unchecked'}
-                                        onPress={() => toggleSelectAll(ndrRecords.filter(r => r.isMatched && !r.isSent))}
-                                        disabled={isBulkSending}
-                                    />
-                                    <Text variant="labelSmall" style={{ marginLeft: -4 }}>Select All</Text>
-                                </View>
-                            )}
-                            <Button 
-                                mode="outlined" 
-                                onPress={handleNDRUpload} 
+                        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                            <IconButton 
                                 icon="upload"
+                                mode="outlined"
+                                onPress={handleNDRUpload} 
                                 disabled={ndrLoading || isBulkSending}
-                            >
-                                Upload
-                            </Button>
+                                size={22}
+                                style={{ margin: 0, width: 42, height: 42 }}
+                            />
                             {ndrRecords.length > 0 && (
-                                <Button 
-                                    mode="contained" 
-                                    onPress={handleBulkSend} 
-                                    icon="rocket-launch"
-                                    loading={isBulkSending}
-                                    disabled={ndrLoading || isBulkSending || (selectedNdrIds.length === 0 && !ndrRecords.some(r => r.isMatched && !r.isSent))}
-                                >
-                                    {selectedNdrIds.length > 0 ? `Shoot (${selectedNdrIds.length})` : 'Shoot All'}
-                                </Button>
+                                <View style={{ width: 42, height: 42, justifyContent: 'center', alignItems: 'center' }}>
+                                    {isBulkSending ? (
+                                        <ActivityIndicator size={24} color={theme.colors.primary} />
+                                    ) : (
+                                        <IconButton 
+                                            icon="rocket-launch"
+                                            mode="contained"
+                                            onPress={handleBulkSend} 
+                                            disabled={ndrLoading || !ndrRecords.some(r => r.isMatched && !r.isSent)}
+                                            size={22}
+                                            containerColor={theme.colors.primary}
+                                            iconColor="#FFFFFF"
+                                            style={{ margin: 0, width: 42, height: 42 }}
+                                        />
+                                    )}
+                                </View>
                             )}
                         </View>
                     </View>
@@ -837,34 +805,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     data={filteredRecords}
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-                    renderItem={({ item }) => {
-                        const isSelected = selectedNdrIds.includes(item.id);
-                        return (
-                        <Surface 
-                            style={[
-                                styles.ndrCard, 
-                                { 
-                                    backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface, 
-                                    opacity: item.isSent ? 0.7 : 1,
-                                    borderWidth: isSelected ? 2 : 0,
-                                    borderColor: theme.colors.primary
-                                }
-                            ]} 
-                            elevation={isSelected ? 2 : 1}
-                        >
-                            <TouchableRipple
-                                onPress={() => toggleSelection(item.id)}
-                                disabled={item.isSent || !item.isMatched || isBulkSending}
-                                style={{ flex: 1 }}
-                            >
+                    renderItem={({ item }) => (
+                        <Surface style={[styles.ndrCard, { backgroundColor: theme.colors.surface, opacity: item.isSent ? 0.7 : 1 }]} elevation={1}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12 }}>
-                                <View style={{ marginRight: 8 }}>
-                                    <Checkbox
-                                        status={isSelected ? 'checked' : 'unchecked'}
-                                        onPress={() => toggleSelection(item.id)}
-                                        disabled={item.isSent || !item.isMatched || isBulkSending}
-                                    />
-                                </View>
                                 <View style={{ flex: 1 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                         <View style={{ flex: 1 }}>
@@ -879,7 +822,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                         )}
                                     </View>
                                     <Text variant="bodyMedium">{item.customerName || 'Customer not found'}</Text>
-                                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+                                    <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: isDesktop ? 12 : 4, marginTop: 4 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                             <Icon source="truck-outline" size={14} color={theme.colors.onSurfaceVariant} />
                                             <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant }}>{item.carrier}</Text>
@@ -889,11 +832,15 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant }}>{item.location}</Text>
                                         </View>
                                     </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 8 }}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>AWB: {item.awb}</Text>
-                                        <Text variant="labelSmall" style={{ marginLeft: 12, color: theme.colors.secondary }}>Attempt: {item.attempts}</Text>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.secondary }}>Att: {item.attempts}</Text>
                                     </View>
-                                    <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 6, fontWeight: '500' }}>Reason: {item.reason}</Text>
+                                    {item.reason ? (
+                                        <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 6, fontSize: 10 }} numberOfLines={2}>
+                                            Reason: {item.reason}
+                                        </Text>
+                                    ) : null}
                                         </View>
                                     </View>
                                 </View>
@@ -929,10 +876,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     </View>
                                 </View>
                             </View>
-                            </TouchableRipple>
                         </Surface>
-                        );
-                    }}
+                    )}
                     ListEmptyComponent={() => (
                         <View style={{ alignItems: 'center', marginTop: 60, opacity: 0.5 }}>
                             <Icon source={ndrRecords.length > 0 ? "filter-variant-remove" : "file-upload-outline"} size={80} color={theme.colors.onSurfaceVariant} />
