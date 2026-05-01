@@ -394,6 +394,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 awb: row['AWB Number']?.toString() || '',
                 reason: row['Details'] || row['Reason'] || 'N/A',
                 status: row['Order Status'] || 'Exception',
+                attempts: row['Attempts'] || '0',
+                carrier: row['Carrier'] || 'N/A',
+                location: `${row['City'] || ''}, ${row['State'] || ''}`.trim().replace(/^, |, $/g, ''),
                 customerName: '', // To be filled from Firestore
                 phone: '',        // To be filled from Firestore
                 isMatched: false,
@@ -416,55 +419,76 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         const updatedRecords = [...records];
         let matchedCount = 0;
 
-        try {
-            for (let i = 0; i < updatedRecords.length; i++) {
-                const rec = updatedRecords[i];
-                const cleanOrderNum = rec.orderNumber.replace('#', '').trim();
-                
-                // Query Firestore
-                const q = query(
-                    collection(db, "orders"),
-                    where("orderNumber", "==", cleanOrderNum),
-                    limit(1)
-                );
-                
-                // Using getDocs here since we don't need real-time for this
-                const querySnapshot = await getDocs(q);
-                
-                if (!querySnapshot.empty) {
-                    const orderData = querySnapshot.docs[0].data();
-                    
-                    // Check if NDR already sent for this order
-                    const qMsg = query(
-                        collection(db, "whatsapp_messages"),
-                        where("orderNumber", "==", cleanOrderNum),
-                        where("templateName", "==", "alert_shipping_ndr"),
-                        limit(1)
-                    );
-                    const msgSnapshot = await getDocs(qMsg);
+        // Future-Proof Industry Standard: Batch Processing (30 items at a time - Firestore 'in' limit)
+        const CHUNK_SIZE = 30;
+        const chunks = [];
+        for (let i = 0; i < updatedRecords.length; i += CHUNK_SIZE) {
+            chunks.push(updatedRecords.slice(i, i + CHUNK_SIZE));
+        }
 
-                    updatedRecords[i] = {
-                        ...rec,
-                        customerName: orderData.customerName || 'Customer',
-                        phone: orderData.phone || '',
-                        isMatched: true,
-                        isSent: !msgSnapshot.empty
-                    };
-                    matchedCount++;
-                }
+        try {
+            for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+                const chunk = chunks[chunkIdx];
+                const cleanNums = chunk.map(r => r.orderNumber.replace('#', '').trim()).filter(n => n);
                 
-                // Update state periodically to show progress
-                if (i % 5 === 0 || i === updatedRecords.length - 1) {
-                    setNdrRecords([...updatedRecords]);
-                    setNdrStats({
-                        total: records.length,
-                        matched: matchedCount,
-                        pending: records.length - matchedCount
-                    });
+                if (cleanNums.length === 0) continue;
+
+                // 1. Batch fetch orders
+                const qOrders = query(
+                    collection(db, "orders"),
+                    where("orderNumber", "in", cleanNums)
+                );
+                const orderSnap = await getDocs(qOrders);
+                const orderMap = {};
+                orderSnap.forEach(doc => {
+                    const data = doc.data();
+                    orderMap[data.orderNumber] = data;
+                });
+
+                // 2. Batch fetch sent messages for these orders
+                const qMsgs = query(
+                    collection(db, "whatsapp_messages"),
+                    where("orderNumber", "in", cleanNums),
+                    where("templateName", "==", "alert_shipping_ndr")
+                );
+                const msgSnap = await getDocs(qMsgs);
+                const sentSet = new Set();
+                msgSnap.forEach(doc => {
+                    sentSet.add(doc.data().orderNumber);
+                });
+
+                // 3. Update records in this chunk
+                for (let i = 0; i < chunk.length; i++) {
+                    const recIdx = (chunkIdx * CHUNK_SIZE) + i;
+                    const cleanNum = updatedRecords[recIdx].orderNumber.replace('#', '').trim();
+                    const orderData = orderMap[cleanNum];
+
+                    if (orderData) {
+                        updatedRecords[recIdx] = {
+                            ...updatedRecords[recIdx],
+                            customerName: orderData.customerName || 'Customer',
+                            phone: orderData.phone || '',
+                            isMatched: true,
+                            isSent: sentSet.has(cleanNum)
+                        };
+                        matchedCount++;
+                    }
                 }
+
+                // Smooth Progress Update
+                setNdrRecords([...updatedRecords]);
+                setNdrStats({
+                    total: records.length,
+                    matched: matchedCount,
+                    pending: records.length - matchedCount
+                });
+                
+                // Small yield to keep UI responsive during large batches
+                await new Promise(resolve => setTimeout(resolve, 50));
             }
         } catch (error) {
-            console.error("Error matching orders:", error);
+            console.error("Industrial Batch Matching Error:", error);
+            showSnackbar("Error during batch matching: " + error.message);
         } finally {
             setNdrLoading(false);
         }
@@ -657,8 +681,21 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                         )}
                                     </View>
                                     <Text variant="bodyMedium">{item.customerName || 'Customer not found'}</Text>
-                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>AWB: {item.awb}</Text>
-                                    <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 4 }}>{item.reason}</Text>
+                                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source="truck-outline" size={14} color={theme.colors.onSurfaceVariant} />
+                                            <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant }}>{item.carrier}</Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
+                                            <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant }}>{item.location}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>AWB: {item.awb}</Text>
+                                        <Text variant="labelSmall" style={{ marginLeft: 12, color: theme.colors.secondary }}>Attempt: {item.attempts}</Text>
+                                    </View>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 6, fontWeight: '500' }}>Reason: {item.reason}</Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                                     <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{item.phone || '---'}</Text>
