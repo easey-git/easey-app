@@ -40,8 +40,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [ndrLoading, setNdrLoading] = useState(false);
     const [ndrStats, setNdrStats] = useState({ total: 0, matched: 0, pending: 0 });
     const [ndrFilter, setNdrFilter] = useState('all'); // all | matched | unsent | sent
-    const [isBulkSending, setIsBulkSending] = useState(false);
-    const [bulkProgress, setBulkProgress] = useState(0);
+
     const [historyLoading, setHistoryLoading] = useState(false);
 
     // Message Viewer State
@@ -666,45 +665,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         }
     };
 
-    const handleBulkSend = async () => {
-        const toSend = ndrRecords.filter(r => r.isMatched && !r.isSent);
 
-        if (toSend.length === 0) {
-            showSnackbar("No pending matched records to send.");
-            return;
-        }
-
-        Alert.alert(
-            "Bulk Send",
-            `Are you sure you want to shoot templates to all ${toSend.length} matched customers?`,
-            [
-                { text: "Cancel", style: "cancel" },
-                { 
-                    text: "Shoot All", 
-                    onPress: async () => {
-                        setIsBulkSending(true);
-                        setBulkProgress(0);
-                        let sent = 0;
-
-                        for (let i = 0; i < toSend.length; i++) {
-                            const record = toSend[i];
-                            setSendingId(record.id);
-                            
-                            const result = await sendNDRTemplate(record);
-                            if (result.success) sent++;
-
-                            setBulkProgress((i + 1) / toSend.length);
-                            await new Promise(resolve => setTimeout(resolve, 600));
-                        }
-
-                        setIsBulkSending(false);
-                        setSendingId(null);
-                        showSnackbar(`Bulk send complete: ${sent} messages sent successfully.`);
-                    }
-                }
-            ]
-        );
-    };
 
     const renderNDREngine = () => {
         const filteredRecords = ndrRecords.filter(r => {
@@ -726,42 +687,14 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 icon="upload"
                                 mode="outlined"
                                 onPress={handleNDRUpload} 
-                                disabled={ndrLoading || isBulkSending}
+                                disabled={ndrLoading}
                                 size={22}
                                 style={{ margin: 0, width: 42, height: 42 }}
                             />
-                            {ndrRecords.length > 0 && (
-                                <View style={{ width: 42, height: 42, justifyContent: 'center', alignItems: 'center' }}>
-                                    {isBulkSending ? (
-                                        <ActivityIndicator size={24} color={theme.colors.primary} />
-                                    ) : (
-                                        <IconButton 
-                                            icon="rocket-launch"
-                                            mode="contained"
-                                            onPress={handleBulkSend} 
-                                            disabled={ndrLoading || !ndrRecords.some(r => r.isMatched && !r.isSent)}
-                                            size={22}
-                                            containerColor={theme.colors.primary}
-                                            iconColor="#FFFFFF"
-                                            style={{ margin: 0, width: 42, height: 42 }}
-                                        />
-                                    )}
-                                </View>
-                            )}
                         </View>
                     </View>
 
-                    {isBulkSending && (
-                        <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <Text variant="labelSmall">Sending Messages...</Text>
-                                <Text variant="labelSmall">{Math.round(bulkProgress * 100)}%</Text>
-                            </View>
-                            <View style={{ height: 4, backgroundColor: theme.colors.surfaceVariant, borderRadius: 2, overflow: 'hidden' }}>
-                                <View style={{ height: '100%', width: `${bulkProgress * 100}%`, backgroundColor: theme.colors.primary }} />
-                            </View>
-                        </View>
-                    )}
+
 
                     {ndrRecords.length > 0 && (
                         <View style={styles.ndrFilterRow}>
@@ -852,7 +785,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             mode="contained-tonal"
                                             size={20}
                                             onPress={() => openChat({ phone: item.phone, customerName: item.customerName })}
-                                            disabled={!item.isMatched || isBulkSending}
+                                            disabled={!item.isMatched}
                                         />
                                         <IconButton 
                                             icon={item.isSent ? "check-all" : "send"} 
@@ -868,7 +801,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                                 }
                                             }}
                                             loading={sendingId === item.id}
-                                            disabled={!item.isMatched || item.isSent || sendingId === item.id || isBulkSending}
+                                            disabled={!item.isMatched || item.isSent || sendingId === item.id}
                                             iconColor={item.isSent ? theme.colors.primary : '#FFFFFF'}
                                             containerColor={item.isSent ? 'transparent' : theme.colors.primary}
                                             size={20}
