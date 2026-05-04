@@ -32,12 +32,12 @@ const getTemplateComponents = (type, order, payload, awb) => {
     // Body Param 1: Customer Name
     // Body Param 2: Order Number
     // Body Param 3: Product Name
-    // Body Param 4: AWB (Tracking Number)
+    // Body Param 4: Courier Name
     let bodyParams = [
         { type: 'text', text: customer },
         { type: 'text', text: orderId },
         { type: 'text', text: productDisplay },
-        { type: 'text', text: awb || order.awb || 'available soon' }
+        { type: 'text', text: courier }
     ];
 
     // Specialized Body Params for NDR (Template only has 3 variables)
