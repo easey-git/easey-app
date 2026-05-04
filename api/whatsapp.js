@@ -114,6 +114,7 @@ module.exports = async (req, res) => {
 
         if (type === 'template') logData.templateName = templateName;
         if (orderNumber) logData.orderNumber = orderNumber;
+        if (req.body.metadata) logData.metadata = req.body.metadata;
 
         await db.collection('whatsapp_messages').add(logData);
 

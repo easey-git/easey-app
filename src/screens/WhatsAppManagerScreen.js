@@ -422,12 +422,12 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 return {
                     id: `history-${index}`,
                     orderNumber: rawNum,
-                    awb: order?.awb || 'Historical',
-                    reason: 'Sent previously',
+                    awb: msg.metadata?.awb || order?.awb || 'Historical',
+                    reason: msg.metadata?.reason || 'Sent previously',
                     status: order?.status || 'Sent',
-                    attempts: order?.attempts || '-',
-                    carrier: order?.carrier || '-',
-                    location: `${order?.city || ''}, ${order?.state || ''}`.trim().replace(/^, |, $/g, ''),
+                    attempts: msg.metadata?.attempts || order?.attempts || '-',
+                    carrier: msg.metadata?.carrier || order?.carrier || '-',
+                    location: msg.metadata?.location || `${order?.city || ''}, ${order?.state || ''}`.trim().replace(/^, |, $/g, ''),
                     customerName: order?.customerName || 'Customer',
                     phone: msg.phoneNormalized || msg.phone,
                     isMatched: true,
@@ -640,6 +640,13 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     templateName: 'alert_shipping_ndr',
                     orderNumber: record.orderNumber.toString().replace('#', '').trim(),
                     languageCode: 'en',
+                    metadata: {
+                        awb: record.awb,
+                        carrier: record.carrier,
+                        attempts: record.attempts,
+                        reason: record.reason,
+                        location: record.location
+                    },
                     components: [
                         {
                             type: 'body',
