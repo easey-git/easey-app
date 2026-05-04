@@ -109,17 +109,24 @@ module.exports = async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
 
-        const phone = order.phone || order.phoneNormalized;
-        if (!phone) {
-            return res.status(400).json({ error: 'No phone number found for order' });
+        let phone = order.phoneNormalized || order.phone || '';
+        phone = phone.toString().replace(/\D/g, '');
+        if (phone.length === 10) phone = '91' + phone;
+        if (phone.length === 12 && phone.startsWith('0')) phone = '91' + phone.substring(1);
+
+        if (!phone || phone.length < 10) {
+            return res.status(400).json({ error: 'Invalid or missing phone number' });
         }
 
         // 4. Idempotency Check (Prevent duplicate alerts)
-        // In-Transit is 'one-time only' per order. NDR/OFD have a 24h cooldown.
         const timeLimit = automationType === 'In-Transit' ? null : new Date(Date.now() - 24 * 60 * 60 * 1000);
         
+        const cleanNum = order.orderNumber.toString().replace('#', '').trim();
+        const searchArray = [order.orderNumber.toString(), cleanNum, `#${cleanNum}`];
+        if (!isNaN(cleanNum)) searchArray.push(Number(cleanNum));
+
         let dupCheckQuery = db.collection('whatsapp_messages')
-            .where('orderNumber', '==', order.orderNumber.toString())
+            .where('orderNumber', 'in', [...new Set(searchArray)])
             .where('templateName', '==', templateName);
 
         if (timeLimit) {
@@ -171,33 +178,40 @@ module.exports = async (req, res) => {
             components[0].parameters.push({ type: 'text', text: payload.ndr_reason || 'Address issue or customer not available' });
         }
 
-        const waResponse = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+        const waResponse = await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${whatsappToken}`,
+                'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                messaging_product: "whatsapp",
-                to: phone.toString().replace(/\D/g, ''),
-                type: "template",
+                messaging_product: 'whatsapp',
+                to: phone,
+                type: 'template',
                 template: {
                     name: templateName,
-                    language: { code: "en" },
+                    language: { code: 'en' },
                     components: components
                 }
             })
         });
 
         const waData = await waResponse.json();
-
+        
         if (!waResponse.ok) {
-            console.error('[Shipping Webhook] WhatsApp API Error:', JSON.stringify(waData));
-            return res.status(500).json({ error: 'WhatsApp delivery failed', details: waData });
+            console.error('[Shipping Webhook] Meta API Error:', JSON.stringify(waData));
+            if (payload.log_id) {
+                await db.collection('webhook_logs').doc(payload.log_id).update({
+                    automationStatus: 'FAILED: META_API_ERROR',
+                    errorDetails: waData.error?.message || 'Unknown Meta Error'
+                });
+            }
+            return res.status(waResponse.status).json({ error: 'WhatsApp delivery failed', details: waData });
         }
 
         // 6. Log to Firestore for Dashboard Visibility
         const logEntry = {
+            phoneNormalized: phone,
             phone: phone,
             customerName: order.customerName || 'Customer',
             orderNumber: order.orderNumber.toString(),
