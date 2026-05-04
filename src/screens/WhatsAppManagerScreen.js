@@ -981,7 +981,10 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 <Surface style={[styles.ndrHeader, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
                     <View style={[styles.cardHeader, { flexDirection: isDesktop ? 'row' : 'column', alignItems: isDesktop ? 'center' : 'flex-start', gap: 12 }]}>
                         <View style={{ flex: 1 }}>
-                            <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>NDR Engine</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>NDR Engine</Text>
+                                <Badge style={{ backgroundColor: '#4ade80', color: '#064e3b' }}>LIVE AUTOMATION</Badge>
+                            </View>
                             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Automated delivery follow-ups</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
@@ -1141,7 +1144,10 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 <Surface style={[styles.ndrHeader, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
                     <View style={[styles.cardHeader, { flexDirection: isDesktop ? 'row' : 'column', alignItems: isDesktop ? 'center' : 'flex-start', gap: 12 }]}>
                         <View style={{ flex: 1 }}>
-                            <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>OFD Engine</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>OFD Engine</Text>
+                                <Badge style={{ backgroundColor: '#4ade80', color: '#064e3b' }}>LIVE AUTOMATION</Badge>
+                            </View>
                             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Out For Delivery alerts</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
