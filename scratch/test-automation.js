@@ -12,7 +12,8 @@ const testAutomation = async (status, label) => {
             status: status,
             awb_number: `TEST_AWB_${Math.floor(Math.random() * 10000)}`,
             courier_name: 'Delhivery',
-            ndr_reason: status === 'ndr' ? 'Customer not available' : undefined
+            ndr_reason: status === 'ndr' ? 'Customer not available' : undefined,
+            is_test: true // Bypass duplicate check for testing
         });
         console.log(`✅ Success: ${JSON.stringify(response.data)}`);
     } catch (error) {
