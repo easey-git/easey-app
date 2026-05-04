@@ -129,21 +129,21 @@ module.exports = async (req, res) => {
         const templateName = statusTemplateMap[automationType];
 
         // Find Order
-        let order = null;
+        let orderDoc = null;
         if (awb) {
             const q = await db.collection('orders').where('awb', '==', awb).limit(1).get();
-            if (!q.empty) order = q.docs[0].data();
+            if (!q.empty) orderDoc = q.docs[0];
         }
         
-        if (!order && orderNum) {
+        if (!orderDoc && orderNum) {
             const cleanNum = orderNum.replace('#', '').trim();
             const searchArray = [orderNum, cleanNum];
             if (!isNaN(cleanNum)) searchArray.push(Number(cleanNum));
             const q = await db.collection('orders').where('orderNumber', 'in', [...new Set(searchArray)]).limit(1).get();
-            if (!q.empty) order = q.docs[0].data();
+            if (!q.empty) orderDoc = q.docs[0];
         }
 
-        if (!order) {
+        if (!orderDoc) {
             await db.collection('webhook_logs').doc(payload.log_id).update({ 
                 automationStatus: 'FAILED: ORDER_NOT_FOUND',
                 debugInfo: `Searched for ${orderNum}`
@@ -151,8 +151,10 @@ module.exports = async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
 
+        const order = orderDoc.data();
+
         // 4. Update Order with latest Tracking Info (Persistence)
-        await order.ref.update({
+        await orderDoc.ref.update({
             awb: awb,
             carrier: payload.courier_name || order.carrier || 'Delhivery',
             lastStatus: status,
