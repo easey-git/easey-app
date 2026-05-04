@@ -184,9 +184,10 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     status: log.status || 'Active',
                     carrier: log.payload?.courier_name || '-',
                     location: log.payload?.location || 'Live Update',
-                    customerName: 'Live Event',
+                    customerName: log.customerName || 'Live Event',
+                    automationStatus: log.automationStatus || 'PENDING',
                     phone: log.payload?.phone || '',
-                    isSent: true,
+                    isSent: log.automationStatus === 'SUCCESS',
                     timestamp: log.timestamp
                 };
 
@@ -1093,7 +1094,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 <Surface style={[styles.listCard, { backgroundColor: theme.colors.surface, marginTop: 16 }]} elevation={1}>
                     <View style={styles.cardHeader}>
                         <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>Recent Activity</Text>
-                        <Button mode="outlined" onPress={() => loadLogisticsData(true)} loading={historyLoading}>Refresh Hub</Button>
                     </View>
                     
                     {[...ndrRecords, ...ofdRecords, ...inTransitRecords].sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)).slice(0, 5).map((item, index) => (
@@ -1133,15 +1133,17 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const renderInTransitEngine = () => {
         return (
             <View style={{ flex: 1 }}>
-                <View style={[styles.engineHeader, { paddingHorizontal: 16, paddingVertical: 12 }]}>
-                    <View style={styles.badgeContainer}>
-                        <Icon source="robot" size={16} color="#4ade80" />
-                        <Text style={styles.automationBadge}>LIVE AUTOMATION ACTIVE</Text>
+                <Surface style={[styles.ndrHeader, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                    <View style={[styles.cardHeader, { flexDirection: isDesktop ? 'row' : 'column', alignItems: isDesktop ? 'center' : 'flex-start', gap: 12 }]}>
+                        <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>In-Transit Engine</Text>
+                                <Badge style={{ backgroundColor: '#4ade80', color: '#064e3b' }}>SYNCED</Badge>
+                            </View>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Shipments moving through the network</Text>
+                        </View>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <Button mode="outlined" compact onPress={() => loadLogisticsData(true)} loading={inTransitLoading}>Refresh</Button>
-                    </View>
-                </View>
+                </Surface>
 
                 <FlatList
                     data={inTransitRecords}
@@ -1152,11 +1154,17 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             <View style={styles.ndrRow}>
                                 <Avatar.Icon size={40} icon="truck-outline" style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.primary} />
                                 <View style={{ flex: 1, marginLeft: 16 }}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>#{item.orderNumber}</Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>#{item.orderNumber}</Text>
+                                            <Badge style={{ backgroundColor: item.automationStatus === 'SUCCESS' ? '#4ade80' : '#f59e0b', color: '#fff' }}>
+                                                {item.automationStatus || 'SYNCED'}
+                                            </Badge>
+                                        </View>
                                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.timestamp?.toDate ? item.timestamp.toDate().toLocaleDateString() : 'Active'}</Text>
                                     </View>
-                                    <Text variant="bodyMedium" style={{ marginTop: 4 }}>{item.status}</Text>
+                                    <Text variant="bodyMedium" style={{ marginTop: 4, flexWrap: 'wrap', fontWeight: '500' }}>{item.customerName}</Text>
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.status}</Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                                         <Icon source="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
                                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>{item.location}</Text>
@@ -1236,7 +1244,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             value={logisticsSubTab}
                             onValueChange={setLogisticsSubTab}
                             density="medium"
-                            style={{ minWidth: isDesktop ? '100%' : 700 }}
+                            style={{ minWidth: isDesktop ? '100%' : 900 }} // Increased to 900 for full text safety
                             buttons={[
                                 { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
                                 { value: 'intransit', label: 'In-Transit', icon: 'truck-outline' },
@@ -1274,19 +1282,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>NDR Engine</Text>
-                                <Badge style={{ backgroundColor: '#4ade80', color: '#064e3b' }}>LIVE AUTOMATION</Badge>
+                                <Badge style={{ backgroundColor: '#4ade80', color: '#064e3b' }}>SYNCED</Badge>
                             </View>
                             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Automated delivery follow-ups</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                            <IconButton 
-                                icon="upload"
-                                mode="outlined"
-                                onPress={handleNDRUpload} 
-                                disabled={ndrLoading}
-                                size={22}
-                                style={{ margin: 0, width: 42, height: 42 }}
-                            />
                         </View>
                     </View>
 
@@ -1318,13 +1316,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 >
                                     Sent ({ndrRecords.filter(r => r.isSent).length})
                                 </Chip>
-                                <IconButton 
-                                    icon="refresh"
-                                    onPress={() => loadNDRHistory(true)} 
-                                    iconColor={theme.colors.error}
-                                    size={20}
-                                    style={{ margin: 0 }}
-                                />
                             </ScrollView>
                         </View>
                     )}
@@ -1356,9 +1347,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             <Icon source="truck-outline" size={14} color={theme.colors.onSurfaceVariant} />
                                             <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant }}>{item.carrier}</Text>
                                         </View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
                                             <Icon source="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
-                                            <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant }}>{item.location}</Text>
+                                            <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant, flexWrap: 'wrap', flex: 1 }}>{item.location}</Text>
                                         </View>
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 8 }}>
@@ -1437,19 +1428,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>OFD Engine</Text>
-                                <Badge style={{ backgroundColor: '#4ade80', color: '#064e3b' }}>LIVE AUTOMATION</Badge>
+                                <Badge style={{ backgroundColor: '#4ade80', color: '#064e3b' }}>SYNCED</Badge>
                             </View>
                             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Out For Delivery alerts</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                            <IconButton 
-                                icon="upload"
-                                mode="outlined"
-                                onPress={handleOFDUpload} 
-                                disabled={ofdLoading}
-                                size={22}
-                                style={{ margin: 0, width: 42, height: 42 }}
-                            />
                         </View>
                     </View>
 
@@ -1479,13 +1460,6 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                 >
                                     Sent ({ofdRecords.filter(r => r.isSent).length})
                                 </Chip>
-                                <IconButton 
-                                    icon="refresh"
-                                    onPress={() => loadOFDHistory(true)} 
-                                    iconColor={theme.colors.error}
-                                    size={20}
-                                    style={{ margin: 0 }}
-                                />
                             </ScrollView>
                         </View>
                     )}

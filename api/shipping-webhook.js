@@ -40,14 +40,16 @@ module.exports = async (req, res) => {
         console.log('[Shipping Webhook] Received payload:', JSON.stringify(payload));
 
         // NEW: Log raw payload for Live Dashboard Monitoring (with 7-day TTL)
-        await db.collection('webhook_logs').add({
+        const logRef = await db.collection('webhook_logs').add({
             source: 'nimbuspost',
             payload: payload,
             timestamp: admin.firestore.Timestamp.now(),
             expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
             status: payload.status || 'unknown',
-            awb: payload.awb_number || payload.awb || 'N/A'
+            awb: payload.awb_number || payload.awb || 'N/A',
+            automationStatus: 'PENDING'
         });
+        payload.log_id = logRef.id;
 
         // 1. Extract Core Data (Adapt to NimbusPost format)
         // Standard NimbusPost webhook fields: status, awb, order_number
@@ -186,7 +188,7 @@ module.exports = async (req, res) => {
         }
 
         // 6. Log to Firestore for Dashboard Visibility
-        await db.collection('whatsapp_messages').add({
+        const logEntry = {
             phone: phone,
             orderNumber: order.orderNumber.toString(),
             direction: 'outbound',
@@ -202,7 +204,17 @@ module.exports = async (req, res) => {
                 awb: awb,
                 automationType
             }
-        });
+        };
+
+        await db.collection('whatsapp_messages').add(logEntry);
+
+        // UPDATE original webhook_log with result
+        if (payload.log_id) {
+            await db.collection('webhook_logs').doc(payload.log_id).update({
+                automationStatus: 'SUCCESS',
+                customerName: order.customerName || 'Customer'
+            });
+        }
 
         console.info(`[Shipping Webhook] Successfully triggered auto-${automationType} for Order ${order.orderNumber}`);
         return res.status(200).json({ success: true, automationType });
