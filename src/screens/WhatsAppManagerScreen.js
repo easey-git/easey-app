@@ -183,9 +183,10 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 ...doc.data(),
                 isSent: true,
                 status: 'In Transit',
-                carrier: doc.data().metadata?.courier || '-',
-                location: 'Tracking Active',
-                customerName: doc.data().customerName || 'Customer'
+                carrier: doc.data().metadata?.courier || doc.data().metadata?.carrier || '-',
+                location: doc.data().metadata?.location || 'Tracking Active',
+                customerName: doc.data().customerName || 'Customer',
+                awb: doc.data().metadata?.awb || 'N/A'
             }));
             setInTransitRecords(records);
         });
@@ -197,8 +198,10 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 ...doc.data(),
                 isSent: true,
                 status: 'Out For Delivery',
-                carrier: doc.data().metadata?.carrier || '-',
-                location: doc.data().metadata?.location || 'Local'
+                carrier: doc.data().metadata?.carrier || doc.data().metadata?.courier || '-',
+                location: doc.data().metadata?.location || 'Local',
+                customerName: doc.data().customerName || 'Customer',
+                awb: doc.data().metadata?.awb || 'N/A'
             }));
             setOfdRecords(records);
         });
@@ -210,8 +213,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 ...doc.data(),
                 isSent: true,
                 status: 'NDR Alert Sent',
-                carrier: doc.data().metadata?.carrier || '-',
-                location: doc.data().metadata?.location || 'Local'
+                carrier: doc.data().metadata?.carrier || doc.data().metadata?.courier || '-',
+                location: doc.data().metadata?.location || 'Local',
+                customerName: doc.data().customerName || 'Customer',
+                awb: doc.data().metadata?.awb || 'N/A',
+                attempts: doc.data().metadata?.attempts || '1'
             }));
             setNdrRecords(records);
         });
@@ -226,6 +232,59 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             unsubNDR();
         };
     }, [activityLimit]);
+    
+    // NAME RECOVERY SYSTEM: Hydrate 'Customer' placeholders with real names
+    useEffect(() => {
+        const hydrate = async () => {
+            const allRecords = [...inTransitRecords, ...ofdRecords, ...ndrRecords];
+            const missing = allRecords.filter(r => r.customerName === 'Customer' || !r.customerName);
+            if (missing.length === 0) return;
+
+            const orderNums = [...new Set(missing.map(r => r.orderNumber).filter(n => n))];
+            if (orderNums.length === 0) return;
+
+            const orderMap = {};
+            const CHUNK_SIZE = 5; // Reduced chunk size because we are sending 2 variants per order
+            for (let i = 0; i < orderNums.length; i += CHUNK_SIZE) {
+                const chunk = orderNums.slice(i, i + CHUNK_SIZE);
+                const queryValues = [];
+                chunk.forEach(n => {
+                    const clean = n.toString().replace('#', '').trim();
+                    queryValues.push(clean);
+                    queryValues.push(`#${clean}`);
+                    if (!isNaN(clean) && clean !== '') queryValues.push(Number(clean));
+                });
+
+                const q = query(collection(db, "orders"), where("orderNumber", "in", [...new Set(queryValues)]));
+                const snap = await getDocs(q);
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    const name = data.customerName || 'Customer';
+                    if (data.orderNumber) {
+                        orderMap[data.orderNumber.toString().replace('#', '')] = name;
+                    }
+                });
+            }
+
+            const updateList = (list, setter) => {
+                const newList = list.map(r => {
+                    if (r.customerName === 'Customer' || !r.customerName) {
+                        const cleanNum = r.orderNumber?.toString().replace('#', '');
+                        return { ...r, customerName: orderMap[cleanNum] || 'Customer' };
+                    }
+                    return r;
+                });
+                setter(newList);
+            };
+
+            updateList(inTransitRecords, setInTransitRecords);
+            updateList(ofdRecords, setOfdRecords);
+            updateList(ndrRecords, setNdrRecords);
+        };
+
+        const timer = setTimeout(hydrate, 500); // Debounce to allow multiple snapshots to settle
+        return () => clearTimeout(timer);
+    }, [inTransitRecords.length, ofdRecords.length, ndrRecords.length]);
 
     // Fetch Chat History
     useEffect(() => {
