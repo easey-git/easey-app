@@ -151,7 +151,15 @@ module.exports = async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
 
-        // Phone Normalization
+        // 4. Update Order with latest Tracking Info (Persistence)
+        await order.ref.update({
+            awb: awb,
+            carrier: payload.courier_name || order.carrier || 'Delhivery',
+            lastStatus: status,
+            updatedAt: admin.firestore.Timestamp.now()
+        });
+
+        // 5. Phone Normalization
         let phone = order.phoneNormalized || order.phone || '';
         phone = phone.toString().replace(/\D/g, '');
         if (phone.length === 10) phone = '91' + phone;

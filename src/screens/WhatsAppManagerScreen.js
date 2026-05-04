@@ -224,10 +224,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         });
 
         // 4. Fetch NDR Alerts (Customer Responses)
-        // Note: Removed orderBy to avoid immediate composite index requirement
+        // Industry Standard: Server-side sort enabled
         const qAlerts = query(
             collection(db, "orders"),
             where("isNdrAlert", "==", true),
+            orderBy("updatedAt", "desc"),
             limit(50)
         );
         const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
@@ -235,15 +236,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 id: doc.id,
                 ...doc.data()
             }));
-            
-            // Sort in memory instead of Firestore index
-            const sorted = records.sort((a, b) => {
-                const timeA = a.updatedAt?.toDate ? a.updatedAt.toDate() : (a.createdAt?.toDate ? a.createdAt.toDate() : 0);
-                const timeB = b.updatedAt?.toDate ? b.updatedAt.toDate() : (b.createdAt?.toDate ? b.createdAt.toDate() : 0);
-                return timeB - timeA;
-            });
-            
-            setAlertRecords(sorted);
+            setAlertRecords(records);
         }, (error) => {
             console.error("Alerts Listener Error:", error);
         });
