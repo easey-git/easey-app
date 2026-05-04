@@ -29,19 +29,20 @@ const getTemplateComponents = (type, order, payload, awb) => {
     const customer = order.customerName || 'Customer';
     const orderId = order.orderNumber.toString();
 
-    // Body Param 1: Customer Name
-    // Body Param 2: Order Number
-    // Body Param 3: Product Name
-    // Body Param 4: Courier Name
+    // Default Body Params (Name, Order#, Product)
     let bodyParams = [
         { type: 'text', text: customer },
         { type: 'text', text: orderId },
-        { type: 'text', text: productDisplay },
-        { type: 'text', text: courier }
+        { type: 'text', text: productDisplay }
     ];
 
-    // Specialized Body Params for NDR (Template only has 3 variables)
-    if (type === 'NDR') {
+    // Position {{4}} varies by template
+    if (type === 'In-Transit') {
+        bodyParams.push({ type: 'text', text: courier }); // {{4}} = Courier Name
+    } else if (type === 'OFD') {
+        bodyParams.push({ type: 'text', text: awb || order.awb || 'available soon' }); // {{4}} = AWB
+    } else if (type === 'NDR') {
+        // NDR only has 3 variables (Name, Order#, Reason)
         bodyParams = [
             { type: 'text', text: customer },
             { type: 'text', text: orderId },
