@@ -187,23 +187,37 @@ module.exports = async (req, res) => {
 
             // 3. NDR Action or Address Edit
             else if (isNdrReattempt || isAddressEdit) {
-                const action = isNdrReattempt ? 'Re-attempt Delivery' : 'Address Update';
+                const actionLabel = isNdrReattempt ? 'Re-attempted' : 'Updated';
+                const actionType = isNdrReattempt ? 'Re-attempt Delivery' : 'Address Update';
+                
                 await orderDoc.ref.update({
-                    verificationStatus: 'ndr_action_required', // ALERT TAB
+                    isNdrAlert: true, // Dedicated flag for the new Alerts tab
+                    ndr_alert_type: isNdrReattempt ? 'REATTEMPT' : 'ADDRESS_UPDATE',
                     ndr_status: isNdrReattempt ? 'reattempt_requested' : 'address_update_requested',
-                    ndr_customer_note: `Customer requested: ${action}`,
+                    ndr_customer_note: `Customer requested: ${actionType}`,
                     updatedAt: admin.firestore.Timestamp.now()
                 });
-                await sendFCMNotifications(`NDR Action: ${action} 🚨`, `Order #${orderData.orderNumber} needs attention.`, { orderId: orderDoc.id });
+
+                await sendFCMNotifications(`NDR Alert: ${actionType} 🚨`, `Order #${orderData.orderNumber} needs attention.`, { orderId: orderDoc.id });
+                
+                // Confirm to customer (Param 1 = Action)
                 await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [
-                    { type: 'body', parameters: [{ type: 'text', text: orderData.customerName || 'Customer' }] }
+                    { type: 'body', parameters: [{ type: 'text', text: actionLabel }] }
                 ]);
             }
 
             // 4. Cancel
             else if (isCancel) {
-                await orderDoc.ref.update({ status: 'CANCELLED', verificationStatus: 'cancelled', updatedAt: admin.firestore.Timestamp.now() });
+                await orderDoc.ref.update({ 
+                    status: 'CANCELLED', 
+                    verificationStatus: 'cancelled', 
+                    isNdrAlert: true, // Also show in the new Alerts tab
+                    ndr_alert_type: 'CANCEL',
+                    updatedAt: admin.firestore.Timestamp.now() 
+                });
+
                 await sendFCMNotifications('Order Cancelled ❌', `Order #${orderData.orderNumber} was cancelled.`, { orderId: orderDoc.id });
+                
                 await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.COD_CANCEL, [
                     { type: 'body', parameters: [
                         { type: 'text', text: orderData.customerName || 'Customer' },

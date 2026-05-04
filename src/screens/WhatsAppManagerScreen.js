@@ -53,6 +53,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [inTransitLoading, setInTransitLoading] = useState(false);
     const [logisticsSubTab, setLogisticsSubTab] = useState('overview'); // overview | intransit | ofd | ndr | logs
 
+    const [alertRecords, setAlertRecords] = useState([]);
     const [webhookLogs, setWebhookLogs] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -222,6 +223,21 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             setNdrRecords(records);
         });
 
+        // 4. Fetch NDR Alerts (Customer Responses)
+        const qAlerts = query(
+            collection(db, "orders"),
+            where("isNdrAlert", "==", true),
+            orderBy("updatedAt", "desc"),
+            limit(50)
+        );
+        const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
+            const records = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setAlertRecords(records);
+        });
+
         return () => {
             unsubOrders();
             unsubCarts();
@@ -230,6 +246,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             unsubTransit();
             unsubOFD();
             unsubNDR();
+            unsubAlerts();
         };
     }, [activityLimit]);
     
@@ -1312,6 +1329,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             style={{ minWidth: isDesktop ? '100%' : 900 }} // Increased to 900 for full text safety
                             buttons={[
                                 { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
+                                { value: 'alerts', label: 'Alerts', icon: 'bell-badge-outline' },
                                 { value: 'intransit', label: 'In-Transit', icon: 'truck-outline' },
                                 { value: 'ofd', label: 'OFD Engine', icon: 'truck-fast-outline' },
                                 { value: 'ndr', label: 'NDR Engine', icon: 'alert-circle-outline' },
@@ -1323,6 +1341,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
                 <View style={{ flex: 1 }}>
                     {logisticsSubTab === 'overview' && renderLogisticsOverview()}
+                    {logisticsSubTab === 'alerts' && renderAlerts()}
                     {logisticsSubTab === 'intransit' && renderInTransitEngine()}
                     {logisticsSubTab === 'ofd' && renderOFDEngine()}
                     {logisticsSubTab === 'ndr' && renderNDREngine()}
@@ -1332,6 +1351,89 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         );
     };
 
+
+    const renderAlerts = () => {
+        return (
+            <View style={{ flex: 1 }}>
+                <Surface style={[styles.ndrHeader, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                    <View style={{ padding: 16 }}>
+                        <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>Customer Action Alerts</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Real-time responses from NDR notifications</Text>
+                    </View>
+                </Surface>
+
+                <FlatList
+                    data={alertRecords}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    renderItem={({ item }) => {
+                        const isCancel = item.ndr_alert_type === 'CANCEL';
+                        const accentColor = isCancel ? theme.colors.error : (item.ndr_alert_type === 'REATTEMPT' ? '#4ade80' : '#3b82f6');
+                        
+                        return (
+                            <Surface style={[styles.ndrCard, { backgroundColor: theme.colors.surface, borderLeftWidth: 6, borderLeftColor: accentColor }]} elevation={2}>
+                                <View style={{ padding: 16 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                                <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>#{item.orderNumber}</Text>
+                                                <Badge style={{ backgroundColor: accentColor, color: '#FFFFFF', marginLeft: 8 }}>
+                                                    {item.ndr_alert_type}
+                                                </Badge>
+                                            </View>
+                                            <Text variant="bodyLarge" style={{ fontWeight: '600' }}>{item.customerName}</Text>
+                                            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                                                {isCancel ? 'Customer cancelled via WhatsApp' : (item.ndr_customer_note || 'Requested action via WhatsApp')}
+                                            </Text>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text variant="labelSmall" style={{ opacity: 0.7 }}>
+                                                {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleTimeString() : 'Recent'}
+                                            </Text>
+                                            <IconButton 
+                                                icon="chat-processing-outline" 
+                                                mode="contained"
+                                                size={24}
+                                                style={{ marginTop: 8 }}
+                                                onPress={() => openChat({ phone: item.phone, customerName: item.customerName })}
+                                            />
+                                        </View>
+                                    </View>
+                                    <Divider style={{ marginVertical: 12 }} />
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <View>
+                                            <Text variant="labelSmall">Tracking AWB</Text>
+                                            <Text variant="bodySmall" style={{ fontWeight: 'bold' }}>{item.awb || 'N/A'}</Text>
+                                        </View>
+                                        <Button 
+                                            mode="outlined" 
+                                            compact 
+                                            onPress={async () => {
+                                                await updateDoc(doc(db, "orders", item.id), {
+                                                    isNdrAlert: false, // Resolve alert
+                                                    updatedAt: new Date()
+                                                });
+                                                showSnackbar("Alert marked as resolved.");
+                                            }}
+                                        >
+                                            Resolve
+                                        </Button>
+                                    </View>
+                                </View>
+                            </Surface>
+                        );
+                    }}
+                    ListEmptyComponent={() => (
+                        <View style={{ alignItems: 'center', marginTop: 100, opacity: 0.5 }}>
+                            <Icon source="bell-off-outline" size={80} color={theme.colors.onSurfaceVariant} />
+                            <Text variant="headlineSmall" style={{ marginTop: 16 }}>No Active Alerts</Text>
+                            <Text variant="bodyMedium">Customer responses will appear here automatically.</Text>
+                        </View>
+                    )}
+                />
+            </View>
+        );
+    };
 
     const renderNDREngine = () => {
         const filteredRecords = ndrRecords.filter(r => {
