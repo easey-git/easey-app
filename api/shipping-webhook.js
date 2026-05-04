@@ -45,6 +45,14 @@ const getTemplateComponents = (type, order, payload, awb) => {
         }
     ];
 
+    // Only NDR has 5 variables (Body 1-4 + Reason as #5)
+    if (type === 'NDR') {
+        components[0].parameters.push({ 
+            type: 'text', 
+            text: payload.ndr_reason || 'Address issue or customer not available' 
+        });
+    }
+
     // Only In-Transit has the tracking button variable
     if (type === 'In-Transit') {
         components.push({
