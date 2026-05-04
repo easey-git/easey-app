@@ -41,6 +41,12 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [ndrStats, setNdrStats] = useState({ total: 0, matched: 0, pending: 0 });
     const [ndrFilter, setNdrFilter] = useState('all'); // all | matched | unsent | sent
 
+    // OFD Engine State
+    const [ofdRecords, setOfdRecords] = useState([]);
+    const [ofdLoading, setOfdLoading] = useState(false);
+    const [ofdStats, setOfdStats] = useState({ total: 0, matched: 0, pending: 0 });
+    const [ofdFilter, setOfdFilter] = useState('all'); // all | matched | sent
+
     const [historyLoading, setHistoryLoading] = useState(false);
 
     // Message Viewer State
@@ -448,8 +454,297 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     useEffect(() => {
         if (tab === 'ndr') {
             loadNDRHistory();
+        } else if (tab === 'ofd') {
+            loadOFDHistory();
         }
     }, [tab]);
+
+    // OFD Engine Logic
+    const loadOFDHistory = async (force = false) => {
+        if (!force && ofdRecords.length > 0) return;
+        setHistoryLoading(true);
+        if (force) setOfdRecords([]);
+        try {
+            const q = query(
+                collection(db, "whatsapp_messages"),
+                where("templateName", "==", "alert_shipping_ofd"),
+                orderBy("timestamp", "desc"),
+                limit(50)
+            );
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) {
+                setHistoryLoading(false);
+                return;
+            }
+            const historyMessages = snapshot.docs.map(doc => doc.data());
+            const orderNums = [...new Set(historyMessages.map(m => m.orderNumber).filter(n => n))];
+            
+            if (orderNums.length === 0) {
+                setHistoryLoading(false);
+                return;
+            }
+
+            const orderDataMap = {};
+            const CHUNK_SIZE = 10;
+            for (let i = 0; i < orderNums.length; i += CHUNK_SIZE) {
+                const chunk = orderNums.slice(i, i + CHUNK_SIZE);
+                const queryVariants = [];
+                chunk.forEach(num => {
+                    const clean = num.toString().replace('#', '').trim();
+                    queryVariants.push(num.toString().trim());
+                    queryVariants.push(clean);
+                    if (!isNaN(clean)) queryVariants.push(Number(clean));
+                });
+
+                const qOrders = query(collection(db, "orders"), where("orderNumber", "in", [...new Set(queryVariants)].slice(0, 30)));
+                const orderSnap = await getDocs(qOrders);
+                orderSnap.forEach(doc => {
+                    const data = doc.data();
+                    const numKey = data.orderNumber?.toString().trim();
+                    if (numKey) {
+                        orderDataMap[numKey] = data;
+                        orderDataMap[numKey.replace('#', '')] = data;
+                    }
+                });
+            }
+
+            const historyRecords = historyMessages.map((msg, index) => {
+                const rawNum = msg.orderNumber?.toString().trim();
+                const cleanNum = rawNum?.replace('#', '');
+                const order = orderDataMap[rawNum] || orderDataMap[cleanNum];
+                
+                return {
+                    id: `ofd-history-${index}`,
+                    orderNumber: rawNum,
+                    awb: msg.metadata?.awb || order?.awb || 'Historical',
+                    status: 'Out For Delivery',
+                    carrier: msg.metadata?.carrier || order?.carrier || '-',
+                    location: msg.metadata?.location || `${order?.city || ''}, ${order?.state || ''}`.trim(),
+                    customerName: order?.customerName || 'Customer',
+                    phone: msg.phoneNormalized || msg.phone,
+                    isMatched: true,
+                    isSent: true,
+                    timestamp: msg.timestamp
+                };
+            });
+
+            setOfdRecords(historyRecords);
+            setOfdStats(prev => ({ ...prev, total: historyRecords.length, matched: historyRecords.length }));
+        } catch (error) {
+            console.error("Error loading OFD history:", error);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    const handleOFDUpload = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel'],
+            });
+
+            if (result.canceled) return;
+
+            setOfdLoading(true);
+            const file = result.assets[0];
+            const response = await fetch(file.uri);
+            const blob = await response.arrayBuffer();
+            const workbook = read(blob);
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const content = utils.sheet_to_json(sheet);
+
+            if (!content || content.length === 0) {
+                throw new Error("CSV file is empty or invalid.");
+            }
+
+            // Filter for Out For Delivery status
+            const ofdOnly = content.filter(row => 
+                (row['Tracking Status'] || '').toLowerCase().includes('out for delivery') ||
+                (row['Status'] || '').toLowerCase().includes('out for delivery')
+            );
+
+            if (ofdOnly.length === 0) {
+                showSnackbar("No 'Out For Delivery' records found in this CSV.");
+                setOfdLoading(false);
+                return;
+            }
+
+            const processed = ofdOnly.map((row, index) => ({
+                id: `ofd-${index}`,
+                orderNumber: (row['Order Id'] || row['Order Number'] || '').toString() || '',
+                awb: (row['AWB Number'] || row['AWB'] || '').toString() || '',
+                status: 'Out For Delivery',
+                carrier: row['Courier'] || row['Carrier'] || 'N/A',
+                location: `${row['City'] || ''}, ${row['State'] || ''}`.trim().replace(/^, |, $/g, ''),
+                customerName: row['Customer Name'] || '',
+                phone: (row['Phone Number'] || row['Phone'] || '').toString() || '',
+                isMatched: false,
+                isSent: false,
+                originalRow: row
+            }));
+
+            setOfdRecords(processed);
+            matchOFDOrders(processed, 'ofd');
+        } catch (error) {
+            console.error("OFD Upload Error:", error);
+            showSnackbar("Failed to process CSV: " + error.message);
+        } finally {
+            setOfdLoading(false);
+        }
+    };
+
+    const matchOFDOrders = async (records) => {
+        setOfdLoading(true);
+        const updatedRecords = [...records];
+        let matchedCount = 0;
+
+        // Future-Proof Industry Standard: Batch Processing (10 items at a time to allow for variants)
+        const CHUNK_SIZE = 10; 
+        const chunks = [];
+        for (let i = 0; i < updatedRecords.length; i += CHUNK_SIZE) {
+            chunks.push(updatedRecords.slice(i, i + CHUNK_SIZE));
+        }
+
+        try {
+            for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+                const chunk = chunks[chunkIdx];
+                
+                const queryVariants = [];
+                chunk.forEach(r => {
+                    const raw = r.orderNumber.toString().trim();
+                    const clean = raw.replace('#', '').trim();
+                    queryVariants.push(raw);
+                    queryVariants.push(clean);
+                    if (!isNaN(clean)) queryVariants.push(Number(clean));
+                });
+                
+                const uniqueVariants = [...new Set(queryVariants)].slice(0, 30);
+                if (uniqueVariants.length === 0) continue;
+
+                // 1. Batch fetch orders
+                const qOrders = query(
+                    collection(db, "orders"),
+                    where("orderNumber", "in", uniqueVariants)
+                );
+                const orderSnap = await getDocs(qOrders);
+                const orderMap = {};
+                orderSnap.forEach(doc => {
+                    const data = doc.data();
+                    orderMap[data.orderNumber?.toString()] = data;
+                    if (data.orderNumber?.toString().startsWith('#')) {
+                        orderMap[data.orderNumber.replace('#', '')] = data;
+                    }
+                });
+
+                // 2. Batch fetch sent messages (ONLY ONE 'in' query allowed)
+                const qMsgs = query(
+                    collection(db, "whatsapp_messages"),
+                    where("orderNumber", "in", uniqueVariants),
+                    where("templateName", "==", "alert_shipping_ofd")
+                );
+                const msgSnap = await getDocs(qMsgs);
+                const sentSet = new Set();
+                msgSnap.forEach(doc => {
+                    sentSet.add(doc.data().orderNumber?.toString());
+                });
+
+                // 3. Update records in this chunk
+                for (let i = 0; i < chunk.length; i++) {
+                    const recIdx = (chunkIdx * CHUNK_SIZE) + i;
+                    const rawNum = updatedRecords[recIdx].orderNumber.toString().trim();
+                    const cleanNum = rawNum.replace('#', '').trim();
+                    
+                    const orderData = orderMap[rawNum] || orderMap[cleanNum] || orderMap[Number(cleanNum)];
+
+                    if (orderData) {
+                        updatedRecords[recIdx] = {
+                            ...updatedRecords[recIdx],
+                            customerName: updatedRecords[recIdx].customerName || orderData.customerName || 'Customer',
+                            phone: updatedRecords[recIdx]?.phone || orderData.phone || '',
+                            isMatched: true,
+                            isSent: sentSet.has(rawNum) || sentSet.has(cleanNum) || sentSet.has(Number(cleanNum).toString())
+                        };
+                        matchedCount++;
+                    }
+                }
+
+                // Unified Merge Strategy
+                setOfdRecords(prev => {
+                    const masterMap = new Map();
+                    prev.forEach(r => masterMap.set(r.orderNumber.toString().replace('#', '').trim(), r));
+                    
+                    updatedRecords.forEach(r => {
+                        const key = r.orderNumber.toString().replace('#', '').trim();
+                        const existing = masterMap.get(key);
+                        masterMap.set(key, {
+                            ...r,
+                            isSent: existing?.isSent || r.isSent
+                        });
+                    });
+
+                    return Array.from(masterMap.values()).sort((a, b) => {
+                        return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
+                    });
+                });
+
+                setOfdStats(prev => ({
+                    total: records.length,
+                    matched: matchedCount,
+                    pending: records.length - matchedCount
+                }));
+                
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        } catch (error) {
+            console.error("OFD Batch Matching Error:", error);
+            showSnackbar("Error during OFD matching: " + error.message);
+        } finally {
+            setOfdLoading(false);
+        }
+    };
+
+    const sendOFDTemplate = async (record) => {
+        if (!record.phone) return { success: false, error: "No phone" };
+        try {
+            const response = await fetch(`${API_BASE}/api/whatsapp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: record.phone,
+                    type: 'template',
+                    templateName: 'alert_shipping_ofd',
+                    orderNumber: record.orderNumber.toString().replace('#', '').trim(),
+                    languageCode: 'en',
+                    metadata: {
+                        awb: record.awb,
+                        carrier: record.carrier,
+                        location: record.location
+                    },
+                    components: [
+                        {
+                            type: 'body',
+                            parameters: [
+                                { type: 'text', text: record.customerName || 'Customer' },
+                                { type: 'text', text: record.orderNumber || 'Order' },
+                                { type: 'text', text: record.carrier || 'our courier partner' },
+                                { type: 'text', text: record.awb || '' }
+                            ]
+                        }
+                    ]
+                })
+            });
+
+            if (response.ok) {
+                setOfdRecords(prev => prev.map(r => r.id === record.id ? { ...r, isSent: true } : r));
+                return { success: true };
+            } else {
+                const data = await response.json();
+                return { success: false, error: data.error };
+            }
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    };
 
     const handleNDRUpload = async () => {
         try {
@@ -834,6 +1129,152 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         );
     };
 
+    const renderOFDEngine = () => {
+        const filteredRecords = ofdRecords.filter(r => {
+            if (ofdFilter === 'matched') return r.isMatched && !r.isSent;
+            if (ofdFilter === 'sent') return r.isSent;
+            return true;
+        });
+
+        return (
+            <View style={{ flex: 1 }}>
+                <Surface style={[styles.ndrHeader, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                    <View style={[styles.cardHeader, { flexDirection: isDesktop ? 'row' : 'column', alignItems: isDesktop ? 'center' : 'flex-start', gap: 12 }]}>
+                        <View style={{ flex: 1 }}>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>OFD Engine</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Out For Delivery alerts</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                            <IconButton 
+                                icon="upload"
+                                mode="outlined"
+                                onPress={handleOFDUpload} 
+                                disabled={ofdLoading}
+                                size={22}
+                                style={{ margin: 0, width: 42, height: 42 }}
+                            />
+                        </View>
+                    </View>
+
+                    {ofdRecords.length > 0 && (
+                        <View style={styles.ndrFilterRow}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                                <Chip 
+                                    selected={ofdFilter === 'all'} 
+                                    onPress={() => setOfdFilter('all')}
+                                    showSelectedOverlay
+                                >
+                                    All ({ofdRecords.length})
+                                </Chip>
+                                <Chip 
+                                    selected={ofdFilter === 'matched'} 
+                                    onPress={() => setOfdFilter('matched')}
+                                    showSelectedOverlay
+                                    icon="link-variant"
+                                >
+                                    Ready ({ofdRecords.filter(r => r.isMatched && !r.isSent).length})
+                                </Chip>
+                                <Chip 
+                                    selected={ofdFilter === 'sent'} 
+                                    onPress={() => setOfdFilter('sent')}
+                                    showSelectedOverlay
+                                    icon="check-all"
+                                >
+                                    Sent ({ofdRecords.filter(r => r.isSent).length})
+                                </Chip>
+                                <IconButton 
+                                    icon="refresh"
+                                    onPress={() => loadOFDHistory(true)} 
+                                    iconColor={theme.colors.error}
+                                    size={20}
+                                    style={{ margin: 0 }}
+                                />
+                            </ScrollView>
+                        </View>
+                    )}
+                </Surface>
+
+                <FlatList
+                    data={filteredRecords}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    renderItem={({ item }) => (
+                        <Surface style={[styles.ndrCard, { backgroundColor: theme.colors.surface, opacity: item.isSent ? 0.7 : 1 }]} elevation={1}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12 }}>
+                                <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>#{item.orderNumber ? item.orderNumber.toString().replace('#', '') : 'N/A'}</Text>
+                                        {item.isSent ? (
+                                            <Badge style={{ backgroundColor: '#3b82f6', marginLeft: 8 }}>SENT</Badge>
+                                        ) : item.isMatched ? (
+                                            <Badge style={{ backgroundColor: '#4ade80', marginLeft: 8 }}>READY</Badge>
+                                        ) : (
+                                            <Badge style={{ backgroundColor: theme.colors.error, marginLeft: 8 }}>NOT FOUND</Badge>
+                                        )}
+                                    </View>
+                                    <Text variant="bodyMedium">{item.customerName || 'Customer not found'}</Text>
+                                    <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: isDesktop ? 12 : 4, marginTop: 4 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source="truck-delivery-outline" size={14} color={theme.colors.onSurfaceVariant} />
+                                            <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant }}>{item.carrier}</Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Icon source="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
+                                            <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant }}>{item.location}</Text>
+                                        </View>
+                                    </View>
+                                    <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold', marginTop: 4 }}>AWB: {item.awb}</Text>
+                                </View>
+                                <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                                    <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{item.phone || '---'}</Text>
+                                    <View style={{ flexDirection: 'row', marginTop: 12 }}>
+                                        <IconButton 
+                                            icon="chat-outline" 
+                                            mode="contained-tonal"
+                                            size={20}
+                                            onPress={() => openChat({ phone: item.phone, customerName: item.customerName })}
+                                            disabled={!item.isMatched}
+                                        />
+                                        <IconButton 
+                                            icon={item.isSent ? "check-all" : "send"} 
+                                            mode={item.isSent ? "outlined" : "contained"}
+                                            onPress={async () => {
+                                                setSendingId(item.id);
+                                                const result = await sendOFDTemplate(item);
+                                                setSendingId(null);
+                                                if (!result.success) {
+                                                    showSnackbar(`Failed: ${result.error || "Unknown error"}`);
+                                                } else {
+                                                    showSnackbar(`Success: Sent to ${item.customerName}`);
+                                                }
+                                            }}
+                                            loading={sendingId === item.id}
+                                            disabled={!item.isMatched || item.isSent || sendingId === item.id}
+                                            iconColor={item.isSent ? theme.colors.primary : '#FFFFFF'}
+                                            containerColor={item.isSent ? 'transparent' : theme.colors.primary}
+                                            size={20}
+                                        />
+                                    </View>
+                                </View>
+                            </View>
+                        </Surface>
+                    )}
+                    ListEmptyComponent={() => (
+                        <View style={{ alignItems: 'center', marginTop: 60, opacity: 0.5 }}>
+                            <Icon source={ofdRecords.length > 0 ? "filter-variant-remove" : "truck-fast-outline"} size={80} color={theme.colors.onSurfaceVariant} />
+                            <Text variant="headlineSmall" style={{ marginTop: 16 }}>
+                                {ofdRecords.length > 0 ? "No results for this filter" : "No OFD Data"}
+                            </Text>
+                            <Text variant="bodyMedium">
+                                {ofdRecords.length > 0 ? "Try changing your filter settings" : "Upload a shipment report CSV to begin"}
+                            </Text>
+                        </View>
+                    )}
+                />
+            </View>
+        );
+    };
+
     // Memoized Stats for Overview to prevent flickering
     const stats = React.useMemo(() => {
         const pendingCOD = codOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending').length;
@@ -1182,6 +1623,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             { value: 'cod', label: 'COD Verify', icon: 'checkbox-marked-circle-outline' },
                             { value: 'abandoned', label: 'Recovery Center', icon: 'cart-arrow-down' },
                             { value: 'ndr', label: 'NDR Engine', icon: 'truck-delivery-outline' },
+                            { value: 'ofd', label: 'OFD Engine', icon: 'truck-fast-outline' },
                         ]}
                     />
                 </ScrollView>
@@ -1192,6 +1634,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 {tab === 'cod' && renderCODVerification()}
                 {tab === 'abandoned' && renderAbandoned()}
                 {tab === 'ndr' && renderNDREngine()}
+                {tab === 'ofd' && renderOFDEngine()}
             </View>
 
             {/* Chat Dialog */}
