@@ -4,6 +4,7 @@ import { Text, Surface, useTheme, Button, SegmentedButtons, Avatar, IconButton, 
 import * as DocumentPicker from 'expo-document-picker';
 import { read, utils } from 'xlsx';
 import { BarChart } from 'react-native-gifted-charts';
+import * as Clipboard from 'expo-clipboard';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, limit, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CRMLayout } from '../components/CRMLayout';
@@ -46,6 +47,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [ofdLoading, setOfdLoading] = useState(false);
     const [ofdStats, setOfdStats] = useState({ total: 0, matched: 0, pending: 0 });
     const [ofdFilter, setOfdFilter] = useState('all'); // all | matched | sent
+
+    // In-Transit Engine State
+    const [inTransitRecords, setInTransitRecords] = useState([]);
+    const [inTransitLoading, setInTransitLoading] = useState(false);
+    const [logisticsSubTab, setLogisticsSubTab] = useState('overview'); // overview | intransit | ofd | ndr
 
     const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -452,12 +458,29 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     useEffect(() => {
-        if (tab === 'ndr') {
-            loadNDRHistory();
-        } else if (tab === 'ofd') {
-            loadOFDHistory();
+        if (tab === 'logistics') {
+            loadLogisticsData();
         }
     }, [tab]);
+
+    const loadLogisticsData = async (force = false) => {
+        setHistoryLoading(true);
+        await Promise.all([
+            loadNDRHistory(force),
+            loadOFDHistory(force),
+            loadInTransitHistory(force)
+        ]);
+        setHistoryLoading(false);
+    };
+
+    const loadInTransitHistory = async (force = false) => {
+        // Similar logic to fetch historical 'in transit' status messages if any
+        // For now, it will be populated by CSV or Webhook
+        if (!force && inTransitRecords.length > 0) return;
+        try {
+            // Logic for loading in-transit history from whatsapp_messages if needed
+        } catch (e) { console.error(e); }
+    };
 
     // OFD Engine Logic
     const loadOFDHistory = async (force = false) => {
@@ -966,7 +989,119 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             return { success: false, error: error.message };
         }
     };
+    const renderLogisticsOverview = () => {
+        const stats = {
+            total: inTransitRecords.length + ofdRecords.length + ndrRecords.length,
+            inTransit: inTransitRecords.length,
+            ofd: ofdRecords.length,
+            ndr: ndrRecords.length
+        };
 
+        return (
+            <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+                <View style={[dynamicStyles.statsGrid, { marginTop: 16 }]}>
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level2, borderBottomWidth: 4, borderBottomColor: '#3b82f6' }]} elevation={2}>
+                        <Avatar.Icon size={44} icon="truck-outline" style={{ backgroundColor: '#3b82f6' }} />
+                        <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12 }}>{stats.inTransit}</Text>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>In Transit</Text>
+                        <Button mode="text" compact onPress={() => setLogisticsSubTab('intransit')} style={{ marginTop: 8 }}>View All</Button>
+                    </Surface>
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level2, borderBottomWidth: 4, borderBottomColor: '#4ade80' }]} elevation={2}>
+                        <Avatar.Icon size={44} icon="truck-fast-outline" style={{ backgroundColor: '#4ade80' }} />
+                        <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12 }}>{stats.ofd}</Text>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Out For Delivery</Text>
+                        <Button mode="text" compact onPress={() => setLogisticsSubTab('ofd')} style={{ marginTop: 8 }}>View All</Button>
+                    </Surface>
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level2, borderBottomWidth: 4, borderBottomColor: theme.colors.error }]} elevation={2}>
+                        <Avatar.Icon size={44} icon="alert-circle-outline" style={{ backgroundColor: theme.colors.error }} />
+                        <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12 }}>{stats.ndr}</Text>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>NDR Issues</Text>
+                        <Button mode="text" compact onPress={() => setLogisticsSubTab('ndr')} style={{ marginTop: 8 }}>Resolve</Button>
+                    </Surface>
+                </View>
+
+                <Surface style={[styles.listCard, { backgroundColor: theme.colors.surface, marginTop: 16 }]} elevation={1}>
+                    <View style={styles.cardHeader}>
+                        <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>Recent Activity</Text>
+                        <Button mode="outlined" onPress={() => loadLogisticsData(true)} loading={historyLoading}>Refresh Hub</Button>
+                    </View>
+                    
+                    {[...ndrRecords, ...ofdRecords, ...inTransitRecords].sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)).slice(0, 5).map((item, index) => (
+                        <View key={`${item.id}-${index}`} style={styles.listItem}>
+                            <Avatar.Icon 
+                                size={36} 
+                                icon={item.status.includes('NDR') ? 'alert' : item.status.includes('Delivery') ? 'truck-fast' : 'truck'} 
+                                style={{ backgroundColor: item.status.includes('NDR') ? theme.colors.errorContainer : theme.colors.primaryContainer }}
+                                color={item.status.includes('NDR') ? theme.colors.error : theme.colors.primary}
+                            />
+                            <View style={{ flex: 1, marginLeft: 16 }}>
+                                <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>#{item.orderNumber} - {item.customerName || 'Customer'}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                                    <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>{item.phone}</Text>
+                                    <IconButton 
+                                        icon="content-copy" 
+                                        size={14} 
+                                        onPress={() => {
+                                            Clipboard.setStringAsync(item.phone);
+                                            showSnackbar("Phone number copied!");
+                                        }}
+                                        style={{ margin: 0, padding: 0 }}
+                                    />
+                                </View>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.status} • {item.location}</Text>
+                            </View>
+                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                {item.timestamp?.toDate ? item.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}
+                            </Text>
+                        </View>
+                    ))}
+                </Surface>
+            </ScrollView>
+        );
+    };
+
+    const renderInTransitEngine = () => {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Icon source="truck-outline" size={80} color={theme.colors.onSurfaceVariant} style={{ opacity: 0.5 }} />
+                <Text variant="headlineSmall" style={{ marginTop: 16, opacity: 0.5 }}>In-Transit Tracking</Text>
+                <Text variant="bodyMedium" style={{ opacity: 0.5 }}>Shipments currently moving through the network.</Text>
+                <Button mode="contained" style={{ marginTop: 24 }} onPress={() => showSnackbar("In-transit engine is automated via NimbusPost webhooks.")}>
+                    Automation Settings
+                </Button>
+            </View>
+        );
+    };
+
+    const renderLogisticsHub = () => {
+        return (
+            <View style={{ flex: 1 }}>
+                <View style={{ backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                        <SegmentedButtons
+                            value={logisticsSubTab}
+                            onValueChange={setLogisticsSubTab}
+                            density="medium"
+                            style={{ minWidth: isDesktop ? '100%' : 600 }}
+                            buttons={[
+                                { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
+                                { value: 'intransit', label: 'In-Transit', icon: 'truck-outline' },
+                                { value: 'ofd', label: 'OFD Engine', icon: 'truck-fast-outline' },
+                                { value: 'ndr', label: 'NDR Engine', icon: 'alert-circle-outline' },
+                            ]}
+                        />
+                    </ScrollView>
+                </View>
+
+                <View style={{ flex: 1 }}>
+                    {logisticsSubTab === 'overview' && renderLogisticsOverview()}
+                    {logisticsSubTab === 'intransit' && renderInTransitEngine()}
+                    {logisticsSubTab === 'ofd' && renderOFDEngine()}
+                    {logisticsSubTab === 'ndr' && renderNDREngine()}
+                </View>
+            </View>
+        );
+    };
 
 
     const renderNDREngine = () => {
@@ -1289,6 +1424,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         return {
             activeTargets: pendingCOD + abandonedCarts.length,
             verifiedOrders: verifiedToday,
+            activeLogistics: ofdRecords.length + ndrRecords.length + inTransitRecords.length,
             isDataReady: !loading
         };
     }, [abandonedCarts, codOrders, loading]);
@@ -1327,6 +1463,14 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         {stats.isDataReady ? stats.activeTargets : '...'}
                     </Text>
                     <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>Active Targets</Text>
+                </Surface>
+                <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level2 }]} elevation={2}>
+                    <Avatar.Icon size={44} icon="truck-delivery-outline" style={{ backgroundColor: theme.colors.primary }} />
+                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12, color: theme.colors.onSurface }}>
+                        {stats.isDataReady ? stats.activeLogistics : '...'}
+                    </Text>
+                    <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 1 }}>In Logistics</Text>
+                    <Button mode="text" compact onPress={() => setTab('logistics')} style={{ marginTop: 4 }}>Go to Hub</Button>
                 </Surface>
             </View>
 
@@ -1628,8 +1772,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
                             { value: 'cod', label: 'COD Verify', icon: 'checkbox-marked-circle-outline' },
                             { value: 'abandoned', label: 'Recovery Center', icon: 'cart-arrow-down' },
-                            { value: 'ndr', label: 'NDR Engine', icon: 'truck-delivery-outline' },
-                            { value: 'ofd', label: 'OFD Engine', icon: 'truck-fast-outline' },
+                            { value: 'logistics', label: 'Logistics Hub', icon: 'truck-fast' },
                         ]}
                     />
                 </ScrollView>
@@ -1639,8 +1782,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 {tab === 'overview' && renderOverview()}
                 {tab === 'cod' && renderCODVerification()}
                 {tab === 'abandoned' && renderAbandoned()}
-                {tab === 'ndr' && renderNDREngine()}
-                {tab === 'ofd' && renderOFDEngine()}
+                {tab === 'logistics' && renderLogisticsHub()}
             </View>
 
             {/* Chat Dialog */}
