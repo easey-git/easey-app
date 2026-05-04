@@ -157,7 +157,7 @@ module.exports = async (req, res) => {
         await orderDoc.ref.update({
             awb: awb,
             carrier: payload.courier_name || order.carrier || 'Delhivery',
-            lastStatus: status,
+            lastStatus: rawStatus,
             updatedAt: admin.firestore.Timestamp.now()
         });
 
