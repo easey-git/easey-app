@@ -39,6 +39,15 @@ module.exports = async (req, res) => {
         const payload = req.body;
         console.log('[Shipping Webhook] Received payload:', JSON.stringify(payload));
 
+        // NEW: Log raw payload for Live Dashboard Monitoring
+        await db.collection('webhook_logs').add({
+            source: 'nimbuspost',
+            payload: payload,
+            timestamp: admin.firestore.Timestamp.now(),
+            status: payload.status || 'unknown',
+            awb: payload.awb_number || payload.awb || 'N/A'
+        });
+
         // 1. Extract Core Data (Adapt to NimbusPost format)
         // Standard NimbusPost webhook fields: status, awb, order_number
         const rawStatus = (payload.status || '').toString().toLowerCase();

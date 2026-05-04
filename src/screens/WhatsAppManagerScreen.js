@@ -51,8 +51,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     // In-Transit Engine State
     const [inTransitRecords, setInTransitRecords] = useState([]);
     const [inTransitLoading, setInTransitLoading] = useState(false);
-    const [logisticsSubTab, setLogisticsSubTab] = useState('overview'); // overview | intransit | ofd | ndr
+    const [logisticsSubTab, setLogisticsSubTab] = useState('overview'); // overview | intransit | ofd | ndr | logs
 
+    const [webhookLogs, setWebhookLogs] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
 
     // Message Viewer State
@@ -167,10 +168,18 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             setLoadingMore(false);
         });
 
+        // Listen for Webhook Logs
+        const qLogs = query(collection(db, "webhook_logs"), orderBy("timestamp", "desc"), limit(20));
+        const unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
+            const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setWebhookLogs(logs);
+        });
+
         return () => {
             unsubOrders();
             unsubCarts();
             unsubActivity();
+            unsubscribeLogs();
         };
     }, [activityLimit]);
 
@@ -1073,6 +1082,48 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         );
     };
 
+    const renderLogisticsLogs = () => {
+        return (
+            <FlatList
+                data={webhookLogs}
+                keyExtractor={item => item.id}
+                contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                ListHeaderComponent={() => (
+                    <Surface style={[styles.infoBanner, { backgroundColor: theme.colors.elevation.level1, marginBottom: 16 }]}>
+                        <Icon source="text-box-search-outline" size={20} color={theme.colors.primary} />
+                        <Text style={{ flex: 1, marginLeft: 8, color: theme.colors.onSurfaceVariant }}>
+                            Live stream of incoming data from NimbusPost.
+                        </Text>
+                    </Surface>
+                )}
+                renderItem={({ item }) => (
+                    <Surface style={[styles.ndrCard, { backgroundColor: '#1e1e1e', marginBottom: 12, borderLeftWidth: 4, borderLeftColor: theme.colors.primary }]} elevation={1}>
+                        <View style={{ padding: 12 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Badge style={{ backgroundColor: theme.colors.primaryContainer, color: theme.colors.primary }}>{item.status.toUpperCase()}</Badge>
+                                    <Text variant="labelSmall" style={{ marginLeft: 8, color: '#888' }}>AWB: {item.awb}</Text>
+                                </View>
+                                <Text variant="labelSmall" style={{ color: '#888' }}>
+                                    {item.timestamp?.toDate ? item.timestamp.toDate().toLocaleTimeString() : '...'}
+                                </Text>
+                            </View>
+                            <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontSize: 11, color: '#4ade80' }}>
+                                {JSON.stringify(item.payload, null, 2)}
+                            </Text>
+                        </View>
+                    </Surface>
+                )}
+                ListEmptyComponent={() => (
+                    <View style={{ alignItems: 'center', marginTop: 60, opacity: 0.5 }}>
+                        <ActivityIndicator animating size="large" color={theme.colors.primary} />
+                        <Text variant="bodyMedium" style={{ marginTop: 16 }}>Waiting for incoming webhooks...</Text>
+                    </View>
+                )}
+            />
+        );
+    };
+
     const renderLogisticsHub = () => {
         return (
             <View style={{ flex: 1 }}>
@@ -1082,12 +1133,13 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                             value={logisticsSubTab}
                             onValueChange={setLogisticsSubTab}
                             density="medium"
-                            style={{ minWidth: isDesktop ? '100%' : 600 }}
+                            style={{ minWidth: isDesktop ? '100%' : 700 }}
                             buttons={[
                                 { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
                                 { value: 'intransit', label: 'In-Transit', icon: 'truck-outline' },
                                 { value: 'ofd', label: 'OFD Engine', icon: 'truck-fast-outline' },
                                 { value: 'ndr', label: 'NDR Engine', icon: 'alert-circle-outline' },
+                                { value: 'logs', label: 'Live Logs', icon: 'console' },
                             ]}
                         />
                     </ScrollView>
@@ -1098,6 +1150,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     {logisticsSubTab === 'intransit' && renderInTransitEngine()}
                     {logisticsSubTab === 'ofd' && renderOFDEngine()}
                     {logisticsSubTab === 'ndr' && renderNDREngine()}
+                    {logisticsSubTab === 'logs' && renderLogisticsLogs()}
                 </View>
             </View>
         );
