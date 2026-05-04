@@ -40,7 +40,6 @@ const CONSTANTS = {
         ADDRESS_CORRECT: ['ADDRESS_CORRECT', 'Confirm Address', 'Yes, Correct', 'Correct'],
         ADDRESS_EDIT: ['ADDRESS_EDIT', 'Make Changes', 'Edit Address', 'Update Address'],
         NDR_REATTEMPT: ['REATTEMPT_DELIVERY', 'Re-attempt Delivery'],
-        NDR_CANCEL: ['CANCEL_SHIPMENT', 'Cancel Shipment'],
     }
 };
 
@@ -159,7 +158,7 @@ module.exports = async (req, res) => {
             const isConfirmYes = CONSTANTS.PAYLOADS.CONFIRM_YES.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_YES.includes(body);
             const isAddressCorrect = CONSTANTS.PAYLOADS.ADDRESS_CORRECT.includes(payload) || CONSTANTS.PAYLOADS.ADDRESS_CORRECT.includes(body);
             const isAddressEdit = CONSTANTS.PAYLOADS.ADDRESS_EDIT.includes(payload) || CONSTANTS.PAYLOADS.ADDRESS_EDIT.includes(body);
-            const isCancel = CONSTANTS.PAYLOADS.CONFIRM_NO.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_NO.includes(body.toLowerCase()) || CONSTANTS.PAYLOADS.NDR_CANCEL.includes(payload) || CONSTANTS.PAYLOADS.NDR_CANCEL.includes(body);
+            const isCancel = CONSTANTS.PAYLOADS.CONFIRM_NO.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_NO.includes(body.toLowerCase());
             const isNdrReattempt = CONSTANTS.PAYLOADS.NDR_REATTEMPT.includes(payload) || CONSTANTS.PAYLOADS.NDR_REATTEMPT.includes(body);
 
             // 1. Confirm Order (Step 1)
@@ -182,42 +181,32 @@ module.exports = async (req, res) => {
                 await orderDoc.ref.update({ verificationStatus: 'approved', cod_status: 'confirmed', updatedAt: admin.firestore.Timestamp.now() });
                 await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.COD_CONFIRMED, [
                     { type: 'body', parameters: [{ type: 'text', text: String(orderData.orderNumber) }] }
-                ], "en_US");
+                ], "en_US_US");
             }
 
-            // 3. NDR Action or Address Edit
-            else if (isNdrReattempt || isAddressEdit) {
-                const actionLabel = isNdrReattempt ? 'Re-attempted' : 'Updated';
-                const actionType = isNdrReattempt ? 'Re-attempt Delivery' : 'Address Update';
+            // 3. NDR Action (Re-attempt ONLY)
+            else if (isNdrReattempt) {
+                const actionLabel = 'Re-attempted';
                 
                 await orderDoc.ref.update({
-                    isNdrAlert: true, // Dedicated flag for the new Alerts tab
-                    ndr_alert_type: isNdrReattempt ? 'REATTEMPT' : 'ADDRESS_UPDATE',
-                    ndr_status: isNdrReattempt ? 'reattempt_requested' : 'address_update_requested',
-                    ndr_customer_note: `Customer requested: ${actionType}`,
+                    isNdrAlert: true,
+                    ndr_alert_type: 'REATTEMPT',
+                    ndr_status: 'reattempt_requested',
+                    ndr_customer_note: `Customer requested: Re-attempt Delivery`,
                     updatedAt: admin.firestore.Timestamp.now()
                 });
 
-                await sendFCMNotifications(`NDR Alert: ${actionType} 🚨`, `Order #${orderData.orderNumber} needs attention.`, { orderId: orderDoc.id });
+                await sendFCMNotifications(`NDR Alert: Re-attempt 🚨`, `Order #${orderData.orderNumber} needs attention.`, { orderId: orderDoc.id });
                 
-                // Confirm to customer (Param 1 = Action)
                 await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [
                     { type: 'body', parameters: [{ type: 'text', text: actionLabel }] }
                 ]);
             }
 
-            // 4. Cancel
+            // 4. Cancel (COD flow)
             else if (isCancel) {
-                await orderDoc.ref.update({ 
-                    status: 'CANCELLED', 
-                    verificationStatus: 'cancelled', 
-                    isNdrAlert: true, // Also show in the new Alerts tab
-                    ndr_alert_type: 'CANCEL',
-                    updatedAt: admin.firestore.Timestamp.now() 
-                });
-
+                await orderDoc.ref.update({ status: 'CANCELLED', verificationStatus: 'cancelled', updatedAt: admin.firestore.Timestamp.now() });
                 await sendFCMNotifications('Order Cancelled ❌', `Order #${orderData.orderNumber} was cancelled.`, { orderId: orderDoc.id });
-                
                 await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.COD_CANCEL, [
                     { type: 'body', parameters: [
                         { type: 'text', text: orderData.customerName || 'Customer' },
