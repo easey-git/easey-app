@@ -63,12 +63,15 @@ module.exports = async (req, res) => {
         let templateName = null;
         let automationType = null;
 
-        if (rawStatus.includes('ndr') || rawStatus.includes('undelivered') || rawStatus.includes('failed attempt')) {
+        if (rawStatus.includes('ndr') || rawStatus.includes('undelivered') || rawStatus.includes('failed attempt') || rawStatus.includes('exception')) {
             templateName = 'alert_shipping_ndr';
             automationType = 'NDR';
         } else if (rawStatus.includes('out for delivery') || rawStatus.includes('ofd')) {
             templateName = 'alert_shipping_ofd';
             automationType = 'OFD';
+        } else if (rawStatus.includes('in transit') || rawStatus.includes('shipped') || rawStatus.includes('dispatched')) {
+            templateName = 'alert_shipping_transit';
+            automationType = 'In-Transit';
         }
 
         if (!templateName) {
@@ -100,14 +103,19 @@ module.exports = async (req, res) => {
             return res.status(400).json({ error: 'No phone number found for order' });
         }
 
-        // 4. Idempotency Check (Prevent duplicate alerts within 24h)
-        const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        const dupCheck = await db.collection('whatsapp_messages')
+        // 4. Idempotency Check (Prevent duplicate alerts)
+        // In-Transit is 'one-time only' per order. NDR/OFD have a 24h cooldown.
+        const timeLimit = automationType === 'In-Transit' ? null : new Date(Date.now() - 24 * 60 * 60 * 1000);
+        
+        let dupCheckQuery = db.collection('whatsapp_messages')
             .where('orderNumber', '==', order.orderNumber.toString())
-            .where('templateName', '==', templateName)
-            .where('timestamp', '>', admin.firestore.Timestamp.fromDate(dayAgo))
-            .limit(1)
-            .get();
+            .where('templateName', '==', templateName);
+
+        if (timeLimit) {
+            dupCheckQuery = dupCheckQuery.where('timestamp', '>', admin.firestore.Timestamp.fromDate(timeLimit));
+        }
+
+        const dupCheck = await dupCheckQuery.limit(1).get();
 
         if (!dupCheck.empty) {
             console.info(`[Shipping Webhook] Skipping duplicate ${automationType} alert for order ${order.orderNumber}`);
@@ -136,6 +144,11 @@ module.exports = async (req, res) => {
         } else if (automationType === 'NDR') {
             // NDR might need attempts or reason
             components[0].parameters.push({ type: 'text', text: payload.ndr_reason || 'Address issue or customer not available' });
+        } else if (automationType === 'In-Transit') {
+            // In-Transit 4th parameter is the tracking link
+            const courierSlug = (payload.courier_name || order.carrier || '').toLowerCase().replace(/\s/g, '');
+            const trackingUrl = `https://nimbuspost.com/tracking?awb=${awb || order.awb}`;
+            components[0].parameters.push({ type: 'text', text: trackingUrl });
         }
 
         const waResponse = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {

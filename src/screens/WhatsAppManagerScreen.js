@@ -1071,13 +1071,55 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
     const renderInTransitEngine = () => {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Icon source="truck-outline" size={80} color={theme.colors.onSurfaceVariant} style={{ opacity: 0.5 }} />
-                <Text variant="headlineSmall" style={{ marginTop: 16, opacity: 0.5 }}>In-Transit Tracking</Text>
-                <Text variant="bodyMedium" style={{ opacity: 0.5 }}>Shipments currently moving through the network.</Text>
-                <Button mode="contained" style={{ marginTop: 24 }} onPress={() => showSnackbar("In-transit engine is automated via NimbusPost webhooks.")}>
-                    Automation Settings
-                </Button>
+            <View style={{ flex: 1 }}>
+                <View style={[styles.engineHeader, { paddingHorizontal: 16, paddingVertical: 12 }]}>
+                    <View style={styles.badgeContainer}>
+                        <Icon source="robot" size={16} color="#4ade80" />
+                        <Text style={styles.automationBadge}>LIVE AUTOMATION ACTIVE</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Button mode="outlined" compact onPress={() => loadLogisticsData(true)} loading={inTransitLoading}>Refresh</Button>
+                    </View>
+                </View>
+
+                <FlatList
+                    data={inTransitRecords}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    renderItem={({ item }) => (
+                        <Surface style={[styles.ndrCard, { backgroundColor: theme.colors.elevation.level1 }]} elevation={1}>
+                            <View style={styles.ndrRow}>
+                                <Avatar.Icon size={40} icon="truck-outline" style={{ backgroundColor: theme.colors.primaryContainer }} color={theme.colors.primary} />
+                                <View style={{ flex: 1, marginLeft: 16 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>#{item.orderNumber}</Text>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.timestamp?.toDate ? item.timestamp.toDate().toLocaleDateString() : 'Active'}</Text>
+                                    </View>
+                                    <Text variant="bodyMedium" style={{ marginTop: 4 }}>{item.status}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                        <Icon source="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
+                                        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>{item.location}</Text>
+                                    </View>
+                                </View>
+                                <IconButton 
+                                    icon="whatsapp" 
+                                    mode="contained" 
+                                    containerColor="#25D366" 
+                                    iconColor="white" 
+                                    size={24}
+                                    onPress={() => openChat({ phone: item.phone, customerName: `Order #${item.orderNumber}` })}
+                                />
+                            </View>
+                        </Surface>
+                    )}
+                    ListEmptyComponent={() => (
+                        <View style={{ alignItems: 'center', marginTop: 60, opacity: 0.5 }}>
+                            <Icon source="truck-outline" size={80} color={theme.colors.onSurfaceVariant} />
+                            <Text variant="headlineSmall" style={{ marginTop: 16 }}>No Active Shipments</Text>
+                            <Text variant="bodyMedium">In-transit shipments will appear here automatically.</Text>
+                        </View>
+                    )}
+                />
             </View>
         );
     };
