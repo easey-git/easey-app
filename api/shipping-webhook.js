@@ -29,6 +29,10 @@ const getTemplateComponents = (type, order, payload, awb) => {
     const customer = order.customerName || 'Customer';
     const orderId = order.orderNumber.toString();
 
+    // Body Param 1: Customer Name
+    // Body Param 2: Order Number
+    // Body Param 3: Product Name
+    // Body Param 4: Courier Name
     const components = [
         {
             type: 'body',
@@ -41,6 +45,7 @@ const getTemplateComponents = (type, order, payload, awb) => {
         }
     ];
 
+    // Only In-Transit has the tracking button variable
     if (type === 'In-Transit') {
         components.push({
             type: 'button',
@@ -48,10 +53,6 @@ const getTemplateComponents = (type, order, payload, awb) => {
             index: '0',
             parameters: [{ type: 'text', text: awb || order.awb || '' }]
         });
-    } else if (type === 'OFD') {
-        components[0].parameters.push({ type: 'text', text: order.awb || awb || '' });
-    } else if (type === 'NDR') {
-        components[0].parameters.push({ type: 'text', text: payload.ndr_reason || 'Address issue or customer not available' });
     }
 
     return components;
@@ -148,25 +149,33 @@ module.exports = async (req, res) => {
             return res.status(400).json({ error: 'Invalid phone number' });
         }
 
-        // Duplicate Check
-        const timeLimit = automationType === 'In-Transit' ? null : new Date(Date.now() - 24 * 60 * 60 * 1000);
-        const orderIdStr = order.orderNumber.toString();
-        const cleanId = orderIdStr.replace('#', '');
-        const dupSearch = [orderIdStr, cleanId, `#${cleanId}`];
-        if (!isNaN(cleanId)) dupSearch.push(Number(cleanId));
+        // 5. Duplicate Check (Skip if is_test or force is true)
+        const isTest = payload.is_test || payload.force || false;
+        
+        if (!isTest) {
+            // In-Transit is 'one-time only' per order. NDR/OFD have a 24h cooldown.
+            const timeLimit = automationType === 'In-Transit' ? null : new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const orderIdStr = order.orderNumber.toString();
+            const cleanId = orderIdStr.replace('#', '');
+            const dupSearch = [orderIdStr, cleanId, `#${cleanId}`];
+            if (!isNaN(cleanId)) dupSearch.push(Number(cleanId));
 
-        let dupCheckQuery = db.collection('whatsapp_messages')
-            .where('orderNumber', 'in', [...new Set(dupSearch)])
-            .where('templateName', '==', templateName);
+            let dupCheckQuery = db.collection('whatsapp_messages')
+                .where('orderNumber', 'in', [...new Set(dupSearch)])
+                .where('templateName', '==', templateName);
 
-        if (timeLimit) {
-            dupCheckQuery = dupCheckQuery.where('timestamp', '>', admin.firestore.Timestamp.fromDate(timeLimit));
-        }
+            // Fully professional timestamp filter (Requires Composite Index)
+            if (timeLimit) {
+                dupCheckQuery = dupCheckQuery.where('timestamp', '>', admin.firestore.Timestamp.fromDate(timeLimit));
+            }
 
-        const dupCheck = await dupCheckQuery.limit(1).get();
-        if (!dupCheck.empty) {
-            await db.collection('webhook_logs').doc(payload.log_id).update({ automationStatus: 'SKIPPED: DUPLICATE' });
-            return res.status(200).json({ message: 'Duplicate alert prevented' });
+            const dupCheck = await dupCheckQuery.limit(1).get();
+            if (!dupCheck.empty) {
+                await db.collection('webhook_logs').doc(payload.log_id).update({ automationStatus: 'SKIPPED: DUPLICATE' });
+                return res.status(200).json({ message: 'Duplicate alert prevented' });
+            }
+        } else {
+            console.log('[Shipping Webhook] TEST MODE: Bypassing duplicate check');
         }
 
         // Send WhatsApp
