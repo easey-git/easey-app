@@ -39,11 +39,12 @@ module.exports = async (req, res) => {
         const payload = req.body;
         console.log('[Shipping Webhook] Received payload:', JSON.stringify(payload));
 
-        // NEW: Log raw payload for Live Dashboard Monitoring
+        // NEW: Log raw payload for Live Dashboard Monitoring (with 7-day TTL)
         await db.collection('webhook_logs').add({
             source: 'nimbuspost',
             payload: payload,
             timestamp: admin.firestore.Timestamp.now(),
+            expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
             status: payload.status || 'unknown',
             awb: payload.awb_number || payload.awb || 'N/A'
         });
