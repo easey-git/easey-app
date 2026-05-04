@@ -127,28 +127,37 @@ module.exports = async (req, res) => {
         const whatsappToken = process.env.WHATSAPP_ACCESS_TOKEN;
         const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
+        // Extract product name (Assuming 'items' array or 'productName' field)
+        const firstItem = order.items?.[0]?.name || order.productName || 'your order';
+        const productDisplay = order.items?.length > 1 ? `${firstItem} & more` : firstItem;
+
         const components = [
             {
                 type: 'body',
                 parameters: [
                     { type: 'text', text: order.customerName || 'Customer' },
                     { type: 'text', text: order.orderNumber.toString() },
+                    { type: 'text', text: productDisplay },
                     { type: 'text', text: payload.courier_name || order.carrier || 'our courier partner' }
                 ]
             }
         ];
 
-        // For OFD, we add the AWB as the 4th parameter
-        if (automationType === 'OFD') {
+        // 5a. Specialized Parameter Handling for Buttons
+        if (automationType === 'In-Transit') {
+            // Param 4 for NDR/OFD (if needed) vs Button Param for In-Transit
+            components.push({
+                type: 'button',
+                sub_type: 'url',
+                index: '0', // First button
+                parameters: [
+                    { type: 'text', text: awb || order.awb || '' }
+                ]
+            });
+        } else if (automationType === 'OFD') {
             components[0].parameters.push({ type: 'text', text: order.awb || awb || '' });
         } else if (automationType === 'NDR') {
-            // NDR might need attempts or reason
             components[0].parameters.push({ type: 'text', text: payload.ndr_reason || 'Address issue or customer not available' });
-        } else if (automationType === 'In-Transit') {
-            // In-Transit 4th parameter is the tracking link
-            const courierSlug = (payload.courier_name || order.carrier || '').toLowerCase().replace(/\s/g, '');
-            const trackingUrl = `https://nimbuspost.com/tracking?awb=${awb || order.awb}`;
-            components[0].parameters.push({ type: 'text', text: trackingUrl });
         }
 
         const waResponse = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {

@@ -173,6 +173,43 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         const unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
             const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setWebhookLogs(logs);
+
+            // SYNC Hub Tabs in Real-Time
+            logs.forEach(log => {
+                const status = (log.status || '').toLowerCase();
+                const record = {
+                    id: `live-${log.id}`,
+                    orderNumber: (log.payload?.order_number || log.payload?.order_id || '...').toString().replace('#', ''),
+                    awb: log.awb || '...',
+                    status: log.status || 'Active',
+                    carrier: log.payload?.courier_name || '-',
+                    location: log.payload?.location || 'Live Update',
+                    customerName: 'Live Event',
+                    phone: log.payload?.phone || '',
+                    isSent: true,
+                    timestamp: log.timestamp
+                };
+
+                if (status.includes('transit') || status.includes('shipped') || status.includes('dispatched')) {
+                    setInTransitRecords(prev => {
+                        const exists = prev.some(p => p.orderNumber === record.orderNumber);
+                        if (exists) return prev;
+                        return [record, ...prev].slice(0, 30);
+                    });
+                } else if (status.includes('ofd') || status.includes('delivery')) {
+                    setOfdRecords(prev => {
+                        const exists = prev.some(p => p.orderNumber === record.orderNumber);
+                        if (exists) return prev;
+                        return [record, ...prev].slice(0, 30);
+                    });
+                } else if (status.includes('ndr') || status.includes('exception') || status.includes('fail')) {
+                    setNdrRecords(prev => {
+                        const exists = prev.some(p => p.orderNumber === record.orderNumber);
+                        if (exists) return prev;
+                        return [record, ...prev].slice(0, 30);
+                    });
+                }
+            });
         });
 
         return () => {
@@ -483,12 +520,36 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
 
     const loadInTransitHistory = async (force = false) => {
-        // Similar logic to fetch historical 'in transit' status messages if any
-        // For now, it will be populated by CSV or Webhook
         if (!force && inTransitRecords.length > 0) return;
         try {
-            // Logic for loading in-transit history from whatsapp_messages if needed
-        } catch (e) { console.error(e); }
+            setHistoryLoading(true);
+            const q = query(
+                collection(db, "whatsapp_messages"),
+                where("templateName", "==", "alert_shipping_transit"),
+                orderBy("timestamp", "desc"),
+                limit(30)
+            );
+            const snapshot = await getDocs(q);
+            const historyMessages = snapshot.docs.map(doc => doc.data());
+            
+            // Map to unified record format
+            const historyRecords = historyMessages.map((msg, index) => ({
+                id: `transit-history-${index}`,
+                orderNumber: msg.orderNumber,
+                awb: msg.metadata?.awb || 'Historical',
+                status: 'In Transit',
+                carrier: msg.metadata?.courier || '-',
+                location: msg.metadata?.location || 'Tracking Active',
+                customerName: 'Customer',
+                phone: msg.phone,
+                isSent: true,
+                timestamp: msg.timestamp
+            }));
+
+            setInTransitRecords(historyRecords);
+        } catch (error) {
+            console.error("Error loading Transit history:", error);
+        }
     };
 
     // OFD Engine Logic
