@@ -630,8 +630,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         const updatedRecords = [...records];
         let matchedCount = 0;
 
-        // Future-Proof Industry Standard: Batch Processing (10 items at a time to allow for variants)
-        const CHUNK_SIZE = 10; 
+        // Future-Proof Industry Standard: Batch Processing (5 items at a time to stay within Firestore's 30-disjunction limit)
+        const CHUNK_SIZE = 5; 
         const chunks = [];
         for (let i = 0; i < updatedRecords.length; i += CHUNK_SIZE) {
             chunks.push(updatedRecords.slice(i, i + CHUNK_SIZE));

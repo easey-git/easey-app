@@ -93,6 +93,12 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /webhook_logs/{document=**} {
+      allow read: if hasPermission('access_whatsapp');
+      allow create: if hasPermission('access_whatsapp');
+      allow update, delete: if isAdmin();
+    }
+
     // 5. Campaigns
     match /campaigns/{document=**} {
       allow read: if hasPermission('access_campaigns');
