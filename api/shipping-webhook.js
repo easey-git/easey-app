@@ -29,29 +29,29 @@ const getTemplateComponents = (type, order, payload, awb) => {
     const customer = order.customerName || 'Customer';
     const orderId = order.orderNumber.toString();
 
-    // Body Param 1: Customer Name
-    // Body Param 2: Order Number
-    // Body Param 3: Product Name
-    // Body Param 4: Courier Name
+    // Default Body Params (Used for In-Transit and OFD)
+    let bodyParams = [
+        { type: 'text', text: customer },
+        { type: 'text', text: orderId },
+        { type: 'text', text: productDisplay },
+        { type: 'text', text: courier }
+    ];
+
+    // Specialized Body Params for NDR (Template only has 3 variables)
+    if (type === 'NDR') {
+        bodyParams = [
+            { type: 'text', text: customer },
+            { type: 'text', text: orderId },
+            { type: 'text', text: payload.ndr_reason || 'Address issue or customer not available' }
+        ];
+    }
+
     const components = [
         {
             type: 'body',
-            parameters: [
-                { type: 'text', text: customer },
-                { type: 'text', text: orderId },
-                { type: 'text', text: productDisplay },
-                { type: 'text', text: courier }
-            ]
+            parameters: bodyParams
         }
     ];
-
-    // Only NDR has 5 variables (Body 1-4 + Reason as #5)
-    if (type === 'NDR') {
-        components[0].parameters.push({ 
-            type: 'text', 
-            text: payload.ndr_reason || 'Address issue or customer not available' 
-        });
-    }
 
     // Only In-Transit has the tracking button variable
     if (type === 'In-Transit') {
