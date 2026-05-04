@@ -190,6 +190,7 @@ module.exports = async (req, res) => {
         // 6. Log to Firestore for Dashboard Visibility
         const logEntry = {
             phone: phone,
+            customerName: order.customerName || 'Customer',
             orderNumber: order.orderNumber.toString(),
             direction: 'outbound',
             type: 'template',

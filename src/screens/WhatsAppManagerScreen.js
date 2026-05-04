@@ -173,44 +173,47 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         const unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
             const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setWebhookLogs(logs);
+        });
 
-            // SYNC Hub Tabs in Real-Time
-            logs.forEach(log => {
-                const status = (log.status || '').toLowerCase();
-                const record = {
-                    id: `live-${log.id}`,
-                    orderNumber: (log.payload?.order_number || log.payload?.order_id || '...').toString().replace('#', ''),
-                    awb: log.awb || '...',
-                    status: log.status || 'Active',
-                    carrier: log.payload?.courier_name || '-',
-                    location: log.payload?.location || 'Live Update',
-                    customerName: log.customerName || 'Live Event',
-                    automationStatus: log.automationStatus || 'PENDING',
-                    phone: log.payload?.phone || '',
-                    isSent: log.automationStatus === 'SUCCESS',
-                    timestamp: log.timestamp
-                };
+        // SYNC Hub Tabs in Real-Time (Sent Messages Only)
+        const qTransit = query(collection(db, "whatsapp_messages"), where("templateName", "==", "alert_shipping_transit"), orderBy("timestamp", "desc"), limit(20));
+        const unsubTransit = onSnapshot(qTransit, (snapshot) => {
+            const records = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                isSent: true,
+                status: 'In Transit',
+                carrier: doc.data().metadata?.courier || '-',
+                location: 'Tracking Active',
+                customerName: doc.data().customerName || 'Customer'
+            }));
+            setInTransitRecords(records);
+        });
 
-                if (status.includes('transit') || status.includes('shipped') || status.includes('dispatched')) {
-                    setInTransitRecords(prev => {
-                        const exists = prev.some(p => p.orderNumber === record.orderNumber);
-                        if (exists) return prev;
-                        return [record, ...prev].slice(0, 30);
-                    });
-                } else if (status.includes('ofd') || status.includes('delivery')) {
-                    setOfdRecords(prev => {
-                        const exists = prev.some(p => p.orderNumber === record.orderNumber);
-                        if (exists) return prev;
-                        return [record, ...prev].slice(0, 30);
-                    });
-                } else if (status.includes('ndr') || status.includes('exception') || status.includes('fail')) {
-                    setNdrRecords(prev => {
-                        const exists = prev.some(p => p.orderNumber === record.orderNumber);
-                        if (exists) return prev;
-                        return [record, ...prev].slice(0, 30);
-                    });
-                }
-            });
+        const qOFD = query(collection(db, "whatsapp_messages"), where("templateName", "==", "alert_shipping_ofd"), orderBy("timestamp", "desc"), limit(20));
+        const unsubOFD = onSnapshot(qOFD, (snapshot) => {
+            const records = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                isSent: true,
+                status: 'Out For Delivery',
+                carrier: doc.data().metadata?.carrier || '-',
+                location: doc.data().metadata?.location || 'Local'
+            }));
+            setOfdRecords(records);
+        });
+
+        const qNDR = query(collection(db, "whatsapp_messages"), where("templateName", "==", "alert_shipping_ndr"), orderBy("timestamp", "desc"), limit(20));
+        const unsubNDR = onSnapshot(qNDR, (snapshot) => {
+            const records = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                isSent: true,
+                status: 'NDR Alert Sent',
+                carrier: doc.data().metadata?.carrier || '-',
+                location: doc.data().metadata?.location || 'Local'
+            }));
+            setNdrRecords(records);
         });
 
         return () => {
@@ -218,6 +221,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             unsubCarts();
             unsubActivity();
             unsubscribeLogs();
+            unsubTransit();
+            unsubOFD();
+            unsubNDR();
         };
     }, [activityLimit]);
 
