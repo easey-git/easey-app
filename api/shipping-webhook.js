@@ -51,14 +51,13 @@ module.exports = async (req, res) => {
         });
         payload.log_id = logRef.id;
 
-        // 1. Extract Core Data (Adapt to NimbusPost format)
-        // Standard NimbusPost webhook fields: status, awb, order_number
+        // 1. Extract Core Data (Prioritize your Order Number over Nimbus internal ID)
         const rawStatus = (payload.status || '').toString().toLowerCase();
-        const awb = (payload.awb || payload.tracking_number || '').toString().trim();
-        const orderId = (payload.order_id || payload.order_number || '').toString().trim();
+        const awb = (payload.awb_number || payload.awb || '').toString().trim();
+        const orderNum = (payload.order_number || payload.order_id || '').toString().trim();
 
-        if (!awb && !orderId) {
-            return res.status(400).json({ error: 'Missing AWB or Order ID' });
+        if (!awb && !orderNum) {
+            return res.status(400).json({ error: 'Missing AWB or Order Number' });
         }
 
         // 2. Determine Trigger Type
@@ -88,15 +87,25 @@ module.exports = async (req, res) => {
             if (!q.empty) order = q.docs[0].data();
         }
         
-        if (!order && orderId) {
-            // Try matching by orderNumber (with and without #)
-            const cleanId = orderId.replace('#', '');
-            const q = await db.collection('orders').where('orderNumber', 'in', [orderId, cleanId, Number(cleanId)]).limit(1).get();
+        if (!order && orderNum) {
+            // Try matching by orderNumber (with and without #, string vs number)
+            const cleanNum = orderNum.replace('#', '').trim();
+            const searchArray = [orderNum, cleanNum];
+            if (!isNaN(cleanNum)) searchArray.push(Number(cleanNum));
+
+            const q = await db.collection('orders').where('orderNumber', 'in', [...new Set(searchArray)]).limit(1).get();
             if (!q.empty) order = q.docs[0].data();
         }
 
         if (!order) {
-            console.error(`[Shipping Webhook] No order found for AWB: ${awb} / ID: ${orderId}`);
+            console.error(`[Shipping Webhook] No order found for AWB: ${awb} / OrderNum: ${orderNum}`);
+            // Log the mismatch to help debugging
+            if (payload.log_id) {
+                await db.collection('webhook_logs').doc(payload.log_id).update({
+                    automationStatus: 'FAILED: ORDER_NOT_FOUND',
+                    debugInfo: `Searched for ${orderNum}`
+                });
+            }
             return res.status(404).json({ error: 'Order not found' });
         }
 
