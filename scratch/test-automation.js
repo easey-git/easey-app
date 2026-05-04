@@ -10,7 +10,7 @@ const testAutomation = async (status, label) => {
         const response = await axios.post(API_URL, {
             order_number: TEST_ORDER_NUMBER,
             status: status,
-            awb_number: `TEST_AWB_${Math.floor(Math.random() * 10000)}`,
+            awb_number: '40441734459890', // Using a real AWB format to test the button link
             courier_name: 'Delhivery',
             ndr_reason: status === 'ndr' ? 'Customer not available' : undefined,
             is_test: true // Bypass duplicate check for testing

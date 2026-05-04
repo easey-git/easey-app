@@ -29,12 +29,15 @@ const getTemplateComponents = (type, order, payload, awb) => {
     const customer = order.customerName || 'Customer';
     const orderId = order.orderNumber.toString();
 
-    // Default Body Params (Used for In-Transit and OFD)
+    // Body Param 1: Customer Name
+    // Body Param 2: Order Number
+    // Body Param 3: Product Name
+    // Body Param 4: AWB (Tracking Number)
     let bodyParams = [
         { type: 'text', text: customer },
         { type: 'text', text: orderId },
         { type: 'text', text: productDisplay },
-        { type: 'text', text: courier }
+        { type: 'text', text: awb || order.awb || 'available soon' }
     ];
 
     // Specialized Body Params for NDR (Template only has 3 variables)
