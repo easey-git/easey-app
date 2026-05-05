@@ -52,13 +52,16 @@ const normalizePhone = (phone) => {
     return p;
 };
 
-const sendWhatsAppMessage = async (to, templateName, components, languageCode = "en") => {
+const sendWhatsAppMessage = async (to, templateName, components, languageCode = "en_US") => {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    if (!token || !phoneId || !to) return;
+    if (!token || !phoneId || !to) {
+        console.error('[WhatsApp] Missing credentials or recipient');
+        return;
+    }
 
     try {
-        await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+        const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -73,17 +76,29 @@ const sendWhatsAppMessage = async (to, templateName, components, languageCode = 
             })
         });
         
-        // Log log
-        db.collection('whatsapp_messages').add({
+        const responseData = await response.json();
+        
+        if (!response.ok) {
+            console.error(`[WhatsApp API Error] Template: ${templateName}, Status: ${response.status}`, JSON.stringify(responseData));
+            return;
+        }
+
+        // Log to Firestore for visibility
+        await db.collection('whatsapp_messages').add({
             phone: to,
             phoneNormalized: normalizePhone(to),
             direction: 'outbound',
             type: 'template',
             templateName: templateName,
+            whatsappId: responseData.messages?.[0]?.id || null,
             timestamp: admin.firestore.Timestamp.now(),
             expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))
-        }).catch(() => {});
-    } catch (e) { console.error(e); }
+        });
+        
+        console.log(`[WhatsApp] Successfully sent ${templateName} to ${to}`);
+    } catch (e) { 
+        console.error('[WhatsApp Exception]', e); 
+    }
 };
 
 const sendFCMNotifications = async (title, body, dataPayload) => {
@@ -203,7 +218,7 @@ module.exports = async (req, res) => {
                     }
                 ];
 
-                await sendWhatsAppMessage(orderData.phoneNormalized, CONSTANTS.TEMPLATES.COD_CONFIRMATION, components);
+                await sendWhatsAppMessage(orderData.phoneNormalized, CONSTANTS.TEMPLATES.COD_CONFIRMATION, components, "en_US");
                 
                 // Update flag to prevent double-send
                 await db.collection("orders").doc(String(data.id)).update({ 
