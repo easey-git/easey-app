@@ -326,6 +326,8 @@ module.exports = async (req, res) => {
             let ordersSnap = null;
             const contextId = message.context?.id;
 
+            let matchedStrategy = 'None';
+
             // 0. Surgical Precision: Match exact message context (100% accurate for button clicks)
             if (contextId) {
                 const contextMsgSnap = await db.collection('whatsapp_messages')
@@ -335,13 +337,17 @@ module.exports = async (req, res) => {
                 if (!contextMsgSnap.empty) {
                     const matchedOrderNumber = contextMsgSnap.docs[0].data().orderNumber;
                     if (matchedOrderNumber) {
-                        // Look for the exact order using the order number (handling formatting differences)
                         const cleanId = matchedOrderNumber.toString().replace('#', '').trim();
+                        // Filter out duplicates to avoid any Firestore 'in' query issues
+                        const searchArr = [...new Set([matchedOrderNumber, cleanId, `#${cleanId}`, Number(cleanId)])];
                         ordersSnap = await db.collection('orders')
-                            .where('orderNumber', 'in', [matchedOrderNumber, cleanId, `#${cleanId}`, Number(cleanId)])
+                            .where('orderNumber', 'in', searchArr)
                             .limit(1)
                             .get();
+                        if (!ordersSnap.empty) matchedStrategy = `Strategy 0 (Context ID) -> Order ${matchedOrderNumber}`;
                     }
+                } else {
+                    console.warn(`[Webhook] Context ID ${contextId} found in payload, but no matching outbound message in DB.`);
                 }
             }
 
@@ -351,6 +357,7 @@ module.exports = async (req, res) => {
                     .where('phoneNormalized', '==', phoneNormalized)
                     .where('whatsapp_flow', '==', 'AWAITING_ADDRESS')
                     .get();
+                if (!ordersSnap.empty) matchedStrategy = 'Strategy 0.5 (Awaiting Address)';
             }
 
             // 1. Primary Strategy: Look for an order that currently has an active NDR/OFD alert sent
@@ -359,6 +366,7 @@ module.exports = async (req, res) => {
                     .where('phoneNormalized', '==', phoneNormalized)
                     .where('ndrStatusCategory', 'in', ['NDR', 'OFD'])
                     .get();
+                if (!ordersSnap.empty) matchedStrategy = 'Strategy 1 (NDR/OFD Category)';
             }
 
             // 2. Secondary Strategy: Look for the latest PENDING order (Verification flow)
@@ -367,6 +375,7 @@ module.exports = async (req, res) => {
                     .where('phoneNormalized', '==', phoneNormalized)
                     .where('verificationStatus', '==', 'pending')
                     .get();
+                if (!ordersSnap.empty) matchedStrategy = 'Strategy 2 (Pending Verification)';
             }
             
             // 3. Fallback: If no pending/NDR order, look for the latest overall order
@@ -374,6 +383,7 @@ module.exports = async (req, res) => {
                 ordersSnap = await db.collection('orders')
                     .where('phoneNormalized', '==', phoneNormalized)
                     .get();
+                if (!ordersSnap.empty) matchedStrategy = 'Strategy 3 (Latest Fallback)';
             }
 
             if (!ordersSnap || ordersSnap.empty) return res.status(200).send('OK');
@@ -381,6 +391,8 @@ module.exports = async (req, res) => {
             // Pick the latest from the matched set
             const orderDoc = ordersSnap.docs.sort((a,b) => (b.data().createdAt?.seconds || 0) - (a.data().createdAt?.seconds || 0))[0];
             const orderData = orderDoc.data();
+            
+            console.log(`[Webhook Match] Phone: ${phoneNormalized} | Matched Order: ${orderData.orderNumber} | Strategy: ${matchedStrategy}`);
 
             // --- PAYLOAD CHECKS ---
             const isConfirmYes = CONSTANTS.PAYLOADS.CONFIRM_YES.includes(payload) || CONSTANTS.PAYLOADS.CONFIRM_YES.includes(body);
@@ -422,6 +434,7 @@ module.exports = async (req, res) => {
                     ndr_alert_type: isNdrReattempt ? 'REATTEMPT' : 'ADDRESS_UPDATE',
                     ndr_status: isNdrReattempt ? 'reattempt_requested' : 'address_update_requested',
                     ndr_customer_note: `Customer requested: ${actionType}`,
+                    ndrStatusCategory: admin.firestore.FieldValue.delete(), // Clear the active NDR bucket so it doesn't catch future replies
                     updatedAt: admin.firestore.Timestamp.now()
                 });
 
@@ -449,6 +462,7 @@ module.exports = async (req, res) => {
                     verificationStatus: 'cancelled', 
                     isNdrAlert: true, // Also show in the new Alerts tab
                     ndr_alert_type: 'CANCEL',
+                    ndrStatusCategory: admin.firestore.FieldValue.delete(), // Clear the active NDR bucket
                     updatedAt: admin.firestore.Timestamp.now() 
                 });
 
