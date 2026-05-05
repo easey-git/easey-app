@@ -139,10 +139,14 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         const unsubActivity = onSnapshot(qActivity, (snapshot) => {
             const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // Update Recent Activity List (All fetched messages for grouping)
-            setRecentActivity(messages);
+            setLoading(false);
+            setLoadingMore(false);
+        });
 
-            // Calculate Stats
+        // 4. Dedicated Stats Listener (High Capacity for Chart Accuracy)
+        const qStats = query(collection(db, "whatsapp_messages"), orderBy("timestamp", "desc"), limit(500));
+        const unsubStats = onSnapshot(qStats, (snapshot) => {
+            const messages = snapshot.docs.map(doc => doc.data());
             let sent = 0;
             let delivered = 0;
             let read = 0;
@@ -161,12 +165,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
             setMessageStats([
                 { value: sent, label: 'Sent', frontColor: theme.colors.primary },
                 { value: delivered, label: 'Delivered', frontColor: theme.colors.secondary },
-                { value: read, label: 'Read', frontColor: '#4ade80' },
+                { value: read, label: '#4ade80' },
                 { value: replied, label: 'Replied', frontColor: '#f59e0b' },
             ]);
-
-            setLoading(false);
-            setLoadingMore(false);
         });
 
         // Listen for Webhook Logs
@@ -1954,7 +1955,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         
         const pendingOrders = activeCodOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
         const verifiedOrders = activeCodOrders.filter(o => o.verificationStatus === 'approved');
-        const alertOrders = activeCodOrders.filter(o => ['address_change_requested', 'address_updated'].includes(o.verificationStatus));
+        const alertOrders = activeCodOrders.filter(o => ['address_change_requested', 'address_updated', 'ndr_action_required'].includes(o.verificationStatus));
         const cancelledOrders = activeCodOrders.filter(o => o.verificationStatus === 'cancelled');
 
         let displayedOrders = [];
@@ -1982,7 +1983,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
 
         const pendingOrders = activeCodOrders.filter(o => !o.verificationStatus || o.verificationStatus === 'pending');
         const verifiedOrders = activeCodOrders.filter(o => o.verificationStatus === 'approved');
-        const alertOrders = activeCodOrders.filter(o => ['address_change_requested', 'address_updated'].includes(o.verificationStatus));
+        const alertOrders = activeCodOrders.filter(o => ['address_change_requested', 'address_updated', 'ndr_action_required'].includes(o.verificationStatus));
         const cancelledOrders = activeCodOrders.filter(o => o.verificationStatus === 'cancelled');
 
         return (

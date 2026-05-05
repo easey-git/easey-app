@@ -191,7 +191,8 @@ module.exports = async (req, res) => {
                 const actionType = isNdrReattempt ? 'Re-attempt Delivery' : 'Address Update';
                 
                 await orderDoc.ref.update({
-                    isNdrAlert: true, // Dedicated flag for the new Alerts tab
+                    verificationStatus: 'ndr_action_required', // Restore visibility in COD Verify Tab
+                    isNdrAlert: true, // Keep visibility in Logistics Hub Tab
                     ndr_alert_type: isNdrReattempt ? 'REATTEMPT' : 'ADDRESS_UPDATE',
                     ndr_status: isNdrReattempt ? 'reattempt_requested' : 'address_update_requested',
                     ndr_customer_note: `Customer requested: ${actionType}`,
