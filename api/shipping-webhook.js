@@ -91,21 +91,25 @@ module.exports = async (req, res) => {
     try {
         const payload = req.body;
         
+        // --- MULTI-CARRIER ADAPTER ---
+        const isShiprocket = !!payload.awb_code;
+        const source = isShiprocket ? 'shiprocket' : 'nimbuspost';
+        
+        const awb = (isShiprocket ? payload.awb_code : payload.awb_number || payload.awb || '').toString().trim();
+        const rawStatus = (isShiprocket ? payload.current_status : payload.status || '').toString().toLowerCase();
+        const orderNum = (isShiprocket ? payload.order_id : payload.order_number || payload.order_id || '').toString().trim();
+
         // Log raw payload
         const logRef = await db.collection('webhook_logs').add({
-            source: 'nimbuspost',
+            source: source,
             payload: payload,
             timestamp: admin.firestore.Timestamp.now(),
             expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
-            status: payload.status || 'unknown',
-            awb: payload.awb_number || payload.awb || 'N/A',
+            status: rawStatus,
+            awb: awb,
             automationStatus: 'PENDING'
         });
         payload.log_id = logRef.id;
-
-        const rawStatus = (payload.status || '').toString().toLowerCase();
-        const awb = (payload.awb_number || payload.awb || '').toString().trim();
-        const orderNum = (payload.order_number || payload.order_id || '').toString().trim();
 
         if (!awb && !orderNum) {
             return res.status(400).json({ error: 'Missing AWB or Order Number' });

@@ -114,6 +114,67 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') return res.status(200).send('OK');
 
     try {
+        const data = req.body;
+        const queryParams = req.query || {};
+
+        // ---------------------------------------------------------
+        // A. SHIPROCKET CHECKOUT / ABANDONED CART
+        // ---------------------------------------------------------
+        if (data.cart_id || data.latest_stage) {
+            let eventType = data.latest_stage || "UNKNOWN";
+            if (queryParams.abandoned === "1") eventType = "ABANDONED";
+
+            const checkoutId = data.cart_id || "";
+            const customerName = `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Visitor';
+
+            const checkoutData = {
+                eventType,
+                checkoutId,
+                orderId: data.order_id || "",
+                amount: data.total_price || 0,
+                currency: data.currency || "INR",
+                customerName,
+                email: data.email || "",
+                phone: data.phone_number || "",
+                items: (data.items || []).map(i => ({ name: i.name || i.title || "", quantity: i.quantity || 1, price: i.price || 0 })),
+                city: data.shipping_address?.city || "",
+                state: data.shipping_address?.state || "",
+                pincode: data.shipping_address?.zip || "",
+                updatedAt: admin.firestore.Timestamp.now(),
+                rawJson: JSON.stringify(data)
+            };
+
+            await db.collection("checkouts").doc(checkoutId ? `checkout_${checkoutId}` : `unknown_${Date.now()}`).set(checkoutData, { merge: true });
+            return res.status(200).send("OK");
+        }
+
+        // ---------------------------------------------------------
+        // B. SHOPIFY ORDER CREATION
+        // ---------------------------------------------------------
+        if (data.order_number) {
+            const orderData = {
+                orderId: data.id,
+                orderNumber: data.order_number,
+                totalPrice: data.total_price,
+                currency: data.currency,
+                customerName: data.customer ? `${data.customer.first_name} ${data.customer.last_name}` : "Guest",
+                email: data.email,
+                phone: data.phone || (data.customer ? data.customer.phone : null),
+                phoneNormalized: normalizePhone(data.phone || (data.customer ? data.customer.phone : null)),
+                createdAt: admin.firestore.Timestamp.now(),
+                updatedAt: admin.firestore.Timestamp.now(),
+                status: "New",
+                verificationStatus: 'pending',
+                items: (data.line_items || []).map(item => ({ name: item.title, quantity: item.quantity, price: item.price }))
+            };
+
+            await db.collection("orders").doc(String(data.id)).set(orderData, { merge: true });
+            return res.status(200).json({ success: true });
+        }
+
+        // ---------------------------------------------------------
+        // C. WHATSAPP WEBHOOK (EXISTING)
+        // ---------------------------------------------------------
         const entry = req.body.entry?.[0];
         const changes = entry?.changes?.[0];
         const value = changes?.value;
