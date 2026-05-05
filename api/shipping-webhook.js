@@ -22,6 +22,24 @@ const statusTemplateMap = {
     'NDR': 'alert_shipping_ndr'
 };
 
+// Constants & Helpers
+const HUMAN_REASONS = {
+    'cna': 'Door was locked or person not available',
+    'nsm': 'Mobile number was unreachable',
+    'ref': 'Customer refused to accept the delivery',
+    'adr': 'Address was incomplete or incorrect',
+    'ofc': 'Office/Shop was closed',
+    'sdm': 'Delivery was delayed due to weather or logistics',
+    'ni': 'Customer not interested anymore',
+    'id': 'Incomplete or wrong address provided'
+};
+
+const humanizeNDR = (msg) => {
+    if (!msg) return 'Address issue or customer not available';
+    const low = msg.toLowerCase().trim();
+    return HUMAN_REASONS[low] || msg;
+};
+
 const getTemplateComponents = (type, order, payload, awb) => {
     const firstItem = order.items?.[0]?.name || order.productName || 'your order';
     const productDisplay = order.items?.length > 1 ? `${firstItem} & more` : firstItem;
@@ -58,7 +76,7 @@ const getTemplateComponents = (type, order, payload, awb) => {
         bodyParams = [
             { type: 'text', text: customer },
             { type: 'text', text: orderId },
-            { type: 'text', text: payload.message || payload.ndr_reason || 'Address issue or customer not available' }
+            { type: 'text', text: humanizeNDR(payload.message || payload.ndr_reason) }
         ];
     }
 
@@ -115,8 +133,9 @@ module.exports = async (req, res) => {
         const logRef = await db.collection('webhook_logs').add({
             source: source,
             payload: payload,
+            type: 'nimbus_tracking',
             timestamp: admin.firestore.Timestamp.now(),
-            expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+            expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
             status: rawStatus,
             awb: awb,
             automationStatus: 'PENDING'

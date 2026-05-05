@@ -135,6 +135,14 @@ module.exports = async (req, res) => {
         const data = req.body;
         const queryParams = req.query || {};
 
+        // 1. Centralized Audit Log (30-day TTL)
+        await db.collection('webhook_logs').add({
+            timestamp: admin.firestore.Timestamp.now(),
+            expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+            type: data.order_number ? 'shopify_order' : (data.cart_id ? 'shiprocket_checkout' : 'webhook_generic'),
+            payload: data
+        });
+
         // ---------------------------------------------------------
         // A. SHIPROCKET CHECKOUT / ABANDONED CART
         // ---------------------------------------------------------
@@ -315,8 +323,19 @@ module.exports = async (req, res) => {
                 expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))
             });
 
-            // Find Latest Order
-            const ordersSnap = await db.collection('orders').where('phoneNormalized', '==', phoneNormalized).get();
+            // Find Latest PENDING Order (To avoid old confirm clicks messing with shipped orders)
+            let ordersSnap = await db.collection('orders')
+                .where('phoneNormalized', '==', phoneNormalized)
+                .where('verificationStatus', '==', 'pending')
+                .get();
+            
+            // Fallback: If no pending order, look for the latest overall order (for NDR responses)
+            if (ordersSnap.empty) {
+                ordersSnap = await db.collection('orders')
+                    .where('phoneNormalized', '==', phoneNormalized)
+                    .get();
+            }
+
             if (ordersSnap.empty) return res.status(200).send('OK');
             const orderDoc = ordersSnap.docs.sort((a,b) => (b.data().createdAt?.seconds || 0) - (a.data().createdAt?.seconds || 0))[0];
             const orderData = orderDoc.data();
