@@ -185,6 +185,34 @@ module.exports = async (req, res) => {
             };
 
             await db.collection("orders").doc(String(data.id)).set(orderData, { merge: true });
+
+            // --- AUTO-TRIGGER WHATSAPP ---
+            if (orderData.phoneNormalized) {
+                const firstItem = orderData.items?.[0]?.name || 'your order';
+                const productDisplay = (orderData.items?.length > 1) ? `${firstItem} & more` : firstItem;
+
+                const components = [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: orderData.customerName || 'Customer' },
+                            { type: 'text', text: String(orderData.orderNumber) },
+                            { type: 'text', text: productDisplay },
+                            { type: 'text', text: String(orderData.totalPrice) }
+                        ]
+                    }
+                ];
+
+                await sendWhatsAppMessage(orderData.phoneNormalized, CONSTANTS.TEMPLATES.COD_CONFIRMATION, components);
+                
+                // Update flag to prevent double-send
+                await db.collection("orders").doc(String(data.id)).update({ 
+                    whatsappSent: true,
+                    whatsappSentAt: admin.firestore.Timestamp.now()
+                });
+            }
+
+            console.log(`Shopify Order ${data.order_number} saved and WhatsApp triggered.`);
             return res.status(200).json({ success: true });
         }
 
@@ -268,7 +296,7 @@ module.exports = async (req, res) => {
                 const actionType = isNdrReattempt ? 'Re-attempt Delivery' : 'Address Update';
                 
                 await orderDoc.ref.update({
-                    isNdrAlert: true, // Dedicated flag for the new Alerts tab
+                    isNdrAlert: true,
                     ndr_alert_type: isNdrReattempt ? 'REATTEMPT' : 'ADDRESS_UPDATE',
                     ndr_status: isNdrReattempt ? 'reattempt_requested' : 'address_update_requested',
                     ndr_customer_note: `Customer requested: ${actionType}`,
@@ -277,10 +305,18 @@ module.exports = async (req, res) => {
 
                 await sendFCMNotifications(`NDR Alert: ${actionType} 🚨`, `Order #${orderData.orderNumber} needs attention.`, { orderId: orderDoc.id });
                 
-                // Confirm to customer (Param 1 = Action)
-                await sendWhatsAppMessage(senderPhone, 'ndr_action_confirmed', [
-                    { type: 'body', parameters: [{ type: 'text', text: actionLabel }] }
-                ]);
+                if (isAddressEdit) {
+                    // Send specialized Update Address template (1 param: Name)
+                    await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.UPDATE_ADDRESS, [
+                        { type: 'body', parameters: [{ type: 'text', text: orderData.customerName || 'Customer' }] }
+                    ]);
+                    await orderDoc.ref.update({ whatsapp_flow: 'AWAITING_ADDRESS' });
+                } else {
+                    // Send generic NDR confirmation
+                    await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.NDR_CONFIRMED, [
+                        { type: 'body', parameters: [{ type: 'text', text: actionLabel }] }
+                    ]);
+                }
             }
 
             // 4. Cancel
