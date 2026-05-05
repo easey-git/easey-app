@@ -322,9 +322,10 @@ module.exports = async (req, res) => {
                 
                 if (isAddressEdit) {
                     // Send specialized Update Address template (1 param: Name)
+                    // We use "en" here because your "No worries, please type" template is in English (not US)
                     await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.UPDATE_ADDRESS, [
                         { type: 'body', parameters: [{ type: 'text', text: orderData.customerName || 'Customer' }] }
-                    ]);
+                    ], "en"); 
                     await orderDoc.ref.update({ whatsapp_flow: 'AWAITING_ADDRESS' });
                 } else {
                     // Send generic NDR confirmation
