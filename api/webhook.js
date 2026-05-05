@@ -339,16 +339,23 @@ module.exports = async (req, res) => {
                 ], "en_US");
             }
 
-            // 5. Text Address Update
+            // 5. Text Address Update (Capturing the typed address)
             else if (message.type === 'text' && orderData.whatsapp_flow === 'AWAITING_ADDRESS') {
-                await orderDoc.ref.update({ updatedAddress: body, whatsapp_flow: admin.firestore.FieldValue.delete(), verificationStatus: 'address_updated' });
+                await orderDoc.ref.update({ 
+                    updatedAddress: body, 
+                    whatsapp_flow: admin.firestore.FieldValue.delete(), 
+                    verificationStatus: 'address_updated',
+                    isNdrAlert: true,
+                    ndr_alert_type: 'ADDRESS_UPDATE', // Keep it in the alerts hub
+                    updatedAt: admin.firestore.Timestamp.now()
+                });
+
                 await sendFCMNotifications('Address Updated! 📍', `New address for #${orderData.orderNumber}: ${body}`, { orderId: orderDoc.id });
-                await sendWhatsAppMessage(senderPhone, 'address_updated_thanks', [
-                    { type: 'body', parameters: [
-                        { type: 'text', text: orderData.customerName || 'Customer' },
-                        { type: 'text', text: String(orderData.orderNumber) }
-                    ]}
-                ]);
+                
+                // Shoot the "Acknowledged" version of the template (en_US)
+                await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.UPDATE_ADDRESS, [
+                    { type: 'body', parameters: [{ type: 'text', text: orderData.customerName || 'Customer' }] }
+                ], "en_US");
             }
         }
 
