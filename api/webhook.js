@@ -222,6 +222,8 @@ module.exports = async (req, res) => {
             }
 
             const address = data.shipping_address || data.billing_address || {};
+            const isPrepaid = data.financial_status === 'paid';
+
             const orderData = {
                 orderId: data.id,
                 orderNumber: data.order_number,
@@ -239,9 +241,9 @@ module.exports = async (req, res) => {
                 zip: address.zip || '',
 
                 // System Statuses
-                status: "COD",
-                cod_status: "pending",
-                verificationStatus: 'pending',
+                status: isPrepaid ? "Paid" : "COD",
+                cod_status: isPrepaid ? "not_applicable" : "pending",
+                verificationStatus: isPrepaid ? 'approved' : 'pending',
                 whatsappSent: false,
                 
                 createdAt: admin.firestore.Timestamp.now(),
@@ -256,7 +258,7 @@ module.exports = async (req, res) => {
             await orderDocRef.set(orderData, { merge: true });
 
             // --- AUTO-TRIGGER WHATSAPP ---
-            if (orderData.phoneNormalized) {
+            if (orderData.phoneNormalized && !isPrepaid) {
                 const firstItem = orderData.items?.[0]?.name || 'your order';
                 const productDisplay = (orderData.items?.length > 1) ? `${firstItem} & more` : firstItem;
 
@@ -275,6 +277,12 @@ module.exports = async (req, res) => {
                 await sendWhatsAppMessage(orderData.phoneNormalized, CONSTANTS.TEMPLATES.COD_CONFIRMATION, components, "en_US");
                 
                 // Update flag to prevent double-send on retry
+                await orderDocRef.update({ 
+                    whatsappSent: true,
+                    whatsappSentAt: admin.firestore.Timestamp.now()
+                });
+            } else if (isPrepaid) {
+                // If paid, just mark as whatsapp sent so we don't try again later
                 await orderDocRef.update({ 
                     whatsappSent: true,
                     whatsappSentAt: admin.firestore.Timestamp.now()
