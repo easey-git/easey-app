@@ -1448,22 +1448,10 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <View>
                                             <Text variant="labelSmall">Tracking AWB</Text>
-                                            <Text variant="bodySmall" style={{ fontWeight: 'bold' }}>{item.awb || 'N/A'}</Text>
+                                            <Text variant="bodySmall" style={{ fontWeight: 'bold' }}>
+                                                {item.awb || item.tracking_number || item.awb_number || item.tracking_id || 'N/A'}
+                                            </Text>
                                         </View>
-                                        <Button 
-                                            mode="contained" 
-                                            buttonColor={theme.colors.primary}
-                                            compact 
-                                            onPress={async () => {
-                                                await updateDoc(doc(db, "orders", item.id), {
-                                                    isNdrAlert: false, // Resolve alert
-                                                    updatedAt: new Date()
-                                                });
-                                                showSnackbar("Alert marked as resolved.");
-                                            }}
-                                        >
-                                            Mark Resolved
-                                        </Button>
                                     </View>
                                 </View>
                             </Surface>
