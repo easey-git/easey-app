@@ -141,6 +141,7 @@ module.exports = async (req, res) => {
 
             const checkoutId = data.cart_id || "";
             const customerName = `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Visitor';
+            const recoveryUrl = data.recovery_url || `https://easey.in/cart/${checkoutId}`;
 
             const checkoutData = {
                 eventType,
@@ -155,11 +156,31 @@ module.exports = async (req, res) => {
                 city: data.shipping_address?.city || "",
                 state: data.shipping_address?.state || "",
                 pincode: data.shipping_address?.zip || "",
+                recoveryUrl: recoveryUrl,
                 updatedAt: admin.firestore.Timestamp.now(),
                 rawJson: JSON.stringify(data)
             };
 
             await db.collection("checkouts").doc(checkoutId ? `checkout_${checkoutId}` : `unknown_${Date.now()}`).set(checkoutData, { merge: true });
+
+            // --- AUTO-TRIGGER RECOVERY WHATSAPP ---
+            if (eventType === "ABANDONED" && checkoutData.phone) {
+                const phoneNormalized = normalizePhone(checkoutData.phone);
+                const components = [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: customerName },
+                            { type: 'text', text: String(checkoutData.amount) },
+                            { type: 'text', text: recoveryUrl }
+                        ]
+                    }
+                ];
+
+                await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, components, "en");
+                console.log(`[Recovery] WhatsApp sent to ${customerName} for Cart ${checkoutId}`);
+            }
+
             return res.status(200).send("OK");
         }
 
