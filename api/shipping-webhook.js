@@ -36,17 +36,29 @@ const getTemplateComponents = (type, order, payload, awb) => {
         { type: 'text', text: productDisplay }
     ];
 
-    // Position {{4}} varies by template
+    // Position {{3}} and {{4}} vary by template
     if (type === 'In-Transit') {
-        bodyParams.push({ type: 'text', text: courier }); // {{4}} = Courier Name
-    } else if (type === 'OFD') {
-        bodyParams.push({ type: 'text', text: awb || order.awb || 'available soon' }); // {{4}} = AWB
-    } else if (type === 'NDR') {
-        // NDR only has 3 variables (Name, Order#, Reason)
+        // Transit: Name, Order#, Product, Courier
         bodyParams = [
             { type: 'text', text: customer },
             { type: 'text', text: orderId },
-            { type: 'text', text: payload.ndr_reason || 'Address issue or customer not available' }
+            { type: 'text', text: productDisplay },
+            { type: 'text', text: courier }
+        ];
+    } else if (type === 'OFD') {
+        // OFD: Name, Order#, Courier, AWB
+        bodyParams = [
+            { type: 'text', text: customer },
+            { type: 'text', text: orderId },
+            { type: 'text', text: courier },
+            { type: 'text', text: awb || order.awb || 'available soon' }
+        ];
+    } else if (type === 'NDR') {
+        // NDR: Name, Order#, Reason
+        bodyParams = [
+            { type: 'text', text: customer },
+            { type: 'text', text: orderId },
+            { type: 'text', text: payload.message || payload.ndr_reason || 'Address issue or customer not available' }
         ];
     }
 
@@ -57,7 +69,7 @@ const getTemplateComponents = (type, order, payload, awb) => {
         }
     ];
 
-    // Only In-Transit has the tracking button variable
+    // Add dynamic URL button for Transit tracking
     if (type === 'In-Transit') {
         components.push({
             type: 'button',
@@ -228,6 +240,8 @@ module.exports = async (req, res) => {
             }, {
                 headers: { 'Authorization': `Bearer ${whatsappToken}` }
             });
+
+            console.log(`[WhatsApp] Successfully sent ${templateName} tracking update to ${phone}`);
 
             // Log Success
             await db.collection('whatsapp_messages').add({

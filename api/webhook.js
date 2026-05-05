@@ -374,10 +374,10 @@ module.exports = async (req, res) => {
                     ], "en"); 
                     await orderDoc.ref.update({ whatsapp_flow: 'AWAITING_ADDRESS' });
                 } else {
-                    // Send generic NDR confirmation
+                    // Send generic NDR confirmation (en)
                     await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.NDR_CONFIRMED, [
                         { type: 'body', parameters: [{ type: 'text', text: actionLabel }] }
-                    ]);
+                    ], "en");
                 }
             }
 
@@ -414,10 +414,14 @@ module.exports = async (req, res) => {
 
                 await sendFCMNotifications('Address Updated! 📍', `New address for #${orderData.orderNumber}: ${body}`, { orderId: orderDoc.id });
                 
-                // Shoot the "Acknowledged" version of the template (en_US)
-                await sendWhatsAppMessage(senderPhone, CONSTANTS.TEMPLATES.UPDATE_ADDRESS, [
-                    { type: 'body', parameters: [{ type: 'text', text: orderData.customerName || 'Customer' }] }
-                ], "en_US");
+                // Shoot the specialized "address_updated_thanks" template (en)
+                // It needs 2 variables: Name, Order#
+                await sendWhatsAppMessage(senderPhone, 'address_updated_thanks', [
+                    { type: 'body', parameters: [
+                        { type: 'text', text: orderData.customerName || 'Customer' },
+                        { type: 'text', text: String(orderData.orderNumber) }
+                    ]}
+                ], "en");
             }
         }
 
