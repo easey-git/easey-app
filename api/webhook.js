@@ -48,7 +48,10 @@ const CONSTANTS = {
 const normalizePhone = (phone) => {
     if (!phone) return null;
     let p = phone.toString().replace(/\D/g, '');
+    // Handle 10-digit: Add 91
     if (p.length === 10) p = `91${p}`;
+    // Handle 11-digit with leading 0: Replace 0 with 91
+    else if (p.length === 11 && p.startsWith('0')) p = `91${p.substring(1)}`;
     return p;
 };
 
