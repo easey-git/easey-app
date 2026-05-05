@@ -201,6 +201,15 @@ module.exports = async (req, res) => {
         // B. SHOPIFY ORDER CREATION
         // ---------------------------------------------------------
         if (data.order_number) {
+            const orderDocRef = db.collection("orders").doc(String(data.id));
+            const existingOrder = await orderDocRef.get();
+            
+            // Idempotency: If order already exists and WhatsApp was sent, just return OK
+            if (existingOrder.exists && existingOrder.data().whatsappSent) {
+                console.log(`[Shopify Webhook] Order ${data.order_number} already processed. Skipping.`);
+                return res.status(200).json({ success: true, message: 'Already processed' });
+            }
+
             const address = data.shipping_address || data.billing_address || {};
             const orderData = {
                 orderId: data.id,
@@ -233,7 +242,7 @@ module.exports = async (req, res) => {
                 }))
             };
 
-            await db.collection("orders").doc(String(data.id)).set(orderData, { merge: true });
+            await orderDocRef.set(orderData, { merge: true });
 
             // --- AUTO-TRIGGER WHATSAPP ---
             if (orderData.phoneNormalized) {
@@ -254,8 +263,8 @@ module.exports = async (req, res) => {
 
                 await sendWhatsAppMessage(orderData.phoneNormalized, CONSTANTS.TEMPLATES.COD_CONFIRMATION, components, "en_US");
                 
-                // Update flag to prevent double-send
-                await db.collection("orders").doc(String(data.id)).update({ 
+                // Update flag to prevent double-send on retry
+                await orderDocRef.update({ 
                     whatsappSent: true,
                     whatsappSentAt: admin.firestore.Timestamp.now()
                 });
