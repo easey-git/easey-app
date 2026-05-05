@@ -54,6 +54,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const [logisticsSubTab, setLogisticsSubTab] = useState('overview'); // overview | intransit | ofd | ndr | logs
 
     const [alertRecords, setAlertRecords] = useState([]);
+    const [lastLogisticsUpdate, setLastLogisticsUpdate] = useState(new Date());
     const [webhookLogs, setWebhookLogs] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -177,6 +178,16 @@ const WhatsAppManagerScreen = ({ navigation }) => {
         });
 
         // SYNC Hub Tabs in Real-Time (Sent Messages Only)
+        return () => {
+            unsubOrders();
+            unsubCarts();
+            unsubActivity();
+            unsubscribeLogs();
+        };
+    }, [activityLimit]);
+
+    // Isolated Logistics Listeners (Rock-Solid Real-Time)
+    useEffect(() => {
         const qTransit = query(collection(db, "whatsapp_messages"), where("templateName", "==", "alert_shipping_transit"), orderBy("timestamp", "desc"), limit(20));
         const unsubTransit = onSnapshot(qTransit, (snapshot) => {
             const records = snapshot.docs.map(doc => ({
@@ -184,12 +195,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 ...doc.data(),
                 isSent: true,
                 status: 'In Transit',
-                carrier: doc.data().metadata?.courier || doc.data().metadata?.carrier || '-',
-                location: doc.data().metadata?.location || 'Tracking Active',
                 customerName: doc.data().customerName || 'Customer',
                 awb: doc.data().metadata?.awb || 'N/A'
             }));
             setInTransitRecords(records);
+            setLastLogisticsUpdate(new Date());
         });
 
         const qOFD = query(collection(db, "whatsapp_messages"), where("templateName", "==", "alert_shipping_ofd"), orderBy("timestamp", "desc"), limit(20));
@@ -199,12 +209,11 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 ...doc.data(),
                 isSent: true,
                 status: 'Out For Delivery',
-                carrier: doc.data().metadata?.carrier || doc.data().metadata?.courier || '-',
-                location: doc.data().metadata?.location || 'Local',
                 customerName: doc.data().customerName || 'Customer',
                 awb: doc.data().metadata?.awb || 'N/A'
             }));
             setOfdRecords(records);
+            setLastLogisticsUpdate(new Date());
         });
 
         const qNDR = query(collection(db, "whatsapp_messages"), where("templateName", "==", "alert_shipping_ndr"), orderBy("timestamp", "desc"), limit(20));
@@ -214,17 +223,13 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 ...doc.data(),
                 isSent: true,
                 status: 'NDR Alert Sent',
-                carrier: doc.data().metadata?.carrier || doc.data().metadata?.courier || '-',
-                location: doc.data().metadata?.location || 'Local',
                 customerName: doc.data().customerName || 'Customer',
-                awb: doc.data().metadata?.awb || 'N/A',
-                attempts: doc.data().metadata?.attempts || '1'
+                awb: doc.data().metadata?.awb || 'N/A'
             }));
             setNdrRecords(records);
+            setLastLogisticsUpdate(new Date());
         });
 
-        // 4. Fetch NDR Alerts (Customer Responses)
-        // Industry Standard: Server-side sort enabled
         const qAlerts = query(
             collection(db, "orders"),
             where("isNdrAlert", "==", true),
@@ -237,21 +242,16 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                 ...doc.data()
             }));
             setAlertRecords(records);
-        }, (error) => {
-            console.error("Alerts Listener Error:", error);
+            setLastLogisticsUpdate(new Date());
         });
 
         return () => {
-            unsubOrders();
-            unsubCarts();
-            unsubActivity();
-            unsubscribeLogs();
             unsubTransit();
             unsubOFD();
             unsubNDR();
             unsubAlerts();
         };
-    }, [activityLimit]);
+    }, []);
     
     // NAME RECOVERY SYSTEM: Hydrate 'Customer' placeholders with real names
     useEffect(() => {
@@ -1330,13 +1330,24 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     const renderLogisticsHub = () => {
         return (
             <View style={{ flex: 1 }}>
-                <View style={{ backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                <View style={{ backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant, padding: 16 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                        <View>
+                            <Text variant="headlineMedium" style={{ fontWeight: 'bold', color: theme.colors.primary }}>Logistics Hub</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
+                                <Text variant="labelSmall" style={{ opacity: 0.7 }}>
+                                    Live Sync: {lastLogisticsUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         <SegmentedButtons
                             value={logisticsSubTab}
                             onValueChange={setLogisticsSubTab}
                             density="medium"
-                            style={{ minWidth: isDesktop ? '100%' : 900 }} // Increased to 900 for full text safety
+                            style={{ minWidth: isDesktop ? '100%' : 900 }}
                             buttons={[
                                 { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
                                 { value: 'alerts', label: 'Alerts', icon: 'bell-badge-outline' },
