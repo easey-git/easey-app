@@ -1147,15 +1147,22 @@ const WhatsAppManagerScreen = ({ navigation }) => {
     };
     const renderLogisticsOverview = () => {
         const stats = {
-            total: inTransitRecords.length + ofdRecords.length + ndrRecords.length,
+            total: inTransitRecords.length + ofdRecords.length + ndrRecords.length + alertRecords.length,
             inTransit: inTransitRecords.length,
             ofd: ofdRecords.length,
-            ndr: ndrRecords.length
+            ndr: ndrRecords.length,
+            alerts: alertRecords.length
         };
 
         return (
             <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
                 <View style={[dynamicStyles.statsGrid, { marginTop: 16 }]}>
+                    <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level2, borderBottomWidth: 4, borderBottomColor: '#f59e0b' }]} elevation={2}>
+                        <Avatar.Icon size={44} icon="bell-badge-outline" style={{ backgroundColor: '#f59e0b' }} />
+                        <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12 }}>{stats.alerts}</Text>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Action Alerts</Text>
+                        <Button mode="text" compact onPress={() => setLogisticsSubTab('alerts')} style={{ marginTop: 8 }}>Respond</Button>
+                    </Surface>
                     <Surface style={[styles.statCard, { backgroundColor: theme.colors.elevation.level2, borderBottomWidth: 4, borderBottomColor: '#3b82f6' }]} elevation={2}>
                         <Avatar.Icon size={44} icon="truck-outline" style={{ backgroundColor: '#3b82f6' }} />
                         <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12 }}>{stats.inTransit}</Text>
@@ -1172,7 +1179,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         <Avatar.Icon size={44} icon="alert-circle-outline" style={{ backgroundColor: theme.colors.error }} />
                         <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginTop: 12 }}>{stats.ndr}</Text>
                         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>NDR Issues</Text>
-                        <Button mode="text" compact onPress={() => setLogisticsSubTab('ndr')} style={{ marginTop: 8 }}>Resolve</Button>
+                        <Button mode="text" compact onPress={() => setLogisticsSubTab('ndr')} style={{ marginTop: 8 }}>Manage</Button>
                     </Surface>
                 </View>
 
@@ -1371,7 +1378,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                     contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
                     renderItem={({ item }) => {
                         const isCancel = item.ndr_alert_type === 'CANCEL';
-                        const accentColor = isCancel ? theme.colors.error : (item.ndr_alert_type === 'REATTEMPT' ? '#4ade80' : '#3b82f6');
+                        const isAddressUpdate = item.ndr_alert_type === 'ADDRESS_UPDATE';
+                        const accentColor = isCancel ? theme.colors.error : (item.ndr_alert_type === 'REATTEMPT' ? '#4ade80' : (isAddressUpdate ? '#0ea5e9' : '#3b82f6'));
                         
                         return (
                             <Surface style={[styles.ndrCard, { backgroundColor: theme.colors.surface, borderLeftWidth: 6, borderLeftColor: accentColor }]} elevation={2}>
@@ -1381,25 +1389,59 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                                                 <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>#{item.orderNumber}</Text>
                                                 <Badge style={{ backgroundColor: accentColor, color: '#FFFFFF', marginLeft: 8 }}>
-                                                    {item.ndr_alert_type}
+                                                    {isAddressUpdate ? 'ADDRESS UPDATE' : item.ndr_alert_type}
                                                 </Badge>
                                             </View>
                                             <Text variant="bodyLarge" style={{ fontWeight: '600' }}>{item.customerName}</Text>
-                                            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                                                {isCancel ? 'Customer cancelled via WhatsApp' : (item.ndr_customer_note || 'Requested action via WhatsApp')}
-                                            </Text>
+                                            
+                                            {isAddressUpdate && item.updatedAddress ? (
+                                                <Surface style={{ 
+                                                    backgroundColor: '#e0f2fe', 
+                                                    padding: 10, 
+                                                    borderRadius: 8, 
+                                                    marginTop: 8, 
+                                                    borderWidth: 1, 
+                                                    borderColor: '#7dd3fc' 
+                                                }}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <Text variant="labelSmall" style={{ color: '#0369a1', fontWeight: 'bold' }}>NEW ADDRESS RECEIVED:</Text>
+                                                        <IconButton 
+                                                            icon="content-copy" 
+                                                            size={16} 
+                                                            iconColor="#0369a1"
+                                                            onPress={() => {
+                                                                Clipboard.setStringAsync(item.updatedAddress);
+                                                                showSnackbar("New address copied!");
+                                                            }}
+                                                            style={{ margin: 0 }}
+                                                        />
+                                                    </View>
+                                                    <Text variant="bodyMedium" style={{ color: '#0c4a6e', marginTop: 4 }}>{item.updatedAddress}</Text>
+                                                </Surface>
+                                            ) : (
+                                                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                                                    {isCancel ? 'Customer cancelled via WhatsApp' : (item.ndr_customer_note || 'Requested action via WhatsApp')}
+                                                </Text>
+                                            )}
                                         </View>
                                         <View style={{ alignItems: 'flex-end' }}>
                                             <Text variant="labelSmall" style={{ opacity: 0.7 }}>
-                                                {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleTimeString() : 'Recent'}
+                                                {item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'}
                                             </Text>
-                                            <IconButton 
-                                                icon="chat-processing-outline" 
-                                                mode="contained"
-                                                size={24}
-                                                style={{ marginTop: 8 }}
-                                                onPress={() => openChat({ phone: item.phone, customerName: item.customerName })}
-                                            />
+                                            <View style={{ flexDirection: 'row', marginTop: 8 }}>
+                                                <IconButton 
+                                                    icon="phone-outline" 
+                                                    mode="contained-tonal"
+                                                    size={20}
+                                                    onPress={() => Linking.openURL(`tel:${item.phone}`)}
+                                                />
+                                                <IconButton 
+                                                    icon="chat-processing-outline" 
+                                                    mode="contained"
+                                                    size={20}
+                                                    onPress={() => openChat({ phone: item.phone, customerName: item.customerName })}
+                                                />
+                                            </View>
                                         </View>
                                     </View>
                                     <Divider style={{ marginVertical: 12 }} />
@@ -1409,7 +1451,8 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             <Text variant="bodySmall" style={{ fontWeight: 'bold' }}>{item.awb || 'N/A'}</Text>
                                         </View>
                                         <Button 
-                                            mode="outlined" 
+                                            mode="contained" 
+                                            buttonColor={theme.colors.primary}
                                             compact 
                                             onPress={async () => {
                                                 await updateDoc(doc(db, "orders", item.id), {
@@ -1419,7 +1462,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                                 showSnackbar("Alert marked as resolved.");
                                             }}
                                         >
-                                            Resolve
+                                            Mark Resolved
                                         </Button>
                                     </View>
                                 </View>
