@@ -166,7 +166,18 @@ module.exports = async (req, res) => {
             // --- AUTO-TRIGGER RECOVERY WHATSAPP ---
             if (eventType === "ABANDONED" && checkoutData.phone) {
                 const phoneNormalized = normalizePhone(checkoutData.phone);
+                const productImage = data.img_url || data.items?.[0]?.img_url || "https://easey.in/cdn/shop/files/easey-logo.png";
+                
                 const components = [
+                    {
+                        type: 'header',
+                        parameters: [
+                            {
+                                type: 'image',
+                                image: { link: productImage }
+                            }
+                        ]
+                    },
                     {
                         type: 'body',
                         parameters: [
@@ -178,7 +189,7 @@ module.exports = async (req, res) => {
                 ];
 
                 await sendWhatsAppMessage(phoneNormalized, CONSTANTS.TEMPLATES.CART_RECOVERY, components, "en");
-                console.log(`[Recovery] WhatsApp sent to ${customerName} for Cart ${checkoutId}`);
+                console.log(`[Recovery] WhatsApp sent to ${customerName} for Cart ${checkoutId} with image.`);
             }
 
             return res.status(200).send("OK");
