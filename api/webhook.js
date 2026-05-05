@@ -152,20 +152,36 @@ module.exports = async (req, res) => {
         // B. SHOPIFY ORDER CREATION
         // ---------------------------------------------------------
         if (data.order_number) {
+            const address = data.shipping_address || data.billing_address || {};
             const orderData = {
                 orderId: data.id,
                 orderNumber: data.order_number,
-                totalPrice: data.total_price,
-                currency: data.currency,
-                customerName: data.customer ? `${data.customer.first_name} ${data.customer.last_name}` : "Guest",
-                email: data.email,
-                phone: data.phone || (data.customer ? data.customer.phone : null),
-                phoneNormalized: normalizePhone(data.phone || (data.customer ? data.customer.phone : null)),
+                totalPrice: Number(data.total_price || 0),
+                currency: data.currency || 'INR',
+                customerName: data.customer ? `${data.customer.first_name} ${data.customer.last_name}`.trim() : "Guest",
+                email: data.email || null,
+                phone: data.phone || address.phone || (data.customer ? data.customer.phone : null),
+                phoneNormalized: normalizePhone(data.phone || address.phone || (data.customer ? data.customer.phone : null)),
+                
+                // Address Info
+                address1: address.address1 || '',
+                city: address.city || '',
+                state: address.province || '',
+                zip: address.zip || '',
+
+                // System Statuses
+                status: "COD",
+                cod_status: "pending",
+                verificationStatus: 'pending',
+                whatsappSent: false,
+                
                 createdAt: admin.firestore.Timestamp.now(),
                 updatedAt: admin.firestore.Timestamp.now(),
-                status: "New",
-                verificationStatus: 'pending',
-                items: (data.line_items || []).map(item => ({ name: item.title, quantity: item.quantity, price: item.price }))
+                items: (data.line_items || []).map(item => ({ 
+                    name: item.title, 
+                    quantity: item.quantity, 
+                    price: Number(item.price || 0)
+                }))
             };
 
             await db.collection("orders").doc(String(data.id)).set(orderData, { merge: true });
