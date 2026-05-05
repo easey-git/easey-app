@@ -323,14 +323,46 @@ module.exports = async (req, res) => {
                 expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))
             });
 
+            let ordersSnap = null;
+            const contextId = message.context?.id;
+
+            // 0. Surgical Precision: Match exact message context (100% accurate for button clicks)
+            if (contextId) {
+                const contextMsgSnap = await db.collection('whatsapp_messages')
+                    .where('whatsappId', '==', contextId)
+                    .limit(1)
+                    .get();
+                if (!contextMsgSnap.empty) {
+                    const matchedOrderNumber = contextMsgSnap.docs[0].data().orderNumber;
+                    if (matchedOrderNumber) {
+                        // Look for the exact order using the order number (handling formatting differences)
+                        const cleanId = matchedOrderNumber.toString().replace('#', '').trim();
+                        ordersSnap = await db.collection('orders')
+                            .where('orderNumber', 'in', [matchedOrderNumber, cleanId, `#${cleanId}`, Number(cleanId)])
+                            .limit(1)
+                            .get();
+                    }
+                }
+            }
+
+            // 0.5 Surgical Precision for Text Replies: Look for the specific order waiting for an address
+            if ((!ordersSnap || ordersSnap.empty) && message.type === 'text') {
+                ordersSnap = await db.collection('orders')
+                    .where('phoneNormalized', '==', phoneNormalized)
+                    .where('whatsapp_flow', '==', 'AWAITING_ADDRESS')
+                    .get();
+            }
+
             // 1. Primary Strategy: Look for an order that currently has an active NDR/OFD alert sent
-            let ordersSnap = await db.collection('orders')
-                .where('phoneNormalized', '==', phoneNormalized)
-                .where('ndrStatusCategory', 'in', ['NDR', 'OFD'])
-                .get();
+            if (!ordersSnap || ordersSnap.empty) {
+                ordersSnap = await db.collection('orders')
+                    .where('phoneNormalized', '==', phoneNormalized)
+                    .where('ndrStatusCategory', 'in', ['NDR', 'OFD'])
+                    .get();
+            }
 
             // 2. Secondary Strategy: Look for the latest PENDING order (Verification flow)
-            if (ordersSnap.empty) {
+            if (!ordersSnap || ordersSnap.empty) {
                 ordersSnap = await db.collection('orders')
                     .where('phoneNormalized', '==', phoneNormalized)
                     .where('verificationStatus', '==', 'pending')
@@ -338,13 +370,13 @@ module.exports = async (req, res) => {
             }
             
             // 3. Fallback: If no pending/NDR order, look for the latest overall order
-            if (ordersSnap.empty) {
+            if (!ordersSnap || ordersSnap.empty) {
                 ordersSnap = await db.collection('orders')
                     .where('phoneNormalized', '==', phoneNormalized)
                     .get();
             }
 
-            if (ordersSnap.empty) return res.status(200).send('OK');
+            if (!ordersSnap || ordersSnap.empty) return res.status(200).send('OK');
             
             // Pick the latest from the matched set
             const orderDoc = ordersSnap.docs.sort((a,b) => (b.data().createdAt?.seconds || 0) - (a.data().createdAt?.seconds || 0))[0];
