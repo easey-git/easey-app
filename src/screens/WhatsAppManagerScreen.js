@@ -1211,6 +1211,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                     />
                                 </View>
                                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.status} • {item.location}</Text>
+                                <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>
+                                    AWB: {item.awb || item.metadata?.awb || 'N/A'}
+                                </Text>
                             </View>
                             <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
                                 {item.timestamp?.toDate ? item.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}
@@ -1261,6 +1264,9 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                         <Icon source="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
                                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>{item.location}</Text>
                                     </View>
+                                    <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold', marginTop: 4 }}>
+                                        AWB: {item.awb || item.metadata?.awb || 'N/A'}
+                                    </Text>
                                 </View>
                                 <IconButton 
                                     icon="whatsapp" 
@@ -1304,15 +1310,18 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                         <View style={{ padding: 12 }}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Badge style={{ backgroundColor: theme.colors.primaryContainer, color: theme.colors.primary }}>{item.status.toUpperCase()}</Badge>
-                                    <Text variant="labelSmall" style={{ marginLeft: 8, color: '#888' }}>AWB: {item.awb}</Text>
+                                    <Badge style={{ backgroundColor: theme.colors.primaryContainer, color: theme.colors.primary }}>{item.status?.toUpperCase() || 'LOG'}</Badge>
+                                    <Text variant="labelSmall" style={{ marginLeft: 8, color: '#888' }}>
+                                        AWB: {item.awb || item.tracking_number || item.awb_number || 'N/A'}
+                                    </Text>
                                 </View>
                                 <Text variant="labelSmall" style={{ color: '#888' }}>
                                     {item.timestamp?.toDate ? item.timestamp.toDate().toLocaleTimeString() : '...'}
                                 </Text>
                             </View>
                             <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontSize: 11, color: '#4ade80' }}>
-                                {JSON.stringify(item.payload, null, 2)}
+                                {JSON.stringify(item.payload, null, 2).substring(0, 500)}
+                                {JSON.stringify(item.payload).length > 500 ? '...' : ''}
                             </Text>
                         </View>
                     </Surface>
@@ -1565,7 +1574,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                         </View>
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 8 }}>
-                                        <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>AWB: {item.awb}</Text>
+                                        <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>AWB: {item.awb || item.metadata?.awb || 'N/A'}</Text>
                                         <Text variant="labelSmall" style={{ color: theme.colors.secondary }}>Att: {item.attempts}</Text>
                                     </View>
                                     {item.reason ? (
@@ -1706,7 +1715,7 @@ const WhatsAppManagerScreen = ({ navigation }) => {
                                             <Text variant="labelSmall" style={{ marginLeft: 4, color: theme.colors.onSurfaceVariant }}>{item.location}</Text>
                                         </View>
                                     </View>
-                                    <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold', marginTop: 4 }}>AWB: {item.awb}</Text>
+                                    <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold', marginTop: 4 }}>AWB: {item.awb || item.metadata?.awb || 'N/A'}</Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                                     <Text variant="labelLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{item.phone || '---'}</Text>

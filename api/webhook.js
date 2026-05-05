@@ -323,13 +323,21 @@ module.exports = async (req, res) => {
                 expireAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))
             });
 
-            // Find Latest PENDING Order (To avoid old confirm clicks messing with shipped orders)
+            // 1. Primary Strategy: Look for an order that currently has an active NDR/OFD alert sent
             let ordersSnap = await db.collection('orders')
                 .where('phoneNormalized', '==', phoneNormalized)
-                .where('verificationStatus', '==', 'pending')
+                .where('ndrStatusCategory', 'in', ['NDR', 'OFD'])
                 .get();
+
+            // 2. Secondary Strategy: Look for the latest PENDING order (Verification flow)
+            if (ordersSnap.empty) {
+                ordersSnap = await db.collection('orders')
+                    .where('phoneNormalized', '==', phoneNormalized)
+                    .where('verificationStatus', '==', 'pending')
+                    .get();
+            }
             
-            // Fallback: If no pending order, look for the latest overall order (for NDR responses)
+            // 3. Fallback: If no pending/NDR order, look for the latest overall order
             if (ordersSnap.empty) {
                 ordersSnap = await db.collection('orders')
                     .where('phoneNormalized', '==', phoneNormalized)
@@ -337,6 +345,8 @@ module.exports = async (req, res) => {
             }
 
             if (ordersSnap.empty) return res.status(200).send('OK');
+            
+            // Pick the latest from the matched set
             const orderDoc = ordersSnap.docs.sort((a,b) => (b.data().createdAt?.seconds || 0) - (a.data().createdAt?.seconds || 0))[0];
             const orderData = orderDoc.data();
 

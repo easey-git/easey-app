@@ -193,6 +193,7 @@ module.exports = async (req, res) => {
             awb: awb,
             carrier: payload.courier_name || order.carrier || 'Delhivery',
             lastStatus: rawStatus,
+            ndrStatusCategory: automationType, // Save the normalized category for matching
             updatedAt: admin.firestore.Timestamp.now()
         });
 
