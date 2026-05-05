@@ -141,7 +141,9 @@ module.exports = async (req, res) => {
 
             const checkoutId = data.cart_id || "";
             const customerName = `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Visitor';
-            const recoveryUrl = data.recovery_url || `https://easey.in/cart/${checkoutId}`;
+            
+            // Link Fix: Prioritize checkout_url, fallback to custom resume pattern
+            const recoveryUrl = data.checkout_url || `https://easey.in/?cart-resume-id=${checkoutId}&type=report`;
 
             const checkoutData = {
                 eventType,
